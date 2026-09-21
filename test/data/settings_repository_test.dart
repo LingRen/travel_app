@@ -22,8 +22,9 @@ void main() {
 
   test('首次读取返回默认值', () async {
     final AppSettings s = await repo.load();
-    expect(s.maxHeartRate, kDefaultMaxHeartRate);
-    expect(s.weightKg, kDefaultWeightKg);
+    // 用字面量而不是常量：否则常量改了默认值、断言也跟着变，等于没钉住。
+    expect(s.maxHeartRate, 190);
+    expect(s.weightKg, 70);
     expect(s.distanceUnit, DistanceUnit.kilometer);
     expect(s.mapTileUrlTemplate, kDefaultMapTileUrlTemplate);
   });
@@ -47,11 +48,11 @@ void main() {
 
   test('存储值损坏时回退到默认值而不是抛错', () async {
     await SettingsDao(db).setString('weight_kg', 'not-a-number');
-    expect((await repo.load()).weightKg, kDefaultWeightKg);
+    expect((await repo.load()).weightKg, 70);
   });
 
   test('最大心率越界时回退到默认值', () async {
     await SettingsDao(db).setString('max_heart_rate', '10');
-    expect((await repo.load()).maxHeartRate, kDefaultMaxHeartRate);
+    expect((await repo.load()).maxHeartRate, 190);
   });
 }

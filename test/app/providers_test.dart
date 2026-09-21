@@ -109,8 +109,9 @@ void main() {
   test('appSettingsProvider 读出默认值，包含可配置的瓦片源地址', () async {
     final AppSettings settings = await container.read(appSettingsProvider.future);
 
-    expect(settings.maxHeartRate, kDefaultMaxHeartRate);
-    expect(settings.weightKg, kDefaultWeightKg);
+    // 字面量：钉住默认值本身，避免断言与常量自指。
+    expect(settings.maxHeartRate, 190);
+    expect(settings.weightKg, 70);
     expect(settings.distanceUnit, DistanceUnit.kilometer);
     expect(settings.mapTileUrlTemplate, kDefaultMapTileUrlTemplate);
     expect(settings.mapTileUrlTemplate, isNotEmpty);
