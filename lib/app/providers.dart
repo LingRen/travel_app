@@ -8,6 +8,8 @@ import '../data/ble/ble_scanner.dart';
 import '../data/db/ride_dao.dart';
 import '../data/db/settings_dao.dart';
 import '../data/db/track_point_dao.dart';
+import '../data/export/backup_io.dart';
+import '../data/export/backup_store.dart';
 import '../data/location/location_service.dart';
 import '../data/ride_repository.dart';
 import '../data/sensor_pairing.dart';
@@ -61,3 +63,12 @@ final Provider<SensorPairingRepository> sensorPairingProvider =
 /// 崩溃恢复时用户选择「继续」的骑行 id。记录页读到后调用
 /// `RecordController.resumeExisting` 续写该会话。
 final StateProvider<int?> resumeRideIdProvider = StateProvider<int?>((Ref ref) => null);
+
+/// 备份数据的读写。设置页用；抽成 provider 是为了让 widget 测试注入假实现。
+final Provider<BackupStore> backupStoreProvider = Provider<BackupStore>(
+  (Ref ref) => SqliteBackupStore(ref.watch(databaseProvider)),
+);
+
+/// 备份文件的读写（系统分享 / 文件选择器）。
+final Provider<BackupIo> backupIoProvider =
+    Provider<BackupIo>((Ref ref) => const FileBackupIo());
