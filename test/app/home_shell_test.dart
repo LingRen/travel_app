@@ -1,10 +1,33 @@
 import 'package:cycling_app/app/home_shell.dart';
+import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/features/record/record_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Override 在 riverpod 3 里只从 misc 入口导出。
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const AppSettings _testSettings = AppSettings(
+  maxHeartRate: kDefaultMaxHeartRate,
+  weightKg: kDefaultWeightKg,
+  distanceUnit: DistanceUnit.kilometer,
+  mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
+);
+
 void main() {
-  Future<void> pumpShell(WidgetTester tester) =>
-      tester.pumpWidget(const MaterialApp(home: HomeShell()));
+  /// 「记录」tab 现在是真实的 [RecordPage]，只需要设置 provider 就够渲染，
+  /// 不需要真的连数据库。
+  Future<void> pumpShell(WidgetTester tester) => tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            appSettingsProvider.overrideWithValue(
+              const AsyncValue<AppSettings>.data(_testSettings),
+            ),
+          ],
+          child: const MaterialApp(home: HomeShell()),
+        ),
+      );
 
   int stackIndex(WidgetTester tester) =>
       tester.widget<IndexedStack>(find.byType(IndexedStack)).index!;
@@ -58,11 +81,14 @@ void main() {
     expect(stackIndex(tester), 1);
   });
 
-  testWidgets('同一时刻只渲染当前 tab 的占位页', (WidgetTester tester) async {
+  testWidgets('同一时刻只渲染当前 tab 的内容', (WidgetTester tester) async {
     await pumpShell(tester);
 
-    expect(find.byType(PlaceholderPage), findsOneWidget);
-    expect(find.text('记录 页尚未实现'), findsOneWidget);
+    // 记录 tab 是真实页面，另外三个 tab 都是占位页且处于 offstage。
+    expect(find.byType(RecordPage), findsOneWidget);
+    expect(find.text('开始骑行'), findsOneWidget);
+    expect(find.byType(PlaceholderPage), findsNothing);
+    expect(find.text('历史 页尚未实现'), findsNothing);
 
     await tester.tap(
       find.descendant(of: find.byType(NavigationBar), matching: find.text('历史')),
@@ -70,6 +96,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('历史 页尚未实现'), findsOneWidget);
-    expect(find.text('记录 页尚未实现'), findsNothing);
+    expect(find.byType(RecordPage), findsNothing);
+    expect(find.text('开始骑行'), findsNothing);
   });
 }

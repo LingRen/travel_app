@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../features/record/record_page.dart';
+
 /// 底部四 tab 导航壳。见设计文档 10。
 ///
-/// 本计划先让四个 tab 都指向占位页，保证导航结构一次成型；Task 21 会把
-/// 「记录」换成真实的 RecordPage，历史 / 统计 / 设置由 Plan B 实现。
+/// 「记录」已是真实的 [RecordPage]；历史 / 统计 / 设置仍是占位页，由 Plan B 实现。
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -19,7 +20,7 @@ class _HomeShellState extends State<HomeShell> {
         body: IndexedStack(
           index: _index,
           children: const <Widget>[
-            PlaceholderPage(title: '记录'),
+            RecordPage(),
             PlaceholderPage(title: '历史'),
             PlaceholderPage(title: '统计'),
             PlaceholderPage(title: '设置'),
