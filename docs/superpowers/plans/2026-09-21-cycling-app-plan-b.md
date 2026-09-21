@@ -6608,3 +6608,115 @@ git commit -m "feat: 接入历史、统计与设置页，移除临时 BLE 诊断
 2. **Inline Execution**：在当前会话里按批次执行，到检查点停下来给你确认。
 
 两种方式都要用 `.fvm/flutter_sdk/bin/flutter`（本机没有全局 flutter/dart），且每个任务结束都要单独提交。
+
+---
+
+## 实施偏差记录（Task 1–13 完成后回写）
+
+Plan B 已全部实施完毕（分支 `feature/plan-b`，13 个任务提交）。
+全量 **432 个测试通过**，`flutter analyze lib test` 输出 `No issues found!`。
+
+本节把实施中发现的偏差回写进来。实施时**没有默认计划书是对的**——下面第一类的偏差如果照抄，会直接编译失败、断言必红或测试挂死。
+
+### 一、计划书代码/断言不可行（照抄会编译失败或断言必红）
+
+| # | 任务 | 计划书原文 | 实际做法 | 证据 |
+| --- | --- | --- | --- | --- |
+| 1 | T1 | 把 `library;` 放在 `import` 之后 | `library;` 必须在**所有其他指令之前** | `dart analyze` 报 `library_directive_not_first` |
+| 2 | T2 | — | 无实现偏差；但见第二类第 1、2 条（两个变异点原用例杀不死） | — |
+| 3 | T6 | 测试辅助 `named(XmlDocument doc, String local)` | 参数类型改为 **`XmlNode`** | 有调用 `named(segs[0], 'trkpt')`，而 `segs[0]` 是 `XmlElement`，编译报 `The argument type 'XmlElement' can't be assigned to the parameter type 'XmlDocument'` |
+| 4 | T6 | 断言 `pt(1758384000000)` 的时间是 `'2025-09-21T00:00:00.000Z'` | 改为 **`'2025-09-20T16:00:00.000Z'`** | `1758384000000ms` 对应的 UTC 是 `2025-09-20T16:00:00Z`。计划书把**本地时间**（UTC+8 的 09-21 00:00）当成了 UTC |
+| 5 | T6 | `current!.add(p)` | 改为 `current.add(p)` | Dart 3 流分析已能证明非空，`!` 触发 `unnecessary_non_null_assertion`，`analyze` 不通过 |
+| 6 | T7 | 「恢复失败时不留半份数据（事务）」用 `throwsA(anything)` | 收紧为断言 `DatabaseException` 且 message `contains('FOREIGN KEY')`，并把旧数据改成 `insertWithId(id: 100)` | **原用例是因为错误的原因通过的**：旧数据自增拿到 `id = 1`，与备份里 `_finished.id == 1` 撞主键（1555），根本走不到外键。实测外键本身有效（`PRAGMA foreign_keys => 1`；孤儿点插入抛 787） |
+| 7 | T7 | 「replaceExisting 为假时保留已有数据」 | 旧数据改用 `insertWithId(id: 100)` | 同上，原写法必然撞主键而失败 |
+| 8 | T8 | 日期文本用 `color: kAppSurface` | 改为 `Colors.white70` | `kAppSurface = 0xFF1E1E1E` 画在 `kAppBackground = 0xFF121212` 上，对比度约 1.08:1，几乎不可见 |
+| 9 | T8 | import 列表含 `constants.dart` 与 `theme.dart` | 两个都删掉 | 修第 8 条后 `theme.dart` 变成未使用；`constants.dart` 本来就未使用。`analyze` 报 `unused_import` |
+| 10 | T8 | `summary_grid.dart` 的 import 列表 | 补 `import '../../domain/models/ride_summary.dart';` | 它用了 `RideSummary` 类型，缺 import 编译不过 |
+| 11 | T8/10/11/12 | `ref.watch(appSettingsProvider).valueOrNull` | 改为 **`.value`** | **riverpod 3.4.3 的 `AsyncValue` 没有 `valueOrNull`**（编译错误实证；`lib/` 里此前无任何地方用过它） |
+| 12 | T8 | `HrZoneBar` 的 `Expanded(flex: (ratio * 1000).round())` | 改为 `math.max(1, (ratio * 1000).round())` | `flex: 0` 不触发断言，但该区间宽度为 **0.0px** 整段消失；占比极小时肉眼看不见 |
+| 13 | T8 | `detail_page_test.dart` 的 `find.text(...)` | 新增 `pumpDetail` 把视口调到 1600 高 | 默认 800×600 下 `ListView` 懒构建，后面的区块不会被 build |
+| 14 | T9 | 断言 `find.text('25.3 km/h')` | 改为 **`'26.8 km/h'`** | 卡片渲染的是 `movingAvgSpeedMps`（7.44 → 26.784 → `'26.8 km/h'`）。`'25.3 km/h'` 是 `avgSpeedMps` 的值 |
+| 15 | T9 | 断言 `find.text('180 m')` | 改为 **`find.text('爬升 180 m')`** | 卡片渲染 `'爬升 ${...} m'`，`find.text` 是精确匹配 |
+| 16 | T9 | 「点卡片进入详情页」只断言 `find.text('骑行详情')` | 额外 override `rideDetailProvider(1)` | 否则 `DetailPage` 会读 `databaseProvider`（未 override）→ `ProviderException` |
+| 17 | T9 | `wrap` 里 `ridePointsProvider(r.id!)` | 加 `if (r.id != null)` 守卫 | id 为 null 的用例会在建 `ProviderScope` 时就抛 |
+| 18 | T9 | 测试里 `ListView.builder` 直接断言 | 新增 `pumpHistory`（视口 `Size(800, 2400)`） | 同第 13 条 |
+| 19 | T10 | 「时间不前进时断开」断言 `segs.length == 2` | 改为 **`expect(segs, isEmpty)`** + 补一条 4 点用例 | `_flush` 开头 `if (vertices.length < 2) return;` 会丢弃断开后只剩 1 个顶点的段 |
+| 20 | T10 | 「GPS 跳变」断言 `segs.length == 2` / `segs[0].vertices.length == 1` | 改为 `segs.length == 1` / `segs.single.vertices.length == 2` + 补一条用例 | 同上，孤立顶点被 `_flush` 丢弃 |
+| 21 | T10 | `_flush` 里 `..add(currentSpeeds.isEmpty ? _speed(prev) : _speed(prev))` | 简化为 `..add(_speed(prev))` | 三元两个分支相同，是笔误 |
+| 22 | T10 | 注释称「`DetailPage` 只在有可显示轨迹时才构建 `RouteMap`」 | 按**无条件构建**实现（占位分支在 `RouteMap` 内部） | 计划书注释与它自己的代码片段及两条测试互相矛盾；无条件构建才能让两条测试都成立 |
+| 23 | T11 | 断言 `find.text('0 m'), findsOneWidget` | 给 `_Totals` 四格加 `Key('totals-distance'/'totals-duration'/'totals-gain'/'totals-count')`，按 Key 读该格的值 | 距离为 0 时 `'0 m'`，爬升为 0 时也是 `'0 m'` → 实际找到 **2 个** widget，`findsOneWidget` 必失败。且 `findsNWidgets(2)` 仍分不清是哪一格 |
+| 24 | T11 | 测试里声明了未使用的 `const RideSummary _summary` | 删掉 | `analyze` 报 `unused_element` |
+| 25 | T11 | 测试里 `ListView` 直接断言 | 新增 `pumpStats`（视口 `Size(800, 2400)`） | 同第 13 条 |
+| 26 | T12 | **`file_picker` 的 API 完全不符**：`FilePicker.platform.pickFiles(type:, allowedExtensions:, withData: true)` → `FilePickerResult?` → `result.files.first.bytes` | 改为 **`FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['zip'])` → `PlatformFile?` → `picked.readAsBytes()`** | `file_picker 13.1.0` 里 `FilePicker` 是 `abstract final class`，**没有 `.platform`、没有 `withData`**，`pickFiles` 是静态方法且返回 `Future<List<PlatformFile>>`；`PlatformFile` **没有 `bytes`**，只有 `name`/`uri`/`path`/`xFile`/`Future<Uint8List> readAsBytes()` |
+| 27 | T12 | 测试里 `ListView` 直接断言 | 新增 `pumpSettings`（视口 `Size(800, 3200)`） | 设置页是最长的 `ListView`，同第 13 条 |
+| 28 | T12 | `_confirm` 里 `'${payload.rides.length}'` 这类多余插值 | 去掉多余插值 | `analyze` 报 `unnecessary_string_interpolations` |
+| 29 | T12 | `backup_section.dart` import `backup_io.dart` | 删掉 | 未显式引用 `BackupIo` 类型 → `unused_import` |
+
+### 二、计划书测试盲区（已补用例，并做了变异自证）
+
+每个任务都做了变异测试自证（把实现改坏 → 确认至少一个用例变红 → 改回）。
+计划书共列了 **50 个变异点，其中 15 个在原用例下杀不死**，逐一补用例后全部杀死：
+
+| # | 任务 | 原用例杀不死的变异 | 补的用例 |
+| --- | --- | --- | --- |
+| 1 | T2 | `dt <= 0` 改成 `dt < 0` | 「时间相同（dt 为 0）时也递增 segment」——原用例 dt=-500，两种写法都为真 |
+| 2 | T2 | 速度曲线去掉滑动平均 | 「速度曲线对尖峰做滑动平均」——原用例断言 `curve[2].y ∈ [1,3]`，而**未平滑的原始值恰好也是 2.0** |
+| 3 | T3 | 删掉 `buildTrend` 的 `status != finished` 判断 | 「带 summary 但未结束的骑行不计入」——原两条用例的 ride 都带 `summary: null`，被 summary 判空提前拦截，`status` 过滤从不生效 |
+| 4 | T3 | 删掉 `personalBests` 的 `status != finished` 判断 | 同上（同类漏洞） |
+| 5 | T4 | `listFinishedBetween` 的 `orderBy ASC` 改成 `DESC` | 「区间内多条时按开始时间正序」——原用例每个区间内最多 1 条，ASC/DESC 结果相同 |
+| 6 | T5 | `clear` 只删 id 不删 name | 「clear 同时清掉 id 与名字，不留残值」——**用 `SettingsDao.getAll()` 直接盯存储**。计划书建议的「clear 后 save 新名字」杀不死（save 会同时覆写两个键） |
+| 7 | T5 | `_autoConnectPairedSensors` 去掉 `device == null` 判断 | 计划书直接删 `if` 无法编译；改用 `(await deviceById(...))!` 等价表达 |
+| 8 | T6 | `hasPosition` 改成 `p.lat != null` | 「只有纬度没有经度时同样跳过」 |
+| 9 | T6 | 去掉 `title?.trim()` | 「标题只有空白时视为没有标题，回退到开始日期」 |
+| 10 | T7 | 版本校验 `!=` 改成 `>` | 「schema 版本**更低**时同样拒绝」——`>` 会静默接受 v0 归档（`fromJson` 缺字段默认 0），是真风险 |
+| 11 | T7 | 「先删骑行再删点」 | **等价变异体**：`ON DELETE CASCADE` 使顺序无关，连整行删掉 `points.deleteAll()` 都全绿。同一事务内中间态不可观测，无法构造杀死它的用例，不加无意义用例 |
+| 12 | T8 | `_CurvePainter` 去掉 `a.segment != b.segment` 跳过 | 把分段跳过抽成公开纯函数 **`drawnCurveSegments`**（画笔与测试共用），再断言跨 segment 不画线 |
+| 13 | T8 | `speed.length >= 2` 改成 `>= 0` | 「轨迹点为空时一个曲线区块都不渲染」——空样本画不出线也不抛异常，原用例只断言提示文本 |
+| 14 | T9 | `_MiniCurve` 去掉 id 判空 | 「没有 id 的记录不查询轨迹点也不崩溃」——原「没有汇总指标」用例的 id=1，杀不死 |
+| 15 | T9 | 迷你曲线不再跳过跨段 | 抽出 **`drawnMiniCurveSegments`** 后断言跨 segment 不连线 |
+| 16 | T10 | `dt > kGpsGapMs` 改成 `*100` | 「缺速度时长间隔超过 kGpsGapMs 也断开」——带速度时 `isTrustedSegment` 里又查一遍间隔，把 `_connectable` 自己的判定掩盖了 |
+| 17 | T10 | 去掉 `_connectable` 的 `dt <= 0` | 「时间倒流处断开，前后各成一段」（4 个**无速度**的点）——同理，带速度时 `isTrustedSegment` 会兜住 |
+| 18 | T11 | `TrendChart` 的 `maxX` 写死 0 | 断言 `data.maxX == 6`（7 桶 → 0..6）。**计划书建议的 `lineBarsData.single.spots.length == buckets.length` 杀不死它**——`spots` 在构造 `LineChartData` 之前就算好了 |
+| 19 | T12 | `_confirm` 的 `?? false` 改成 `?? true` | 「点确认框**外面**关掉不写库」——点「取消」走 `pop(false)`，`false ?? true` 仍是 `false`；只有遮罩关闭才返回 null |
+| 20 | T12 | `bytes == null` 时不 return | 用 `backupSectionTexts()` 钉死备份区**全部**文本——原 3 条断言全过（空字节进 `parseBackupArchive` 抛 `BackupFormatException`，被专用 catch 接住，提示文本不含「失败」） |
+| 21 | T12 | `_export` 漏掉 `points` / 漏掉 `rides`（新增变异） | 「导出的归档包含轨迹点」/「点导出备份会把归档交给 IO 层」 |
+
+另有若干**区分力不足但未被计划书列出**的用例，也一并补强：T9 的「没有标题时用日期当标题」原本与「卡片显示日期…」断言重复（区分力为零），拆成「无标题只一行日期 / 有标题标题与日期各一行」两条；T11 的「切到年/月」补了切换**前**的前置断言，「个人最佳四项」补了四项标签+值断言（原名声称四项却只断言一项）；T13 补了「切三个 tab 各自渲染对应页面」。
+
+### 三、计划书里的测试数量期望已过时（一律以实测为准）
+
+| 位置 | 计划书写 | 实测 |
+| --- | --- | --- |
+| T1 Step 4 | 10 个 | 11 个 |
+| T2 Step 4 | 14 个 | 12 个（补 2 后 14） |
+| T3 Step 4 | 18 个 | 17 个（补 2 后 19） |
+| T6 Step 4 | 20 个 | 19 个（补 2 后 21） |
+| T7 Step 5 | 14 个 | 15 个 |
+| T10 Step 4 | 13 个 | 16 个（补 1 后 17） |
+| T11 Step 4 | 8 个 | 8 个（补 2 后 10） |
+| T12 Step 5 | 12 个 | 12 个（补 2 后 14） |
+
+### 四、实施中发现的新增约束（后续维护必须知道）
+
+1. **riverpod 3.4.3 的 `AsyncValue` 没有 `valueOrNull`**，只有 `.value`。计划书里 4 处用过它。
+2. **widget 测试里 `ListView` 会懒构建**：默认视口 800×600 只构建前一两屏。凡是断言页面下半部分的用例，都要先把 `tester.view.physicalSize` 调高（本计划最终用了 `Size(800, 2400)` / `Size(800, 3200)`）并 `addTearDown(tester.view.reset)`。Task 8/9/11/12 都踩过。
+3. **`flutter_map` 的 `FlutterMap` 在 widget 测试里不会挂住**：`flutter_test` 的 `HttpOverrides` 把瓦片请求挡成 400，一张也画不出来，但图层会正常构建，`pumpAndSettle` 不超时。因此可以断言 `find.byType(FlutterMap)` 与 `find.byType(PolylineLayer)`。
+4. **`SensorMonitor` 的 FakeAsync 挂死风险在 Task 5 后扩大了**：`RecordController.start()` 现在会 `await _autoConnectPairedSensors().timeout(...)`。在 FakeAsync 下若 `blePlatformProvider` 注入的是**真实** `FlutterBluePlusPlatform`，`connect()` 永不返回，而 `.timeout` 的定时器也是假的（不 pump 不触发）→ **`await start()` 会死锁 10 分钟**。
+   因此 `record_controller_test.dart` 的 `makeContainer` 改为**默认注入一个空假平台**；`record_views_test.dart` 也必须补 `sensorPairingProvider` override。**后续任何在 widget 测试里驱动 `start()` 的地方，都必须给 `blePlatformProvider` 注入假实现。**
+5. **`RideDao.deleteAll()` 会经 `ON DELETE CASCADE` 连带清空 `track_points`**，所以 `applyBackup` 里「先删点再删骑行」的顺序其实无关紧要（保留为防御性代码）。
+6. **`TrackPointDao.listAll()` 的 `orderBy 'ride_id ASC, t_ms ASC'` 是冗余的**：schema 的 `idx_track_points_ride_t(ride_id, t_ms)` 已提供同样顺序，因此「去掉 `t_ms ASC`」是等价变异，无法被任何用例杀死。**若将来删掉那个索引，这条会变成真实缺陷。**
+7. **`_trackName`（GPX 的默认名称）依赖本地时区**：它用 `DateTime.fromMillisecondsSinceEpoch`（本地）拼日期，而 `_isoUtc` 用 `isUtc: true`。测试断言 `'骑行 2025-09-21'` 依赖本机 UTC+8，**在 UTC 或 UTC-8 环境会变成 `2025-09-20`（跨时区 flaky）**。未改成宽松断言，仅记录。
+8. **`_downsample` 里的 `identical` 去重是死代码**：守卫保证 `samples.length > maxSamples`，索引步长 `last/(maxSamples-1) > 1`，相邻 `round()` 结果必严格递增，该分支不可达。保留原样。
+9. **`PlaceholderPage` 现在零引用**（四个 tab 都换成真实页面了）。它是**公开类**，Dart 的 `unused_element` 只对私有成员生效，所以 `analyze` 不报错，计划书决定保留。**要不要删掉由你决定。**
+10. **`dart format` 的 tall style 重排**：编辑器的保存钩子会用新版 `dart format` 重排被触碰的文件，导致 diff 里混入无关的格式变化（例如 Task 5 改 `ble_platform.dart` 时）。仅格式，无行为变化，但会让 diff 变噪。**不要为此对抗格式化器。**
+11. **`FileBackupIo` 没有自动化测试**：测试环境没有文件选择器与分享通道，只保证 `analyze` 通过。`pickArchive` 的真机行为（`readAsBytes()` 在 Android content URI 上是否可用）**未实测**，列入真机验证清单。
+12. **`_restore` 的 `on BackupVersionException` 专用 catch 目前未被任何用例区分**：删掉它后通用 catch 仍会输出含「schema 版本」的文案，测试照样通过。不是计划书列出的变异点，未补用例。
+13. **`finishedRidesProvider` 与 `historyRidesProvider` 查询完全相同**（都调 `listFinished()`），是两套独立缓存。若要统一可让后者复用前者，本计划未做（不在范围）。
+14. **`trendRangeProvider` 是全局 `StateProvider`**，切页/重建不会重置范围（保持上次选择）。设计上合理，但如果期望「每次进统计页重置为周」，需要另行处理。
+
+### 五、仍未完成的事
+
+1. **Plan A 的 Task 22（端到端真机验证）尚未执行** —— 需要一部带 BLE 与 GPS 的真机。
+2. **Plan B 的 Task 13 Step 7（真机验证清单，10 项）尚未执行** —— 同样需要真机。
+   其中最关键的判据是：**详情页地图上的轨迹要贴合道路**（验证 GCJ-02 转换真的接上了）、**GPX 导出的位置要与地图一致**（验证「地图用 GCJ-02、GPX 用 WGS-84」两者各自正确）、以及**把瓦片源换成 OSM 后地图仍能显示**（验证设计文档 9.1 的对冲措施有效）。
+3. **Fit 3 心率广播的验证**（设计文档第 14 节的两项风险，Plan A 的 Task 3 Step 4–6 与 Task 22 Step 7–8）也依赖真机。
