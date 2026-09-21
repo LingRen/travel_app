@@ -37,3 +37,13 @@ String formatDuration(int seconds) {
   String two(int v) => v.toString().padLeft(2, '0');
   return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
 }
+
+/// 日期时间文本，形如 `2026-09-21 08:05`。用本地时区。
+///
+/// 不做「今年省略年份」的压缩：列表里跨年的记录混在一起时，省略年份会看不出
+/// 是哪一年，得不偿失。
+String formatDateTime(int epochMs) {
+  final DateTime t = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
+}

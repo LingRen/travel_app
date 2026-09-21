@@ -98,4 +98,21 @@ void main() {
       expect(formatDuration(-5), '00:00');
     });
   });
+
+  group('formatDateTime', () {
+    test('按本地时区输出 yyyy-MM-dd HH:mm', () {
+      final int ms = DateTime(2026, 9, 21, 8, 5).millisecondsSinceEpoch;
+      expect(formatDateTime(ms), '2026-09-21 08:05');
+    });
+
+    test('个位数月日与时分都补零', () {
+      final int ms = DateTime(2026, 1, 2, 3, 4).millisecondsSinceEpoch;
+      expect(formatDateTime(ms), '2026-01-02 03:04');
+    });
+
+    test('午夜输出 00:00', () {
+      final int ms = DateTime(2026, 12, 31).millisecondsSinceEpoch;
+      expect(formatDateTime(ms), '2026-12-31 00:00');
+    });
+  });
 }
