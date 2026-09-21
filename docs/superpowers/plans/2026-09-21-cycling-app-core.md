@@ -6625,3 +6625,107 @@ git commit -m "docs: 补充 Fit 3 心率广播的真机验证结论"
 2. **Inline Execution**：在当前会话里按批次执行，到检查点停下来给你确认。
 
 两种方式都要用 `fvm flutter`（本机没有全局 flutter/dart），且每个任务结束都要单独提交。
+
+---
+
+## 实施偏差记录（Task 1–21 完成后回写）
+
+Task 1–21 已全部实施完毕（分支 `feature/plan-a`，26 个提交，141 个文件、+10226 行）。
+全量 **254 个测试通过**，`flutter analyze lib test` 输出 `No issues found!`。
+
+本节把实施中发现的偏差回写进来，格式为「计划书原文 → 实际做法 → 证据」。
+实施时**没有默认计划书是对的**：下面第一类的偏差如果照抄，会直接编译失败或测试挂死。
+
+### 一、计划书代码不可行（照抄会编译失败或挂死）
+
+| # | 任务 | 计划书原文 | 实际做法 | 证据 |
+| --- | --- | --- | --- | --- |
+| 1 | T5 | `geo_test.dart` 夹具用 0.001° 纬度差 | 改为 **0.0001°**（约 11.13 m / 9.5 m） | 原夹具下多个「不足 5 米不写入」的断言失去区分力 |
+| 2 | T5 | `constants.dart` 无 `library;` 声明 | 顶部加 `library;` | 文件只有顶层常量时 `dangling_library_doc_comments` 报 issue，`analyze` 不通过 |
+| 3 | T6 | 高程滤波裁剪窗口（丢弃窗口两端） | 改为**复制边界值**填充 | 原做法在序列两端系统性少算爬升，与「不丢首尾爬升」的意图矛盾 |
+| 4 | T6 | 锯齿测试与滤波后值比较 | 改为与**未滤波值**比较 | 原断言在滤波正确与错误时都会通过，等于没测 |
+| 5 | T7 | 毛刺夹具放在序列首位 | 移到序列**正中**，期望最高速 10 | 首位毛刺会被「首点无前驱」的守卫顺带跳过，测不到真正的跳变剔除 |
+| 6 | T7 | 等红灯夹具间隔 1s/2s | 改为 **2s / 3s** | 1s 间隔不足以跨过静止判定边界，用例不成立 |
+| 7 | T7 | 无跳变守卫 | 新增 `isTrustedSegment`，并在 `splitMovingStationary` 里跳过不可信段 | 设计文档 8.1 的「GPS 跳变」陷阱需要显式判定 |
+| 8 | T9 | 无分界点用例 | 补「分界点」+ `segmentColorArgb` 两条用例 | 颜色映射的边界值原本无覆盖 |
+| 9 | T10 | 首个用例速度序列 `[5,5,0,0]` | 改为 `[5,5,5,0]` | 原序列的移动/静止切分点与用例意图不符 |
+| 10 | T10 | 测试 3 夹具 `alt: 102` | 改为 `alt: 110` | 原值在爬升阈值下不产生爬升，用例失去意义 |
+| 11 | T13 | Step 顺序：先写 `track_point_dao_test` 再写 `ride_dao_test` | **调换**：`ride_dao` 先于 `track_point_dao` | `track_point_dao_test` 需要 `RideDao` 造外键行，原顺序编译不过 |
+| 12 | T13 | 7 个变异无区分力（`countByRide` 非空表、`deleteByRide`） | 补 4 条用例（`countByRide` 非空表 + `deleteByRide` 3 条） | 变异测试发现原用例全绿 |
+| 13 | T14 | `RideRepository` 构造函数写 `this._rides` 以外的形式 | 改用 `required this._rides` | `prefer_initializing_formals` 报 issue |
+| 14 | T14 | `expect(s.maxHeartRate, kDefaultMaxHeartRate)` | 改为**字面量** `expect(s.maxHeartRate, 190)`（体重同理改 70） | **断言与常量自指**：把常量默认值改成任意值，断言仍通过，变异未被杀死。见提交 `2a87ec5` |
+| 15 | T15 | 「距离达到 5 米」用例用 lat=31.0001（≈11.13 m） | 改为**赤道纬度**下恰好 5.0 m 的真边界 | 原用例测的不是边界 |
+| 16 | T15 | 无下界 / 高纬 / 零间隔用例 | 补 4 条：真边界 5.0 m、4.9 m 下界、高纬度收缩、dt=0 | 变异测试发现边界无覆盖 |
+| 17 | T16 | 无状态机边界用例 | 补 9 条状态机边界 + 1 条「GPS 上报速度不合理时回退到位移推算」 | 同上 |
+| 18 | T17 | 直接调 `Geolocator` 静态方法，且声明「不写单元测试」 | 抽出 `LocationPlatform` 抽象 + `buildLocationSettings` 纯函数，补 18 条用例 | 静态方法走平台通道，单测既弹系统框又会挂住 |
+| 19 | T18 | `device.connect(...)` 缺 `license:` 参数 | 补 `license: License.nonprofit` | flutter_blue_plus 2.3.12 的 `connect` 要求该必需参数 |
+| 20 | T18 | 直接调 `FlutterBluePlus` 静态 API 且无测试 | 新增 `lib/data/ble/ble_platform.dart` 抽象层（`BlePlatform` / `BleDeviceHandle` / `BleCharacteristicHandle`） | 同上，且为 Task 20/21 的可测性打底 |
+| 21 | T18 | 无错误原因暴露 | 新增 `SensorMonitor.lastError`（成功后清空） | 承载设计文档 11.2「心率广播未开启要给针对性指引」 |
+| 22 | T18 | 无假时钟注入 | 新增 `BleTimerFactory` / `defaultBleTimerFactory` | 指数退避重连若不注入假时钟，测试要真的等待退避时长 |
+| 23 | T18 | `_subscribe` 未作废上一帧曲柄数据 | 加 `_lastCsc = null` | 换会话后旧帧不可比，会算出错误的踏频 |
+| 24 | T19 | 计划 `providers.dart` 有未使用导入 | 删除 | `analyze` 报 `unused_import` |
+| 25 | T19 | `IndexedStack` 非活动子树按「已渲染」断言 | 改为「**同时只渲染当前 tab**」（非活动子树是 offstage） | 原断言在 offstage 语义下不成立 |
+| 26 | T19 | widget 测试用 `databaseFactoryFfi` | 改用 **`databaseFactoryFfiNoIsolate`** | FakeAsync 下跨 isolate 的真实 IO 永不完成，测试挂死 |
+| 27 | T19 | `databaseProvider` 未 override 时抛 `UnimplementedError` | 实际抛 **`ProviderException`**（riverpod 3 包装了异常） | 断言 `UnimplementedError` 会失败 |
+| 28 | T19 | 无 `legacy.dart` / `misc.dart` 导入 | `StateProvider` 需 `package:flutter_riverpod/legacy.dart`；`Override` 需 `package:flutter_riverpod/misc.dart` | riverpod 3 的导出位置变了，否则编译不过 |
+| 29 | T20 | `connectSensor(SensorKind kind, BluetoothDevice device)` | 第二参数改为 **`BleDeviceHandle`** | 本抽象层没有 `BluetoothDevice`；同时删掉 `flutter_blue_plus` 未使用导入，补 `ble_platform.dart` / `ride_repository.dart` 导入，测试补 `flutter_riverpod/misc.dart` |
+| 30 | T20 | `finish()` 里 `await _fixSub?.cancel()` | 改为 **`unawaited(_fixSub?.cancel())`** | 广播流订阅的 `cancel()` 返回 root zone 里已完成的 future，FakeAsync 下续延永不 flush；实测 `结束时结算并清空缓冲`、`reset 回到未开始状态` 从 **10 分钟挂死**变为通过。生产语义不变（广播流取消立即生效） |
+| 31 | T20 | `RecordingSession` 构造函数把 `_lastTickMs` 初始化为 `startedAtMs` | 新增可选参数 **`resumedAtMs`**，由控制器在 `resumeExisting` 里传 `_now()` | **实测缺陷**：恢复一个几小时前开始的会话后，第一次 `tick` 会把「崩溃到重启」的空档整段计入时长——实测 `elapsedMs = 3603000`（应为 3000）。用 `lastWritten?.tMs` 也不行（崩溃后隔 5 分钟才重启仍会把空档算进去） |
+| 32 | T21 | `Icons.pocket` | 改用 `Icons.screen_lock_portrait` | 本 SDK 的 `Icons` 无 `pocket` 成员，编译期 `Member not found: 'pocket'` |
+| 33 | T21 | `d.device.remoteId.str` | 改为 **`d.device.id`** | `BleDeviceHandle` 只暴露 `id`，没有 `remoteId` |
+
+### 二、计划书测试盲区（已补用例，并做了变异自证）
+
+| # | 任务 | 补的用例 |
+| --- | --- | --- |
+| 34 | T9 | 分界点 + `segmentColorArgb` 共 2 条 |
+| 35 | T13 | `countByRide` 非空表 1 条 + `deleteByRide` 3 条 |
+| 36 | T15 | 真边界 5.0 m、4.9 m 下界、高纬度收缩、dt=0 共 4 条 |
+| 37 | T16 | 状态机边界 9 条 + 速度回退 1 条 |
+| 38 | T17 | 18 条（权限四态、定位设置两端、字段翻译等） |
+| 39 | T18 | 30 条（退避、UUID 归一化、订阅、重连、`lastError`） |
+| 40 | T19 | 23 条 widget 用例 |
+| 41 | T20 | 6 条：`handleLifecycle(paused)` / `(inactive)` 强制落盘各 1 条、`connectSensor` 接线 1 条、写库重试成功 1 条、恢复时刻计时 1 条、时间倒流 + GPS 断档 1 条 |
+| 42 | T20 | `test/domain/recording/recording_session_test.dart` 追加 `resumedAtMs` 用例 1 条 |
+| 43 | T21 | `formatDuration(0)` / `(3599)`、`formatDistance(0, km)` / `(999.9, km)` / `(0, mi)`、速度换算 0 值等边界；车把模式主指标 **≥72pt** 断言；口袋模式「无任何 ≥72pt 文字」；模式切换后 UI 真的变了；未开始态显示「开始骑行」；`errorMessage` 非空时界面可见 |
+
+每个任务都做了**变异测试自证**（把实现改坏，确认至少一个用例变红，再改回）。
+T20 的变异清单里有一处首轮**未被杀死**（`resumeExisting` 去掉 `dt <= 0` 守卫），补强为 `dt = -500` 的倒流点对后才杀死——说明「只覆盖 `dt == 0`」是不够的。
+
+### 三、计划书里的测试数量期望已过时（一律以实测为准）
+
+| 位置 | 计划书写 | 实测 |
+| --- | --- | --- |
+| T13 Step 7 | 14 个 | 20 个 |
+| T14 Step 7 | 17 个 | 30 个 |
+| T15 Step 7 | 13 个 | 17 个 |
+| T16 | 28 个 | 41 个 |
+| T18 | 5 个 | 7 个（新增用例合计 30） |
+| T20 Step 5 / Step 6 | 29 个 / 11 个 | **44 个 / 17 个** |
+| T21 Step 4 / Step 9 | 8 个 / 14 个 | **20 个 / 25 个** |
+
+### 四、实施中发现的新增约束（后续任务必须知道）
+
+1. **`SensorMonitor.dispose()` 在 FakeAsync 下有挂死风险**：它内部 `await _valueSub?.cancel()` / `await _stateSub?.cancel()` 与上面第 30 条同源。
+   生产环境无影响；但**任何「已连接传感器 + finish()」的 widget 测试都会挂死**。
+   Task 21 的测试因此全部避开了这条组合路径——**Plan B 若要测这条路径，必须先处理 `sensor_monitor.dart`**。
+2. **车把模式常亮收紧为「车把 且 记录中（非暂停）」**：设计文档 10.1 只写「车把模式常亮」。
+   暂停时恢复系统熄灭是实施时的收紧，**需在真机验证时确认是否符合预期**（Task 22 Step 10）。
+3. **`wakelock_plus` 已在 `pubspec.yaml`**（`^1.8.0`，Task 1 就加了），Task 21 直接使用，未新增依赖。
+4. **`formatDistance(999.9, DistanceUnit.kilometer)` 实际输出 `1000 m`**（临界点四舍五入的观感问题）。
+   已用测试钉住**真实行为**而非修掉，避免超出 Task 21 范围；Plan B 若在意可再调整。
+5. **本机工具链**：无全局 flutter/dart，必须用 `.fvm/flutter_sdk/bin/flutter`（`fvm flutter` 会因联网检查版本失败而报错）；
+   `test` / `analyze` 的**退出码可能是 1 但实际成功**（沙箱拦截 `.dartServer` 打印 `TRAE Sandbox Error: hit restricted`），
+   **判据是输出内容**（`All tests passed!` / `No issues found!`）。
+6. **本机访问不了 github.com**：**严禁** `pub get` / `clean` / `pub upgrade`。
+   手工配置的 sqlite3 native asset 缓存 `.dart_tool/hooks_runner/shared/sqlite3/build/download-6d80ba56/libsqlite3.dylib` 被 gitignore，删掉就要重做。
+
+### 五、对 Plan B 的接口影响
+
+1. **`connectSensor(SensorKind kind, BleDeviceHandle device)`** —— 第二参数是 `BleDeviceHandle`（`lib/data/ble/ble_platform.dart`），不是 `BluetoothDevice`。
+2. **`RecordState`** 字段：`rideId` / `phase`（`RecordingPhase?`，null = 未开始）/ `mode` / `elapsedMs` / `distanceM` / `currentSpeedMps` / `hr` / `cadence` / `hrConnected` / `cadenceConnected` / `gpsWeak` / `errorMessage`，getter `isActive` / `isPaused` / `isFinished` / `elapsedSeconds`。
+3. **`RecordController`** 方法：`start()` / `resumeExisting(int)` / `pause()` / `resume()` / `finish()` / `reset()` / `setMode(RecordViewMode)` / `handleLifecycle(AppLifecycleState)` / `connectSensor(SensorKind, BleDeviceHandle)`。
+4. **`RecordingSession`** 构造函数新增可选参数：`initialElapsedMs` / `initialDistanceM` / `lastWritten` / **`resumedAtMs`**。
+5. **`home_shell.dart`** 的「记录」tab 已换成 `RecordPage()`；历史 / 统计 / 设置仍是 `PlaceholderPage`，由 Plan B 替换。
+   `test/app/home_shell_test.dart` 已依赖 tab 标签顺序 `['记录','历史','统计','设置']` 与 `IndexedStack.index == NavigationBar.selectedIndex`，**Plan B 改导航时不要破坏这两条**。
+6. **Task 22（真机验证）尚未执行**：需要一部带 BLE 与 GPS 的真机，尚未进行。
