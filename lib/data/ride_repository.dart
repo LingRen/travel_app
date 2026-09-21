@@ -1,0 +1,106 @@
+import '../domain/analysis/summary.dart';
+import '../domain/models/ride.dart';
+import '../domain/models/ride_status.dart';
+import '../domain/models/ride_summary.dart';
+import '../domain/models/track_point.dart';
+import 'db/ride_dao.dart';
+import 'db/track_point_dao.dart';
+import 'settings_repository.dart';
+
+/// 骑行数据的统一入口：组合 DAO 与 domain 分析层，供上层调用。
+class RideRepository {
+  RideRepository({
+    required this._rides,
+    required this._points,
+    required this._settings,
+  });
+
+  final RideDao _rides;
+  final TrackPointDao _points;
+  final SettingsRepository _settings;
+
+  /// 新建一条进行中的骑行记录。
+  Future<Ride> startRide({
+    required int startedAtMs,
+    String? hrDeviceName,
+    String? cadenceDeviceName,
+  }) async {
+    final int id = await _rides.insert(Ride(
+      startedAtMs: startedAtMs,
+      status: RideStatus.recording,
+      hrDeviceName: hrDeviceName,
+      cadenceDeviceName: cadenceDeviceName,
+    ));
+    return Ride(
+      id: id,
+      startedAtMs: startedAtMs,
+      status: RideStatus.recording,
+      hrDeviceName: hrDeviceName,
+      cadenceDeviceName: cadenceDeviceName,
+    );
+  }
+
+  Future<void> appendPoints(int rideId, List<TrackPoint> points) =>
+      _points.insertBatch(points);
+
+  Future<void> setStatus(int rideId, RideStatus status) => _rides.updateStatus(rideId, status);
+
+  /// 正常结束：用会话给出的时长（不含暂停）计算汇总。
+  Future<RideSummary> finishRide(
+    int rideId, {
+    required int endedAtMs,
+    required int durationS,
+  }) async {
+    final List<TrackPoint> points = await _points.listByRide(rideId);
+    final AppSettings settings = await _settings.load();
+    final RideSummary summary = computeSummary(
+      points: points,
+      durationS: durationS,
+      maxHeartRate: settings.maxHeartRate,
+      weightKg: settings.weightKg,
+    );
+    await _rides.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    return summary;
+  }
+
+  /// 崩溃恢复时选择「结算」：只用已有轨迹点推算，时长取末点与首点之差。
+  Future<RideSummary> settleRide(int rideId) async {
+    final Ride? ride = await _rides.findById(rideId);
+    if (ride == null) {
+      throw ArgumentError('骑行记录不存在: $rideId');
+    }
+    final List<TrackPoint> points = await _points.listByRide(rideId);
+    final AppSettings settings = await _settings.load();
+
+    final int endedAtMs = points.isEmpty ? ride.startedAtMs : points.last.tMs;
+    final int durationS =
+        points.length < 2 ? 0 : ((points.last.tMs - points.first.tMs) / 1000).round();
+
+    final RideSummary summary = computeSummary(
+      points: points,
+      durationS: durationS,
+      maxHeartRate: settings.maxHeartRate,
+      weightKg: settings.weightKg,
+    );
+    await _rides.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    return summary;
+  }
+
+  Future<List<Ride>> findUnfinished() => _rides.findUnfinished();
+
+  Future<List<Ride>> listFinished({int? limit, int? offset}) =>
+      _rides.listFinished(limit: limit, offset: offset);
+
+  Future<Ride?> getRide(int id) => _rides.findById(id);
+
+  Future<List<TrackPoint>> getPoints(int rideId) => _points.listByRide(rideId);
+
+  Future<TrackPoint?> lastPoint(int rideId) => _points.lastByRide(rideId);
+
+  Future<void> updateTitle(int rideId, String? title) => _rides.updateTitle(rideId, title);
+
+  Future<void> deleteRide(int rideId) async {
+    await _points.deleteByRide(rideId);
+    await _rides.delete(rideId);
+  }
+}
