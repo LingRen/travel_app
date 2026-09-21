@@ -46,9 +46,21 @@ class RecordingSnapshot {
 /// 需要时调用 [takePendingPoints] 取走一批点写库；结束前必须调用 [finish]
 /// 取走缓冲中剩余的点。
 class RecordingSession {
-  RecordingSession({required this.rideId, required this.startedAtMs})
-      : _lastTickMs = startedAtMs,
-        _lastWrittenMs = startedAtMs;
+  /// [resumedAtMs] 是崩溃恢复时「重新开始计时」的时刻。恢复的会话
+  /// [startedAtMs] 可能是几小时前，若不给出该时刻，恢复后的第一次 [tick] 会把
+  /// 开始到现在整段（含 App 没运行的空档）都累加进 [snapshot] 的时长。
+  RecordingSession({
+    required this.rideId,
+    required this.startedAtMs,
+    int initialElapsedMs = 0,
+    double initialDistanceM = 0,
+    TrackPoint? lastWritten,
+    int? resumedAtMs,
+  })  : _elapsedMs = initialElapsedMs,
+        _distanceM = initialDistanceM,
+        _lastWritten = lastWritten,
+        _lastTickMs = resumedAtMs ?? startedAtMs,
+        _lastWrittenMs = lastWritten?.tMs ?? startedAtMs;
 
   final int rideId;
   final int startedAtMs;
@@ -56,10 +68,10 @@ class RecordingSession {
   final WriteBuffer _buffer = WriteBuffer();
 
   RecordingPhase _phase = RecordingPhase.recording;
-  int _elapsedMs = 0;
+  int _elapsedMs;
   int _lastTickMs;
   int _lastWrittenMs;
-  double _distanceM = 0;
+  double _distanceM;
   double _currentSpeedMps = 0;
   int? _hr;
   double? _cadence;

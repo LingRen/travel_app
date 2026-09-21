@@ -159,6 +159,47 @@ void main() {
       expect(s.finish(2000).length, 1);
       expect(s.takePendingPoints(), isEmpty);
     });
+
+    test('可以用已落盘的点续写会话', () {
+      const TrackPoint last = TrackPoint(rideId: 1, tMs: 5000, lat: 31.0, lon: 121.0);
+      final RecordingSession s = RecordingSession(
+        rideId: 1,
+        startedAtMs: 0,
+        initialElapsedMs: 5000,
+        initialDistanceM: 120.0,
+        lastWritten: last,
+      );
+      expect(s.snapshot.elapsedMs, 5000);
+      expect(s.snapshot.distanceM, 120.0);
+
+      // 距上一点不足 5 米且不足 2 秒：不写入
+      s.ingestFix(const LocationFix(tMs: 6000, lat: 31.00001, lon: 121.0));
+      expect(s.takePendingPoints(), isEmpty);
+
+      // 距上一点超过 2 秒：写入
+      s.ingestFix(const LocationFix(tMs: 8000, lat: 31.00001, lon: 121.0));
+      expect(s.takePendingPoints().length, 1);
+    });
+
+    test('续写会话的时长从恢复时刻继续累计', () {
+      final RecordingSession s = RecordingSession(
+        rideId: 1,
+        // 一小时前开始、最后落盘点在一小时前：崩溃后 5 分钟才重启 App。
+        startedAtMs: -3599000,
+        initialElapsedMs: 2000,
+        lastWritten: const TrackPoint(rideId: 1, tMs: 0, lat: 31.0, lon: 121.0),
+        resumedAtMs: 300000,
+      );
+
+      expect(s.snapshot.elapsedMs, 2000);
+      s.tick(301000);
+      expect(
+        s.snapshot.elapsedMs,
+        3000,
+        reason: '只能加恢复之后的 1 秒：既不能算上开始到现在整段，'
+            '也不能算上崩溃到重启之间的空档',
+      );
+    });
   });
 
   group('RecordingSession 状态机边界', () {
