@@ -66,5 +66,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>用于记录你的骑行轨迹</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>锁屏或切到其他 App 时继续记录骑行轨迹</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>用于连接心率带与踏频器</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>用于连接心率带与踏频器</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>bluetooth-central</string>
+	</array>
 </dict>
 </plist>
