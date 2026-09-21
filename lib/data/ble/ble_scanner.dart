@@ -27,6 +27,10 @@ class BleScanner {
   /// 蓝牙是否已开启。未开启时由 UI 提示，不视为记录阻断项。
   Future<bool> isAdapterOn() => _platform.isAdapterOn();
 
+  /// 按 id 找回设备句柄。空 id 直接返回 null，不查平台。
+  Future<BleDeviceHandle?> deviceById(String id) =>
+      id.isEmpty ? Future<BleDeviceHandle?>.value() : _platform.deviceById(id);
+
   /// 扫描 [timeout] 时长，返回按信号强度从强到弱排序的候选设备。
   ///
   /// 不使用 `withServices` 过滤：部分设备不在广播里带服务 UUID，

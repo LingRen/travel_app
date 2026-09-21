@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../data/ble/ble_platform.dart';
 import '../data/ble/ble_scanner.dart';
 import '../data/db/ride_dao.dart';
 import '../data/db/settings_dao.dart';
 import '../data/db/track_point_dao.dart';
 import '../data/location/location_service.dart';
 import '../data/ride_repository.dart';
+import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
 
 /// 数据库连接。在 `main()` 里打开后用 override 注入，因此这里不需要异步。
@@ -42,8 +44,19 @@ final Provider<LocationService> locationServiceProvider =
 final Provider<int Function()> nowProvider =
     Provider<int Function()>((Ref ref) => () => DateTime.now().millisecondsSinceEpoch);
 
-final Provider<BleScanner> bleScannerProvider =
-    Provider<BleScanner>((Ref ref) => const BleScanner());
+/// BLE 平台。抽成 provider 是为了让记录控制器的自动重连能在测试里注入假实现。
+final Provider<BlePlatform> blePlatformProvider =
+    Provider<BlePlatform>((Ref ref) => const FlutterBluePlusPlatform());
+
+final Provider<BleScanner> bleScannerProvider = Provider<BleScanner>(
+  (Ref ref) => BleScanner(platform: ref.watch(blePlatformProvider)),
+);
+
+/// 已配对传感器的读写。设置页与记录控制器共用。
+final Provider<SensorPairingRepository> sensorPairingProvider =
+    Provider<SensorPairingRepository>(
+  (Ref ref) => SensorPairingRepository(SettingsDao(ref.watch(databaseProvider))),
+);
 
 /// 崩溃恢复时用户选择「继续」的骑行 id。记录页读到后调用
 /// `RecordController.resumeExisting` 续写该会话。

@@ -8,6 +8,7 @@ import '../../data/ble/ble_platform.dart';
 import '../../data/ble/sensor_monitor.dart';
 import '../../data/location/location_service.dart';
 import '../../data/ride_repository.dart';
+import '../../data/sensor_pairing.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/geo.dart';
 import '../../domain/models/location_fix.dart';
@@ -80,6 +81,16 @@ class RecordController extends Notifier<RecordState> {
   SensorMonitor? _hrMonitor;
   SensorMonitor? _cadenceMonitor;
 
+  /// 自动重连的整体时间预算。
+  ///
+  /// 传感器不在身边时 `connect` 要等满 10 秒超时，不能让「开始骑行」卡那么久。
+  /// 超时后记录照常开始，[SensorMonitor] 的退避重连会继续在后台尝试。
+  static const Duration _kAutoConnectBudget = Duration(seconds: 3);
+
+  SensorPairingRepository get _pairing => ref.read(sensorPairingProvider);
+
+  BlePlatform get _blePlatform => ref.read(blePlatformProvider);
+
   int? _rideId;
   RecordViewMode _mode = RecordViewMode.handlebar;
   bool _hrConnected = false;
@@ -119,6 +130,10 @@ class RecordController extends Notifier<RecordState> {
       _publish();
       return;
     }
+
+    // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
+    // 这样 rides.hr_device_name / cadence_device_name 才有值。
+    await _autoConnectPairedSensors().timeout(_kAutoConnectBudget, onTimeout: () {});
 
     final Ride ride = await ref.read(rideRepositoryProvider).startRide(
           startedAtMs: _now(),
@@ -298,7 +313,33 @@ class RecordController extends Notifier<RecordState> {
     } else {
       _cadenceConnected = connected;
     }
+    // 只有真的连上了才记住：用户点错设备（那个设备不提供标准 HRS）时
+    // 不该被写进配对，否则下次开记录会一直去连一个连不上的设备。
+    if (connected) unawaited(_rememberSensor(kind));
     _publish();
+  }
+
+  Future<void> _rememberSensor(SensorKind kind) async {
+    final SensorMonitor? monitor =
+        kind == SensorKind.heartRate ? _hrMonitor : _cadenceMonitor;
+    if (monitor == null) return;
+    await _pairing.save(
+      kind,
+      PairedSensor(id: monitor.device.id, name: monitor.deviceName),
+    );
+  }
+
+  /// 自动重连上次配对成功的传感器。见设计文档 10.5 与 6.1。
+  ///
+  /// 任何一步失败都直接跳过：传感器连不上不阻断开始记录（设计文档 6.1）。
+  Future<void> _autoConnectPairedSensors() async {
+    for (final SensorKind kind in SensorKind.values) {
+      final PairedSensor? paired = await _pairing.load(kind);
+      if (paired == null) continue;
+      final BleDeviceHandle? device = await _blePlatform.deviceById(paired.id);
+      if (device == null) continue;
+      await connectSensor(kind, device);
+    }
   }
 
   /// 攒够一批就提交一个事务；[force] 为真时无条件提交（暂停、结束、退后台）。

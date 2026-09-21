@@ -64,6 +64,12 @@ abstract class BlePlatform {
   Future<void> startScan({required Duration timeout});
 
   Future<void> stopScan();
+
+  /// 按平台侧 id 找回一个设备句柄，用于自动重连已配对的传感器。
+  ///
+  /// 找不到时返回 null。注意这里拿到的句柄没有广播信息，连接前也读不到
+  /// 系统缓存名——因此配对时要把名字一起存下来。
+  Future<BleDeviceHandle?> deviceById(String id);
 }
 
 /// 生产实现：转发到 flutter_blue_plus。
@@ -76,15 +82,15 @@ class FlutterBluePlusPlatform implements BlePlatform {
 
   @override
   Stream<List<BleScanEntry>> scanResults() => FlutterBluePlus.scanResults.map(
-        (List<ScanResult> results) => <BleScanEntry>[
-          for (final ScanResult r in results)
-            BleScanEntry(
-              device: FlutterBluePlusDevice(r.device),
-              advertisedName: r.advertisementData.advName,
-              rssi: r.rssi,
-            ),
-        ],
-      );
+    (List<ScanResult> results) => <BleScanEntry>[
+      for (final ScanResult r in results)
+        BleScanEntry(
+          device: FlutterBluePlusDevice(r.device),
+          advertisedName: r.advertisementData.advName,
+          rssi: r.rssi,
+        ),
+    ],
+  );
 
   @override
   Future<void> startScan({required Duration timeout}) =>
@@ -92,6 +98,10 @@ class FlutterBluePlusPlatform implements BlePlatform {
 
   @override
   Future<void> stopScan() => FlutterBluePlus.stopScan();
+
+  @override
+  Future<BleDeviceHandle?> deviceById(String id) async =>
+      id.isEmpty ? null : FlutterBluePlusDevice(BluetoothDevice.fromId(id));
 }
 
 /// 生产实现：包装一个 [BluetoothDevice]。
@@ -108,9 +118,8 @@ class FlutterBluePlusDevice implements BleDeviceHandle {
 
   @override
   Stream<bool> get connectionState => device.connectionState.map(
-        (BluetoothConnectionState s) =>
-            s == BluetoothConnectionState.connected,
-      );
+    (BluetoothConnectionState s) => s == BluetoothConnectionState.connected,
+  );
 
   @override
   Future<void> connect({required Duration timeout}) =>

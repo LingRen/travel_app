@@ -44,6 +44,12 @@ class FakeBlePlatform implements BlePlatform {
   int stopScanCalls = 0;
   Duration? capturedTimeout;
 
+  /// `deviceById` 的返回值表。
+  final Map<String, BleDeviceHandle> devicesById = <String, BleDeviceHandle>{};
+
+  @override
+  Future<BleDeviceHandle?> deviceById(String id) async => devicesById[id];
+
   @override
   Future<bool> isAdapterOn() async => adapterOn;
 
@@ -168,6 +174,28 @@ void main() {
 
       expect(found.length, 1);
       expect(found.single.name, isEmpty);
+    });
+  });
+
+  group('deviceById', () {
+    test('能按 id 找回设备句柄', () async {
+      final FakeBlePlatform platform = FakeBlePlatform();
+      final FakeScanDevice device = FakeScanDevice(id: 'AA:01', name: 'Fit 3');
+      platform.devicesById['AA:01'] = device;
+
+      final BleDeviceHandle? found =
+          await BleScanner(platform: platform).deviceById('AA:01');
+      expect(found, same(device));
+    });
+
+    test('id 不存在时返回 null', () async {
+      final FakeBlePlatform platform = FakeBlePlatform();
+      expect(await BleScanner(platform: platform).deviceById('AA:99'), isNull);
+    });
+
+    test('空 id 直接返回 null，不查平台', () async {
+      final FakeBlePlatform platform = FakeBlePlatform();
+      expect(await BleScanner(platform: platform).deviceById(''), isNull);
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:cycling_app/data/ble/ble_platform.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/ride_repository.dart';
+import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
@@ -188,6 +189,47 @@ class _FakeBleDevice implements BleDeviceHandle {
       characteristics;
 }
 
+/// 内存版配对仓储：不碰数据库，FakeAsync 下安全。
+class _FakeSensorPairing implements SensorPairingRepository {
+  final Map<SensorKind, PairedSensor> stored = <SensorKind, PairedSensor>{};
+
+  @override
+  Future<PairedSensor?> load(SensorKind kind) async => stored[kind];
+
+  @override
+  Future<void> save(SensorKind kind, PairedSensor sensor) async {
+    stored[kind] = sensor;
+  }
+
+  @override
+  Future<void> clear(SensorKind kind) async {
+    stored.remove(kind);
+  }
+}
+
+/// 只实现 deviceById 的假平台，供自动重连用例使用。
+class _FakeBlePlatform implements BlePlatform {
+  _FakeBlePlatform(this.devicesById);
+
+  final Map<String, BleDeviceHandle> devicesById;
+
+  @override
+  Future<BleDeviceHandle?> deviceById(String id) async => devicesById[id];
+
+  @override
+  Future<bool> isAdapterOn() async => true;
+
+  @override
+  Stream<List<BleScanEntry>> scanResults() =>
+      const Stream<List<BleScanEntry>>.empty();
+
+  @override
+  Future<void> startScan({required Duration timeout}) async {}
+
+  @override
+  Future<void> stopScan() async {}
+}
+
 /// 标准 HRS 特征值：服务 0x180D、测量 0x2A37（故意用 128 位长形式）。
 _FakeCharacteristic _hrCharacteristic() => _FakeCharacteristic(
       serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
@@ -205,14 +247,28 @@ void main() {
     clockMs = 1000;
   });
 
-  /// 只替换 IO 边界的容器：假仓储、假定位、假时钟。
-  ProviderContainer makeContainer() => ProviderContainer(
-        overrides: <Override>[
-          rideRepositoryProvider.overrideWithValue(repo),
-          locationServiceProvider.overrideWithValue(location),
-          nowProvider.overrideWithValue(() => clockMs),
-        ],
-      );
+  /// 只替换 IO 边界的容器：假仓储、假定位、假时钟、假配对、假 BLE 平台。
+  ///
+  /// BLE 平台默认也给假的：真实实现会走平台通道，`testWidgets` 的 FakeAsync 下
+  /// 那个 await 永远不返回（`.timeout` 的定时器也是假的，不 pump 就不触发），
+  /// 会把用例挂死。默认假平台找不到任何设备，即「没有配对」。
+  ProviderContainer makeContainer({
+    _FakeSensorPairing? pairing,
+    BlePlatform? platform,
+  }) {
+    final _FakeSensorPairing sensorPairing = pairing ?? _FakeSensorPairing();
+    return ProviderContainer(
+      overrides: <Override>[
+        rideRepositoryProvider.overrideWithValue(repo),
+        locationServiceProvider.overrideWithValue(location),
+        nowProvider.overrideWithValue(() => clockMs),
+        sensorPairingProvider.overrideWithValue(sensorPairing),
+        blePlatformProvider.overrideWithValue(
+          platform ?? _FakeBlePlatform(const <String, BleDeviceHandle>{}),
+        ),
+      ],
+    );
+  }
 
   /// 推入一个定位点，并把假时钟与 1Hz 节拍一起推进 1 秒。
   ///
@@ -558,6 +614,83 @@ void main() {
     expect(state.mode, RecordViewMode.pocket);
     expect(state.phase, RecordingPhase.recording);
     expect(state.distanceM, greaterThan(0));
+    container.dispose();
+  });
+
+  testWidgets('start 时自动重连已配对的心率传感器，并把设备名写进骑行记录',
+      (WidgetTester tester) async {
+    final _FakeSensorPairing pairing = _FakeSensorPairing();
+    pairing.stored[SensorKind.heartRate] =
+        const PairedSensor(id: 'AA:01', name: 'FIT 3');
+    final _FakeBleDevice device = _FakeBleDevice(
+      id: 'AA:01',
+      name: 'FIT 3',
+      characteristics: <BleCharacteristicHandle>[_hrCharacteristic()],
+    );
+    final ProviderContainer container = makeContainer(
+      pairing: pairing,
+      platform: _FakeBlePlatform(<String, BleDeviceHandle>{'AA:01': device}),
+    );
+
+    await container.read(recordControllerProvider.notifier).start();
+    await tester.pump();
+
+    expect(device.connectCalls, 1);
+    expect(container.read(recordControllerProvider).hrConnected, isTrue);
+    expect(repo.hrDeviceName, 'FIT 3');
+    container.dispose();
+  });
+
+  testWidgets('没有配对时 start 不尝试连接任何传感器', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer(
+      platform: _FakeBlePlatform(<String, BleDeviceHandle>{}),
+    );
+
+    await container.read(recordControllerProvider.notifier).start();
+    await tester.pump();
+
+    expect(container.read(recordControllerProvider).hrConnected, isFalse);
+    expect(container.read(recordControllerProvider).cadenceConnected, isFalse);
+    expect(repo.hrDeviceName, isNull);
+    expect(container.read(recordControllerProvider).phase, RecordingPhase.recording);
+    container.dispose();
+  });
+
+  testWidgets('配对里的设备找不回来时照常开始记录，不报错', (WidgetTester tester) async {
+    final _FakeSensorPairing pairing = _FakeSensorPairing();
+    pairing.stored[SensorKind.heartRate] =
+        const PairedSensor(id: 'AA:01', name: 'FIT 3');
+    final ProviderContainer container = makeContainer(
+      pairing: pairing,
+      platform: _FakeBlePlatform(<String, BleDeviceHandle>{}), // 空表，找不到
+    );
+
+    await container.read(recordControllerProvider.notifier).start();
+    await tester.pump();
+
+    final RecordState state = container.read(recordControllerProvider);
+    expect(state.phase, RecordingPhase.recording);
+    expect(state.errorMessage, isNull);
+    expect(state.hrConnected, isFalse);
+    container.dispose();
+  });
+
+  testWidgets('连接传感器成功后记住设备，供下次自动重连', (WidgetTester tester) async {
+    final _FakeSensorPairing pairing = _FakeSensorPairing();
+    final ProviderContainer container = makeContainer(pairing: pairing);
+    final _FakeBleDevice device = _FakeBleDevice(
+      id: 'AA:01',
+      name: 'FIT 3',
+      characteristics: <BleCharacteristicHandle>[_hrCharacteristic()],
+    );
+
+    await container
+        .read(recordControllerProvider.notifier)
+        .connectSensor(SensorKind.heartRate, device);
+    await tester.pump();
+
+    expect(pairing.stored[SensorKind.heartRate]!.id, 'AA:01');
+    expect(pairing.stored[SensorKind.heartRate]!.name, 'FIT 3');
     container.dispose();
   });
 }

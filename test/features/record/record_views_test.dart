@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/ride_repository.dart';
+import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/ride.dart';
@@ -101,6 +103,18 @@ class _FakeLocationService implements LocationService {
 
   @override
   Future<bool> openLocationSettings() async => true;
+}
+
+/// 内存版配对仓储：记录页测试不关心传感器配对，等价于「从没配对过」。
+class _FakeSensorPairing implements SensorPairingRepository {
+  @override
+  Future<PairedSensor?> load(SensorKind kind) async => null;
+
+  @override
+  Future<void> save(SensorKind kind, PairedSensor sensor) async {}
+
+  @override
+  Future<void> clear(SensorKind kind) async {}
 }
 
 const AppSettings _testSettings = AppSettings(
@@ -227,6 +241,7 @@ void main() {
           rideRepositoryProvider.overrideWithValue(repo),
           locationServiceProvider.overrideWithValue(location),
           nowProvider.overrideWithValue(() => 1000),
+          sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
         ],
         child: const MaterialApp(home: RecordPage()),
       ));
