@@ -51,4 +51,18 @@ class TrackPointDao {
   Future<void> deleteByRide(int rideId) async {
     await _db.delete('track_points', where: 'ride_id = ?', whereArgs: <Object?>[rideId]);
   }
+
+  /// 全部轨迹点，按 ride_id 再按 t_ms 正序。备份导出用。
+  Future<List<TrackPoint>> listAll() async {
+    final List<Map<String, Object?>> rows = await _db.query(
+      'track_points',
+      orderBy: 'ride_id ASC, t_ms ASC',
+    );
+    return rows.map(TrackPoint.fromDbMap).toList();
+  }
+
+  /// 清空 track_points 表。恢复备份前调用。
+  Future<void> deleteAll() async {
+    await _db.delete('track_points');
+  }
 }

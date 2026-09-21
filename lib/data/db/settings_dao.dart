@@ -25,6 +25,11 @@ class SettingsDao {
     );
   }
 
+  /// 删除一个键。键不存在时静默返回。
+  Future<void> remove(String key) async {
+    await _db.delete('settings', where: 'key = ?', whereArgs: <Object?>[key]);
+  }
+
   Future<Map<String, String>> getAll() async {
     final List<Map<String, Object?>> rows = await _db.query('settings');
     return <String, String>{

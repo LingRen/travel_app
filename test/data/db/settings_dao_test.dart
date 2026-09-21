@@ -39,4 +39,20 @@ void main() {
     await dao.setString('b', '2');
     expect(await dao.getAll(), <String, String>{'a': '1', 'b': '2'});
   });
+
+  test('remove 删掉键后读回 null', () async {
+    final SettingsDao dao = SettingsDao(db);
+    await dao.setString('hr_sensor_id', 'AA:BB');
+    await dao.setString('weight_kg', '70');
+
+    await dao.remove('hr_sensor_id');
+
+    expect(await dao.getString('hr_sensor_id'), isNull);
+    expect(await dao.getString('weight_kg'), '70');
+  });
+
+  test('remove 一个不存在的键不抛错', () async {
+    await SettingsDao(db).remove('never_set');
+    expect(await SettingsDao(db).getString('never_set'), isNull);
+  });
 }

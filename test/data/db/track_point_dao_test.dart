@@ -86,4 +86,37 @@ void main() {
     expect(await dao.countByRide(otherRideId), 1);
     expect((await dao.lastByRide(otherRideId))!.tMs, 1000);
   });
+
+  test('listAll 按 ride_id 再按 t_ms 正序返回全部点', () async {
+    final int rideA = await RideDao(db).insert(
+      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    );
+    final int rideB = await RideDao(db).insert(
+      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    );
+
+    await dao.insertBatch(<TrackPoint>[
+      TrackPoint(rideId: rideB, tMs: 100, lat: 1.0, lon: 1.0),
+      TrackPoint(rideId: rideA, tMs: 300, lat: 2.0, lon: 2.0),
+      TrackPoint(rideId: rideA, tMs: 100, lat: 3.0, lon: 3.0),
+    ]);
+
+    final List<TrackPoint> all = await dao.listAll();
+    expect(all.length, 3);
+    expect(all.map((TrackPoint p) => p.rideId).toList(), <int>[rideA, rideA, rideB]);
+    expect(all[0].tMs, 100);
+    expect(all[1].tMs, 300);
+  });
+
+  test('deleteAll 清空 track_points 表', () async {
+    final int rideId = await RideDao(db).insert(
+      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    );
+    await dao.insertBatch(<TrackPoint>[
+      TrackPoint(rideId: rideId, tMs: 0, lat: 1.0, lon: 1.0),
+    ]);
+
+    await dao.deleteAll();
+    expect(await dao.listAll(), isEmpty);
+  });
 }

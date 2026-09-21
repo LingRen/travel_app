@@ -103,4 +103,89 @@ void main() {
     await dao.delete(id);
     expect(await dao.findById(id), isNull);
   });
+
+  test('listFinishedBetween 只取区间内已完成的骑行，按开始时间正序', () async {
+    await dao.insert(const Ride(startedAtMs: 1000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 2000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 3000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 2500, status: RideStatus.recording));
+
+    final List<Ride> rides = await dao.listFinishedBetween(fromMs: 2000, toMs: 3000);
+    expect(rides.map((Ride r) => r.startedAtMs).toList(), <int>[2000]);
+  });
+
+  test('listFinishedBetween 是左闭右开区间', () async {
+    await dao.insert(const Ride(startedAtMs: 2000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 3000, status: RideStatus.finished));
+
+    final List<Ride> rides = await dao.listFinishedBetween(fromMs: 2000, toMs: 3000);
+    expect(rides.length, 1);
+    expect(rides.first.startedAtMs, 2000);
+  });
+
+  test('countFinished 只数已完成的骑行', () async {
+    await dao.insert(const Ride(startedAtMs: 1000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 2000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 3000, status: RideStatus.recording));
+
+    expect(await dao.countFinished(), 2);
+  });
+
+  test('insertWithId 保留给定的 id，供备份恢复使用', () async {
+    await dao.insertWithId(const Ride(
+      id: 7,
+      startedAtMs: 1000,
+      status: RideStatus.finished,
+      title: '通勤',
+    ));
+
+    final Ride ride = (await dao.findById(7))!;
+    expect(ride.title, '通勤');
+    expect(ride.startedAtMs, 1000);
+  });
+
+  test('insertWithId 能原样保留汇总列', () async {
+    await dao.insertWithId(Ride(
+      id: 3,
+      startedAtMs: 1000,
+      endedAtMs: 3601000,
+      status: RideStatus.finished,
+      summary: const RideSummary(
+        distanceM: 25000,
+        durationS: 3600,
+        movingS: 3400,
+        avgSpeedMps: 6.94,
+        movingAvgSpeedMps: 7.35,
+        maxSpeedMps: 12.5,
+        elevationGainM: 180,
+        avgHr: 142,
+        maxHr: 176,
+        avgCadence: 78,
+        calories: 900,
+        pointCount: 3400,
+      ),
+    ));
+
+    final RideSummary s = (await dao.findById(3))!.summary!;
+    expect(s.distanceM, 25000);
+    expect(s.maxHr, 176);
+    expect(s.calories, 900);
+    expect(s.pointCount, 3400);
+  });
+
+  test('deleteAll 清空 rides 表', () async {
+    await dao.insert(const Ride(startedAtMs: 1000, status: RideStatus.finished));
+    await dao.deleteAll();
+    expect(await dao.countFinished(), 0);
+    expect(await dao.listFinished(), isEmpty);
+  });
+
+  test('listFinishedBetween 区间内多条时按开始时间正序', () async {
+    await dao.insert(const Ride(startedAtMs: 2500, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 2000, status: RideStatus.finished));
+    await dao.insert(const Ride(startedAtMs: 2800, status: RideStatus.finished));
+
+    final List<Ride> rides = await dao.listFinishedBetween(fromMs: 2000, toMs: 3000);
+    expect(rides.map((Ride r) => r.startedAtMs).toList(), <int>[2000, 2500, 2800]);
+  });
 }
