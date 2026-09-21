@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../features/history/history_page.dart';
 import '../features/record/record_page.dart';
+import '../features/settings/settings_page.dart';
+import '../features/stats/stats_page.dart';
 
 /// 底部四 tab 导航壳。见设计文档 10。
 ///
-/// 「记录」已是真实的 [RecordPage]；历史 / 统计 / 设置仍是占位页，由 Plan B 实现。
+/// 四个 tab 都已是真实页面。
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -21,9 +24,9 @@ class _HomeShellState extends State<HomeShell> {
           index: _index,
           children: const <Widget>[
             RecordPage(),
-            PlaceholderPage(title: '历史'),
-            PlaceholderPage(title: '统计'),
-            PlaceholderPage(title: '设置'),
+            HistoryPage(),
+            StatsPage(),
+            SettingsPage(),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -39,7 +42,7 @@ class _HomeShellState extends State<HomeShell> {
       );
 }
 
-/// 尚未实现的页面占位。Plan B 会逐个替换成真实页面。
+/// 尚未实现的页面占位。四个 tab 都已接入真实页面，暂时没有引用者，保留备后续使用。
 class PlaceholderPage extends StatelessWidget {
   const PlaceholderPage({required this.title, super.key});
 
