@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../models/track_point.dart';
 import 'constants.dart';
+import 'geo.dart';
 
 /// 滑动平均，窗口以当前点为中心并裁剪到序列边界。
 /// 窗口内只统计非空值；窗口内全为空时输出 null。
@@ -46,15 +47,23 @@ class MovingStats {
 /// 按速度阈值切分移动/静止时长。
 ///
 /// 以相邻两点的时间差作为该区间的时长，速度取区间末点的瞬时速度。
-/// 时间不前进、缺速度、或间隔超过 [kGpsGapMs] 的区间不计入任何一侧
-/// —— 后者与设计文档 9.3 的 GPS 断点定义保持一致。
+/// 下列区间不计入任何一侧：
+/// - 时间不前进，或间隔超过 [kGpsGapMs]（设计文档 9.3 的 GPS 断点）
+/// - 缺速度
+/// - 两端都有坐标、却构成 GPS 跳变（隐含速度超过 [kMaxPlausibleSpeedMps]）。
+///   跳变区间的距离已被 [segmentDistanceMeters] 剔除，时长也必须一并剔除，
+///   否则移动均速（距离 / 移动时长）会被低估。
 MovingStats splitMovingStationary(List<TrackPoint> points, double thresholdMps) {
   double moving = 0;
   double stationary = 0;
   for (int i = 1; i < points.length; i++) {
-    final int dtMs = points[i].tMs - points[i - 1].tMs;
+    final TrackPoint prev = points[i - 1];
+    final TrackPoint cur = points[i];
+    final int dtMs = cur.tMs - prev.tMs;
     if (dtMs <= 0 || dtMs > kGpsGapMs) continue;
-    final double? v = points[i].speedMps;
+    // 只有两端都有坐标时才判得出跳变；缺坐标的区间退回纯时间判定。
+    if (prev.hasPosition && cur.hasPosition && !isTrustedSegment(prev, cur)) continue;
+    final double? v = cur.speedMps;
     if (v == null) continue;
     final double dt = dtMs / 1000.0;
     if (v < thresholdMps) {

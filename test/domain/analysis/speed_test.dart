@@ -57,7 +57,35 @@ void main() {
       expect(s.movingSeconds, 0);
       expect(s.stationarySeconds, 0);
     });
+
+    test('GPS 跳变的区间两个时长都不计入', () {
+      // 1 秒内纬度跳了 0.01°（约 1113 m），隐含速度远超 kMaxPlausibleSpeedMps。
+      // 距离侧已由 segmentDistanceMeters 剔除该段，时长侧若照常计入，
+      // 移动均速（距离 / 移动时长）就会被低估。
+      final List<TrackPoint> points = <TrackPoint>[
+        _pos(0, 31.23, 121.47, 5.0),
+        _pos(1000, 31.24, 121.47, 5.0),
+      ];
+      final MovingStats s = splitMovingStationary(points, kStationarySpeedMps);
+      expect(s.movingSeconds, 0);
+      expect(s.stationarySeconds, 0);
+    });
+
+    test('正常位移的区间照常计入', () {
+      // 1 秒内纬度走 0.000045°（约 5.0 m），隐含速度 5 m/s 未超上限，
+      // 用于确认上面的跳变守卫没有把正常段一并误杀。
+      final List<TrackPoint> points = <TrackPoint>[
+        _pos(0, 31.23, 121.47, 5.0),
+        _pos(1000, 31.230045, 121.47, 5.0),
+      ];
+      final MovingStats s = splitMovingStationary(points, kStationarySpeedMps);
+      expect(s.movingSeconds, closeTo(1.0, 1e-9));
+      expect(s.stationarySeconds, 0);
+    });
   });
 }
 
 TrackPoint _p(int tMs, double? speed) => TrackPoint(rideId: 1, tMs: tMs, speedMps: speed);
+
+TrackPoint _pos(int tMs, double lat, double lon, double? speed) =>
+    TrackPoint(rideId: 1, tMs: tMs, lat: lat, lon: lon, speedMps: speed);

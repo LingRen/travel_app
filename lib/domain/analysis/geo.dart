@@ -19,18 +19,23 @@ double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
   return 2 * kEarthRadiusM * math.asin(math.min(1.0, math.sqrt(a)));
 }
 
-/// 相邻两个轨迹点之间的有效距离（米）。
+/// 相邻两点是否构成一个可信的轨迹段。
 ///
-/// 下列情况返回 0，即视为「不可信，不连线也不计距离」：
+/// 下列情况返回 false，即视为「不可信，不连线、不计距离，也不计入移动/静止时长」：
 /// - 任一端点缺坐标（GPS 丢失）
 /// - 时间不前进
 /// - 时间间隔超过 [kGpsGapMs]（设计文档 9.3 的 GPS 断点）
 /// - 隐含速度超过 [kMaxPlausibleSpeedMps]（GPS 跳变）
-double segmentDistanceMeters(TrackPoint a, TrackPoint b) {
-  if (!a.hasPosition || !b.hasPosition) return 0;
+bool isTrustedSegment(TrackPoint a, TrackPoint b) {
+  if (!a.hasPosition || !b.hasPosition) return false;
   final int dtMs = b.tMs - a.tMs;
-  if (dtMs <= 0 || dtMs > kGpsGapMs) return 0;
+  if (dtMs <= 0 || dtMs > kGpsGapMs) return false;
   final double d = haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!);
-  if (d / (dtMs / 1000.0) > kMaxPlausibleSpeedMps) return 0;
-  return d;
+  return d / (dtMs / 1000.0) <= kMaxPlausibleSpeedMps;
 }
+
+/// 相邻两个轨迹点之间的有效距离（米）。
+///
+/// 不可信时返回 0，判定规则见 [isTrustedSegment]。
+double segmentDistanceMeters(TrackPoint a, TrackPoint b) =>
+    isTrustedSegment(a, b) ? haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) : 0;
