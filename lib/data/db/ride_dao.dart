@@ -8,7 +8,7 @@ import '../../domain/models/ride_summary.dart';
 class RideDao {
   RideDao(this._db);
 
-  final Database _db;
+  final DatabaseExecutor _db;
 
   /// 插入一行并返回新 id。进行中的骑行汇总列全部为 NULL。
   Future<int> insert(Ride ride) async {

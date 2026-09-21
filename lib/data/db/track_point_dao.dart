@@ -6,7 +6,7 @@ import '../../domain/models/track_point.dart';
 class TrackPointDao {
   TrackPointDao(this._db);
 
-  final Database _db;
+  final DatabaseExecutor _db;
 
   /// 一个事务内批量插入。空列表直接返回，不开启事务。
   Future<void> insertBatch(List<TrackPoint> points) async {
