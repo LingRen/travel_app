@@ -6,11 +6,14 @@ import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/curve.dart';
 import '../../domain/analysis/heart_rate.dart';
+import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/ride.dart';
 import '../../domain/models/track_point.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
+import 'gpx_export.dart';
 import 'hr_zone_bar.dart';
+import 'route_map.dart';
 import 'summary_grid.dart';
 
 /// 单次骑行详情页。见设计文档 10.3。
@@ -61,8 +64,18 @@ class _DetailBody extends ConsumerWidget {
     final List<CurveSample> cadence =
         buildCurve(points, metric: CurveMetric.cadence);
 
+    final List<RouteSegment> route = buildRouteSegments(points);
+    final String tileUrl =
+        ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
+            kDefaultMapTileUrlTemplate;
+
     return ListView(
       children: <Widget>[
+        RouteMap(
+          segments: route,
+          tileUrlTemplate: tileUrl,
+          subdomains: kDefaultMapTileSubdomains,
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Text(
@@ -103,9 +116,31 @@ class _DetailBody extends ConsumerWidget {
             child: CurveChart(samples: cadence, unitLabel: 'rpm'),
           ),
         ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+          child: FilledButton.icon(
+            onPressed: () => _exportGpx(context, ride, points),
+            icon: const Icon(Icons.ios_share),
+            label: const Text('导出 GPX'),
+          ),
+        ),
         const SizedBox(height: 32),
       ],
     );
+  }
+
+  /// 导出失败时给用户一句能看懂的话，而不是把异常栈糊在界面上。
+  Future<void> _exportGpx(
+    BuildContext context,
+    Ride ride,
+    List<TrackPoint> points,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await const GpxExporter().exportAndShare(ride: ride, points: points);
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('导出失败：$error')));
+    }
   }
 }
 

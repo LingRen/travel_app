@@ -10,6 +10,8 @@ import 'package:cycling_app/features/detail/curve_chart.dart';
 import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/detail/hr_zone_bar.dart';
+import 'package:cycling_app/features/detail/route_map.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -215,6 +217,37 @@ void main() {
 
     expect(find.text('这条记录还没有汇总指标'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('轨迹点有坐标时渲染地图区块', (WidgetTester tester) async {
+    await tester.pumpWidget(wrap(
+      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+    ));
+    await tester.pumpAndSettle();
+
+    // 实测：flutter_test 的 HttpOverrides 让瓦片请求返回 400 而不是挂起，
+    // `pumpAndSettle` 不会超时，也不会有异常逃出来；瓦片自然一张都没画出来
+    // （`find.byType(Image)` 为 0），但地图与折线图层本身确实构建了。
+    // 只断言 `RouteMap` 的话，这条用例在「永远显示占位提示」的实现下也会通过，
+    // 因此把「真的建了 FlutterMap」钉住。
+    expect(find.byType(RouteMap), findsOneWidget);
+    expect(find.byType(FlutterMap), findsOneWidget);
+    expect(find.byType(PolylineLayer), findsOneWidget);
+  });
+
+  testWidgets('轨迹点没有坐标时不渲染地图，显示占位提示', (WidgetTester tester) async {
+    final List<TrackPoint> noPosition = <TrackPoint>[
+      for (int i = 0; i < 3; i++)
+        TrackPoint(rideId: 1, tMs: 1000 + i * 1000, speedMps: 5, hr: 140),
+    ];
+
+    await tester.pumpWidget(wrap(
+      detail: RideDetail(ride: rideWith(), points: noPosition),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RouteMap), findsOneWidget);
+    expect(find.text('这次骑行没有可显示的轨迹'), findsOneWidget);
   });
 
   group('曲线断点分段', () {
