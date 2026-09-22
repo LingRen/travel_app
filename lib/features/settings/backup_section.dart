@@ -103,6 +103,9 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
       if (!ok) return;
 
       await ref.read(backupStoreProvider).apply(payload, replaceExisting: true);
+      // 恢复走的是 BackupStore，不经过 RideRepository，得在这里手动通知
+      // 历史页与统计页重查，否则它们还显示被替换掉的旧数据。
+      ref.read(rideDataRevisionProvider.notifier).markChanged();
       _setMessage(
         '恢复完成：${payload.rides.length} 条记录、${payload.points.length} 个轨迹点',
         isError: false,

@@ -10,9 +10,11 @@ import '../../domain/models/ride.dart';
 ///
 /// 个人记录量级（几百到几千条）下这完全够用；真到几万条再考虑下推到 SQL。
 final FutureProvider<List<Ride>> finishedRidesProvider =
-    FutureProvider<List<Ride>>(
-  (Ref ref) => ref.watch(rideRepositoryProvider).listFinished(),
-);
+    FutureProvider<List<Ride>>((Ref ref) {
+  // 依赖数据版本号：结束骑行、崩溃结算、删除、恢复备份后自动重查。
+  ref.watch(rideDataRevisionProvider);
+  return ref.watch(rideRepositoryProvider).listFinished();
+});
 
 /// 当前选中的统计范围。见设计文档 10.4。
 final StateProvider<TrendRange> trendRangeProvider =

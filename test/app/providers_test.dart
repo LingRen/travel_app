@@ -10,6 +10,8 @@ import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/features/history/history_providers.dart';
+import 'package:cycling_app/features/stats/stats_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -172,5 +174,56 @@ void main() {
     container.read(resumeRideIdProvider.notifier).state = 7;
 
     expect(container.read(resumeRideIdProvider), 7);
+  });
+
+  // 真机验证时发现的缺陷：结算保存后切回历史页仍是旧列表，必须杀进程重启
+  // 才看得到新记录。根因是这些 FutureProvider 取过一次数就一直缓存着，
+  // 没有任何地方让它们失效。这里钉住修复：结束骑行后自动重查。
+  test('结束骑行后历史与统计列表自动刷新，无需手动 invalidate', () async {
+    // 订阅住，模拟页面一直挂着 watch：否则缓存可能因无人监听被回收，
+    // 断言就退化成「反正每次都会重查」，失去区分力。
+    final ProviderSubscription<AsyncValue<List<Ride>>> historySub =
+        container.listen(historyRidesProvider, (_, _) {});
+    final ProviderSubscription<AsyncValue<List<Ride>>> statsSub =
+        container.listen(finishedRidesProvider, (_, _) {});
+    addTearDown(historySub.close);
+    addTearDown(statsSub.close);
+
+    expect(await container.read(historyRidesProvider.future), isEmpty);
+    expect(await container.read(finishedRidesProvider.future), isEmpty);
+
+    final int id = await seedRide(0);
+    await container.read(rideRepositoryProvider).finishRide(
+          id,
+          endedAtMs: 2000,
+          durationS: 2,
+        );
+
+    expect(
+      (await container.read(historyRidesProvider.future)).map((Ride r) => r.id),
+      <int>[id],
+    );
+    expect(
+      (await container.read(finishedRidesProvider.future)).map((Ride r) => r.id),
+      <int>[id],
+    );
+  });
+
+  test('删除骑行后历史列表自动刷新', () async {
+    final ProviderSubscription<AsyncValue<List<Ride>>> sub =
+        container.listen(historyRidesProvider, (_, _) {});
+    addTearDown(sub.close);
+
+    final int id = await seedRide(0);
+    await container.read(rideRepositoryProvider).finishRide(
+          id,
+          endedAtMs: 2000,
+          durationS: 2,
+        );
+    expect(await container.read(historyRidesProvider.future), hasLength(1));
+
+    await container.read(rideRepositoryProvider).deleteRide(id);
+
+    expect(await container.read(historyRidesProvider.future), isEmpty);
   });
 }

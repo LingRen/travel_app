@@ -6720,3 +6720,57 @@ Plan B 已全部实施完毕（分支 `feature/plan-b`，13 个任务提交）�
 2. **Plan B 的 Task 13 Step 7（真机验证清单，10 项）尚未执行** —— 同样需要真机。
    其中最关键的判据是：**详情页地图上的轨迹要贴合道路**（验证 GCJ-02 转换真的接上了）、**GPX 导出的位置要与地图一致**（验证「地图用 GCJ-02、GPX 用 WGS-84」两者各自正确）、以及**把瓦片源换成 OSM 后地图仍能显示**（验证设计文档 9.1 的对冲措施有效）。
 3. **Fit 3 心率广播的验证**（设计文档第 14 节的两项风险，Plan A 的 Task 3 Step 4–6 与 Task 22 Step 7–8）也依赖真机。
+
+### 六、真机模拟验证发现的缺陷与修复
+
+Plan A Task 22 与 Plan B Task 13 Step 7 已在 OPPO R9s Plus（Android 7.1.1）上用模拟 GPS 执行，
+结果与偏差记在设计文档第 14 节。其中**唯一的用户可见功能性缺陷**在此修复：
+
+#### 缺陷：结算保存后历史/统计列表不刷新（已修复）
+
+**现象**：结束骑行保存后切到历史页，列表仍是旧的（只有上一条记录）；杀进程重启后新记录立刻出现。
+
+**根因**：`historyRidesProvider`、`finishedRidesProvider`、`ridePointsProvider`、`rideDetailProvider`
+都是一次性取数的 `FutureProvider`，取过一次就缓存住，而**全项目没有任何地方让它们失效**
+（全库只有 `settings_page.dart` 对 `appSettingsProvider` 做过 `invalidate`）。
+
+**修复**：在装配层引入集中的失效信号，而不是在每个保存点逐个 `invalidate`——
+结束、崩溃结算、改标题、删除、恢复备份都要刷新同一批列表，漏掉任何一处都会重新长出这个缺陷。
+
+| 文件 | 改动 |
+| --- | --- |
+| `lib/app/providers.dart` | 新增 `RideDataRevision`（`Notifier<int>`）与 `rideDataRevisionProvider`，`markChanged()` 自增版本号；`rideRepositoryProvider` 传入 `onRideDataChanged: () => ...markChanged()` |
+| `lib/data/ride_repository.dart` | 新增可选构造参数 `onRideDataChanged`，在 `finishRide` / `settleRide` / `updateTitle` / `deleteRide` 成功后调用 |
+| `lib/features/history/history_providers.dart` | 两个 provider 各加 `ref.watch(rideDataRevisionProvider)` |
+| `lib/features/stats/stats_providers.dart` | `finishedRidesProvider` 同上 |
+| `lib/features/detail/detail_providers.dart` | `rideDetailProvider` 同上 |
+| `lib/features/settings/backup_section.dart` | `apply` 之后手动 `markChanged()`（恢复走 `BackupStore`，不经过 `RideRepository`） |
+
+**刻意不通知的路径**：`appendPoints` / `setStatus` 是记录中的追加写，不影响已完成列表；
+若也通知，每 2 秒一次落盘都会让历史页与统计页重查一遍库。
+
+**测试**（全量 **436 个测试通过**，`analyze` 无问题）：
+
+- `test/data/ride_repository_test.dart`：新增 2 条——「结束、结算、改标题、删除各通知一次」（断言恰好 4 次）、
+  「记录中的追加写不通知」（断言 0 次）。
+- `test/app/providers_test.dart`：新增 2 条——「结束骑行后历史与统计列表自动刷新」、
+  「删除骑行后历史列表自动刷新」。两条都先用 `container.listen` 把 provider **订阅住**
+  （模拟页面一直挂着 watch），否则缓存可能因无人监听被回收，断言会退化成
+  「反正每次都会重查」而失去区分力。
+- **变异自证**：把两处 `ref.watch(rideDataRevisionProvider)` 去掉后，这两条用例都变红；改回后全绿。
+
+**同时暴露的假仓储问题**：`record_controller_test.dart` 与 `record_views_test.dart` 里的
+`_FakeRideRepository implements RideRepository` 因新增字段而编译失败，各补一个
+`onRideDataChanged => null` 的 getter。
+
+#### 其余 4 项待处理
+
+1. **非 GCJ-02 瓦片源下轨迹偏约 500 m**：`route_segments.dart` 的 `_vertex` 无条件做 `wgs84ToGcj02`，
+   换成 OSM 等 WGS-84 源后会整体偏移（实测约 180 物理像素 ≈ 310 m）。设计文档 9.1 把「换源」当作
+   高德失效时的对冲措施，在 WGS-84 源上不成立。**未修**。
+2. **统计页 Y 轴刻度重复**：显示成 `0 / 1 / 1 / 2 / 2`，`fl_chart` 对小数刻度按 0 位格式化。**未修**。
+3. **爬升被异常跳变污染**：首个真实定位点 `altitude_m = 0.0` 跳到 mock 的 500 m 被计成 500 m 爬升。
+   距离与速度有 `kMaxPlausibleSpeedMps` 兜底，爬升没有对应的异常值过滤。**未修**。
+4. **`android/app/build.gradle.kts` 两处偏离计划**：`compileSdk` 36→37（`permission_handler_android` 13.x 要求）、
+   `minSdk` 23→24（被 flutter 默认值改写）。**未处理**；`android/build/` 也未被 gitignore。
+

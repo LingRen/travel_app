@@ -7,15 +7,18 @@ import '../../domain/models/track_point.dart';
 
 /// 已完成的骑行，按开始时间倒序（排序由 `RideDao.listFinished` 保证）。
 final FutureProvider<List<Ride>> historyRidesProvider =
-    FutureProvider<List<Ride>>(
-  (Ref ref) => ref.watch(rideRepositoryProvider).listFinished(),
-);
+    FutureProvider<List<Ride>>((Ref ref) {
+  // 依赖数据版本号：结束骑行、崩溃结算、改标题、删除、恢复备份后自动重查。
+  ref.watch(rideDataRevisionProvider);
+  return ref.watch(rideRepositoryProvider).listFinished();
+});
 
 /// 某次骑行的轨迹点，供卡片上的迷你曲线使用。
 ///
 /// 用 family 而不是一次取全部点：列表是懒加载的，不可见的卡片不会触发查询，
 /// 记录多起来之后不会一次把所有轨迹点读进内存。
 final FutureProviderFamily<List<TrackPoint>, int> ridePointsProvider =
-    FutureProvider.family<List<TrackPoint>, int>(
-  (Ref ref, int rideId) => ref.watch(rideRepositoryProvider).getPoints(rideId),
-);
+    FutureProvider.family<List<TrackPoint>, int>((Ref ref, int rideId) {
+  ref.watch(rideDataRevisionProvider);
+  return ref.watch(rideRepositoryProvider).getPoints(rideId);
+});

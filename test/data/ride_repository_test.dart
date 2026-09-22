@@ -100,4 +100,50 @@ void main() {
     expect(await repo.getRide(ride.id!), isNull);
     expect(await repo.getPoints(ride.id!), isEmpty);
   });
+
+  group('onRideDataChanged 回调', () {
+    late int changed;
+
+    setUp(() {
+      changed = 0;
+      repo = RideRepository(
+        rides: RideDao(db),
+        points: TrackPointDao(db),
+        settings: SettingsRepository(SettingsDao(db)),
+        onRideDataChanged: () => changed++,
+      );
+    });
+
+    test('结束、结算、改标题、删除各通知一次', () async {
+      final Ride a = await repo.startRide(startedAtMs: 0);
+      await repo.appendPoints(a.id!, <TrackPoint>[
+        TrackPoint(rideId: a.id!, tMs: 0, lat: 31.23, lon: 121.4700),
+        TrackPoint(rideId: a.id!, tMs: 1000, lat: 31.23, lon: 121.4701),
+      ]);
+      await repo.finishRide(a.id!, endedAtMs: 1000, durationS: 1);
+
+      final Ride b = await repo.startRide(startedAtMs: 5000);
+      await repo.appendPoints(b.id!, <TrackPoint>[
+        TrackPoint(rideId: b.id!, tMs: 5000, lat: 31.23, lon: 121.4700),
+        TrackPoint(rideId: b.id!, tMs: 6000, lat: 31.23, lon: 121.4701),
+      ]);
+      await repo.settleRide(b.id!);
+
+      await repo.updateTitle(a.id!, '晨骑');
+      await repo.deleteRide(b.id!);
+
+      expect(changed, 4);
+    });
+
+    test('记录中的追加写不通知，避免每次落盘都重查历史页', () async {
+      final Ride ride = await repo.startRide(startedAtMs: 0);
+      await repo.appendPoints(ride.id!, <TrackPoint>[
+        TrackPoint(rideId: ride.id!, tMs: 0, lat: 31.23, lon: 121.47),
+      ]);
+      await repo.setStatus(ride.id!, RideStatus.paused);
+      await repo.setStatus(ride.id!, RideStatus.recording);
+
+      expect(changed, 0);
+    });
+  });
 }

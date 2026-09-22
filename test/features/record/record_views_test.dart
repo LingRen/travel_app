@@ -83,6 +83,9 @@ class _FakeRideRepository implements RideRepository {
 
   @override
   Future<void> deleteRide(int rideId) async {}
+
+  @override
+  void Function()? get onRideDataChanged => null;
 }
 
 /// 假的定位服务：readiness 由用例设置，不产生任何定位点。

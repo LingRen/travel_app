@@ -30,8 +30,27 @@ final Provider<RideRepository> rideRepositoryProvider = Provider<RideRepository>
     rides: RideDao(ref.watch(databaseProvider)),
     points: TrackPointDao(ref.watch(databaseProvider)),
     settings: ref.watch(settingsRepositoryProvider),
+    onRideDataChanged: () =>
+        ref.read(rideDataRevisionProvider.notifier).markChanged(),
   ),
 );
+
+/// 骑行数据的版本号。任何改变「已完成骑行」的写操作之后自增，历史页、
+/// 统计页、详情页的缓存型 provider 都 watch 它来自动失效。
+///
+/// 集中成一个信号而不是在每个保存点逐个 `invalidate`：结束、崩溃结算、
+/// 改标题、删除、恢复备份都要刷新同一批列表，漏掉任何一处都会重新长出
+/// 「保存后历史页还是旧数据」这个缺陷。
+class RideDataRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  /// 标记骑行数据已变更，让 watch 本 provider 的列表重新查库。
+  void markChanged() => state++;
+}
+
+final NotifierProvider<RideDataRevision, int> rideDataRevisionProvider =
+    NotifierProvider<RideDataRevision, int>(RideDataRevision.new);
 
 /// 当前生效的设置。修改设置后 invalidate 本 provider 即可刷新。
 final FutureProvider<AppSettings> appSettingsProvider = FutureProvider<AppSettings>(

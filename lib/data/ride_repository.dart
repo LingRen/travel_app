@@ -13,11 +13,22 @@ class RideRepository {
     required this._rides,
     required this._points,
     required this._settings,
+    this.onRideDataChanged,
   });
 
   final RideDao _rides;
   final TrackPointDao _points;
   final SettingsRepository _settings;
+
+  /// 「已完成骑行」集合或某条已完成记录的内容发生变化时的回调。
+  ///
+  /// 装配层（`app/providers.dart`）用它递增数据版本号，让历史页、统计页、
+  /// 详情页那些一次性取数的 `FutureProvider` 缓存失效——否则结算保存后
+  /// 切回历史页仍是旧列表，必须杀进程重启才看得到新记录。
+  ///
+  /// 只在结束/结算/改标题/删除时触发：记录中的追加写（`appendPoints`、
+  /// `setStatus`）不影响已完成列表，不该每次落盘都把历史页重新查一遍库。
+  final void Function()? onRideDataChanged;
 
   /// 新建一条进行中的骑行记录。
   Future<Ride> startRide({
@@ -60,6 +71,7 @@ class RideRepository {
       weightKg: settings.weightKg,
     );
     await _rides.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    onRideDataChanged?.call();
     return summary;
   }
 
@@ -83,6 +95,7 @@ class RideRepository {
       weightKg: settings.weightKg,
     );
     await _rides.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    onRideDataChanged?.call();
     return summary;
   }
 
@@ -97,10 +110,14 @@ class RideRepository {
 
   Future<TrackPoint?> lastPoint(int rideId) => _points.lastByRide(rideId);
 
-  Future<void> updateTitle(int rideId, String? title) => _rides.updateTitle(rideId, title);
+  Future<void> updateTitle(int rideId, String? title) async {
+    await _rides.updateTitle(rideId, title);
+    onRideDataChanged?.call();
+  }
 
   Future<void> deleteRide(int rideId) async {
     await _points.deleteByRide(rideId);
     await _rides.delete(rideId);
+    onRideDataChanged?.call();
   }
 }
