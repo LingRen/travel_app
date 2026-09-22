@@ -41,16 +41,3 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
 }
-
-/// 尚未实现的页面占位。四个 tab 都已接入真实页面，暂时没有引用者，保留备后续使用。
-class PlaceholderPage extends StatelessWidget {
-  const PlaceholderPage({required this.title, super.key});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(title)),
-        body: Center(child: Text('$title 页尚未实现')),
-      );
-}

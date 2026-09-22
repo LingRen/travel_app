@@ -82,15 +82,15 @@ class FlutterBluePlusPlatform implements BlePlatform {
 
   @override
   Stream<List<BleScanEntry>> scanResults() => FlutterBluePlus.scanResults.map(
-    (List<ScanResult> results) => <BleScanEntry>[
-      for (final ScanResult r in results)
-        BleScanEntry(
-          device: FlutterBluePlusDevice(r.device),
-          advertisedName: r.advertisementData.advName,
-          rssi: r.rssi,
-        ),
-    ],
-  );
+        (List<ScanResult> results) => <BleScanEntry>[
+          for (final ScanResult r in results)
+            BleScanEntry(
+              device: FlutterBluePlusDevice(r.device),
+              advertisedName: r.advertisementData.advName,
+              rssi: r.rssi,
+            ),
+        ],
+      );
 
   @override
   Future<void> startScan({required Duration timeout}) =>
@@ -118,8 +118,9 @@ class FlutterBluePlusDevice implements BleDeviceHandle {
 
   @override
   Stream<bool> get connectionState => device.connectionState.map(
-    (BluetoothConnectionState s) => s == BluetoothConnectionState.connected,
-  );
+        (BluetoothConnectionState s) =>
+            s == BluetoothConnectionState.connected,
+      );
 
   @override
   Future<void> connect({required Duration timeout}) =>

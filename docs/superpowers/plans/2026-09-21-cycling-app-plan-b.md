@@ -6707,7 +6707,7 @@ Plan B 已全部实施完毕（分支 `feature/plan-b`，13 个任务提交）�
 6. **`TrackPointDao.listAll()` 的 `orderBy 'ride_id ASC, t_ms ASC'` 是冗余的**：schema 的 `idx_track_points_ride_t(ride_id, t_ms)` 已提供同样顺序，因此「去掉 `t_ms ASC`」是等价变异，无法被任何用例杀死。**若将来删掉那个索引，这条会变成真实缺陷。**
 7. **`_trackName`（GPX 的默认名称）依赖本地时区**：它用 `DateTime.fromMillisecondsSinceEpoch`（本地）拼日期，而 `_isoUtc` 用 `isUtc: true`。测试断言 `'骑行 2025-09-21'` 依赖本机 UTC+8，**在 UTC 或 UTC-8 环境会变成 `2025-09-20`（跨时区 flaky）**。未改成宽松断言，仅记录。
 8. **`_downsample` 里的 `identical` 去重是死代码**：守卫保证 `samples.length > maxSamples`，索引步长 `last/(maxSamples-1) > 1`，相邻 `round()` 结果必严格递增，该分支不可达。保留原样。
-9. **`PlaceholderPage` 现在零引用**（四个 tab 都换成真实页面了）。它是**公开类**，Dart 的 `unused_element` 只对私有成员生效，所以 `analyze` 不报错，计划书决定保留。**要不要删掉由你决定。**
+9. **`PlaceholderPage` 已删除**。四个 tab 都接入真实页面后它变成零引用；它是公开类，`unused_element` 只对私有成员生效，所以 `analyze` 不会报错——**但留着就是死代码**。用户决定删掉，已删（`home_shell.dart` 只剩 `HomeShell`）。
 10. **`dart format` 的 tall style 重排**：编辑器的保存钩子会用新版 `dart format` 重排被触碰的文件，导致 diff 里混入无关的格式变化（例如 Task 5 改 `ble_platform.dart` 时）。仅格式，无行为变化，但会让 diff 变噪。**不要为此对抗格式化器。**
 11. **`FileBackupIo` 没有自动化测试**：测试环境没有文件选择器与分享通道，只保证 `analyze` 通过。`pickArchive` 的真机行为（`readAsBytes()` 在 Android content URI 上是否可用）**未实测**，列入真机验证清单。
 12. **`_restore` 的 `on BackupVersionException` 专用 catch 目前未被任何用例区分**：删掉它后通用 catch 仍会输出含「schema 版本」的文案，测试照样通过。不是计划书列出的变异点，未补用例。
