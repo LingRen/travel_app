@@ -24,7 +24,9 @@ class RouteSegment {
 
 /// 把轨迹点整理成地图可用的分段折线。见设计文档 9.2 与 9.3。
 ///
-/// **坐标会转成 GCJ-02**：高德瓦片是 GCJ-02，直接用 WGS-84 画会偏移数百米。
+/// **坐标默认转成 GCJ-02**：高德瓦片是 GCJ-02，直接用 WGS-84 画会偏移数百米。
+/// 但 OSM、Carto 这类源本身就是 WGS-84，对它们再转一次反而偏出几百米，因此
+/// 调用方必须按瓦片源传 [toGcj02]（用 `isGcj02TileSource(tileUrl)` 判定）。
 /// 转换只发生在这里，落盘与 GPX 导出的仍是 WGS-84 原始坐标。
 ///
 /// **两种情况下断开折线**，否则地图上会出现横穿隧道或建筑物的假直线：
@@ -38,6 +40,7 @@ class RouteSegment {
 /// 相邻两段共享一个顶点，折线才连得上。
 List<RouteSegment> buildRouteSegments(
   List<TrackPoint> points, {
+  bool toGcj02 = true,
   double maxSpeedMps = kColorScaleMaxSpeedMps,
   int maxVerticesPerSegment = 24,
 }) {
@@ -51,7 +54,7 @@ List<RouteSegment> buildRouteSegments(
 
   /// 当前正在攒的顶点。段与段之间靠「保留最后一个顶点」连起来。
   List<RouteVertex> current = <RouteVertex>[
-    _vertex(located.first),
+    _vertex(located.first, toGcj02),
   ];
   final List<double> currentSpeeds = <double>[_speed(located.first)];
 
@@ -61,7 +64,7 @@ List<RouteSegment> buildRouteSegments(
 
     if (!_connectable(prev, cur)) {
       _flush(segments, current, currentSpeeds, maxSpeedMps);
-      current = <RouteVertex>[_vertex(cur)];
+      current = <RouteVertex>[_vertex(cur, toGcj02)];
       currentSpeeds
         ..clear()
         ..add(_speed(cur));
@@ -77,7 +80,7 @@ List<RouteSegment> buildRouteSegments(
         ..add(_speed(prev));
     }
 
-    current.add(_vertex(cur));
+    current.add(_vertex(cur, toGcj02));
     currentSpeeds.add(_speed(cur));
   }
 
@@ -113,7 +116,8 @@ bool _connectable(TrackPoint a, TrackPoint b) {
   return isTrustedSegment(a, b);
 }
 
-RouteVertex _vertex(TrackPoint p) {
+RouteVertex _vertex(TrackPoint p, bool toGcj02) {
+  if (!toGcj02) return RouteVertex(p.lat!, p.lon!);
   final ({double lat, double lon}) converted = wgs84ToGcj02(p.lat!, p.lon!);
   return RouteVertex(converted.lat, converted.lon);
 }

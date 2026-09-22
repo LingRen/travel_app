@@ -66,4 +66,58 @@ void main() {
       expect(a.lon, b.lon);
     });
   });
+
+  group('isGcj02TileSource', () {
+    test('默认的高德瓦片源算 GCJ-02', () {
+      expect(
+        isGcj02TileSource(
+          'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1'
+          '&scale=1&style=8&x={x}&y={y}&z={z}',
+        ),
+        isTrue,
+      );
+    });
+
+    test('高德的其他域名也算 GCJ-02', () {
+      expect(isGcj02TileSource('https://wprd01.is.autonavi.com/x'), isTrue);
+      expect(isGcj02TileSource('https://webst01.amap.com/x'), isTrue);
+    });
+
+    test('OSM 与 Carto 是 WGS-84，不算 GCJ-02', () {
+      expect(
+        isGcj02TileSource('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+        isFalse,
+      );
+      expect(
+        isGcj02TileSource('https://{s}.basemaps.cartocdn.com/x/{z}/{x}/{y}.png'),
+        isFalse,
+      );
+    });
+
+    // 域名大小写不敏感是 URL 规范的一部分，设置页允许用户手输地址。
+    test('大小写混写的域名照样判得出来', () {
+      expect(isGcj02TileSource('https://WEBRD01.IS.AutoNavi.com/x'), isTrue);
+    });
+
+    test('没写 scheme 的裸域名也认', () {
+      expect(isGcj02TileSource('webrd01.is.autonavi.com/x'), isTrue);
+      expect(isGcj02TileSource('tile.openstreetmap.org'), isFalse);
+    });
+
+    test('带端口与 userinfo 的地址取的是主机名', () {
+      expect(isGcj02TileSource('https://user@webrd01.is.autonavi.com:8080/x'), isTrue);
+    });
+
+    // 子串判定的误判会导致轨迹白偏几百米，因此只看域名、不看路径这条要钉住。
+    test('域名只出现在路径里的第三方地址不算 GCJ-02', () {
+      expect(isGcj02TileSource('https://example.org/autonavi.com/{z}'), isFalse);
+      expect(isGcj02TileSource('https://example.org/?src=amap.com'), isFalse);
+    });
+
+    // 后缀匹配必须落在域名边界上，否则 `notautonavi.com` 也会被算进去。
+    test('域名只是以目标串结尾但不构成子域时不算', () {
+      expect(isGcj02TileSource('https://notautonavi.com/x'), isFalse);
+      expect(isGcj02TileSource('https://fakeamap.com/x'), isFalse);
+    });
+  });
 }

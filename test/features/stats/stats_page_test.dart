@@ -195,4 +195,74 @@ void main() {
     expect(find.text('还没有可统计的记录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  group('Y 轴刻度', () {
+    // 真机验证时看到的是 `0 / 1 / 1 / 2 / 2`：fl_chart 自己算出的步长是
+    // 0.5，而标签按整数四舍五入就出现了重复。这条钉住重复不再出现。
+    testWidgets('刻度标签不重复', (WidgetTester tester) async {
+      // 单次 2 km → 轴上最大 2*1.2 = 2.4，正是真机上出现 `0/1/1/2/2` 的量级
+      // （旧实现没给 interval，fl_chart 自己算出 0.5 的步长）。
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 2000)]);
+
+      final LineChartData data =
+          tester.widget<LineChart>(find.byType(LineChart)).data;
+      // 轴顶取步长的整数倍，2.4 向上补到 3。
+      expect(data.maxY, 3);
+
+      final SideTitles titles = data.titlesData.leftTitles.sideTitles;
+      final double interval = titles.interval!;
+
+      final List<String> labels = <String>[
+        for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
+          axisLabel(v, interval),
+      ];
+
+      expect(labels.toSet().length, labels.length, reason: '刻度标签重复了：$labels');
+      // 具体值也钉一下，避免「只印一个 0」这种退化也满足「不重复」。
+      expect(labels, <String>['0', '1', '2', '3']);
+    });
+
+    // 小数步长也要满足：轴顶不能落在步长序列之外（真机上曾出现末尾补一个
+    // `1.7`，看着像刻度算错了）。
+    testWidgets('轴顶落在步长序列上', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 1400)]);
+
+      final LineChartData data =
+          tester.widget<LineChart>(find.byType(LineChart)).data;
+      final SideTitles titles = data.titlesData.leftTitles.sideTitles;
+      final double interval = titles.interval!;
+
+      expect(interval, 0.5);
+      expect(data.maxY, 2.0);
+      expect(data.maxY % interval, closeTo(0, 1e-9));
+
+      final List<String> labels = <String>[
+        for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
+          axisLabel(v, interval),
+      ];
+      expect(labels, <String>['0.0', '0.5', '1.0', '1.5', '2.0']);
+    });
+
+    test('步长取 1/2/5 序列，最多 4 条刻度', () {
+      expect(niceAxisInterval(2.4), 1);
+      expect(niceAxisInterval(1.2), 0.5);
+      expect(niceAxisInterval(1), 0.5);
+      expect(niceAxisInterval(0.6), 0.2);
+      expect(niceAxisInterval(24), 10);
+      expect(niceAxisInterval(120), 50);
+      expect(niceAxisInterval(600), 200);
+
+      for (final double maxY in <double>[0.6, 1, 1.2, 2.4, 10, 24, 120, 600]) {
+        expect(maxY / niceAxisInterval(maxY), lessThanOrEqualTo(4));
+      }
+    });
+
+    test('步长不足 1 时标签保留一位小数，避免刻度互相压成同一个整数', () {
+      expect(axisLabel(0.5, 0.5), '0.5');
+      expect(axisLabel(1, 0.5), '1.0');
+      expect(axisLabel(0.30000000000000004, 0.1), '0.3');
+      expect(axisLabel(5, 5), '5');
+      expect(axisLabel(4.999999999, 5), '5');
+    });
+  });
 }

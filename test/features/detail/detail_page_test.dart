@@ -1,6 +1,7 @@
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
+import 'package:cycling_app/domain/analysis/gcj02.dart';
 import 'package:cycling_app/domain/analysis/heart_rate.dart';
 import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
@@ -12,6 +13,7 @@ import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/detail/hr_zone_bar.dart';
 import 'package:cycling_app/features/detail/route_map.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -233,6 +235,48 @@ void main() {
     expect(find.byType(RouteMap), findsOneWidget);
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.byType(PolylineLayer), findsOneWidget);
+  });
+
+  // 轨迹用哪套坐标必须跟着瓦片源走：对 OSM 这类 WGS-84 源再转一次 GCJ-02，
+  // 轨迹会整体偏出几百米（真机实测约 310 米）。这里直接读折线收到的坐标，
+  // 而不是只断言「传了参数」。
+  group('坐标跟随瓦片源', () {
+    LatLng firstPolylinePoint(WidgetTester tester) =>
+        tester
+            .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+            .polylines
+            .first
+            .points
+            .first;
+
+    testWidgets('高德源：轨迹转成 GCJ-02', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(
+        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      ));
+      await tester.pumpAndSettle();
+
+      final ({double lat, double lon}) expected = wgs84ToGcj02(31.0, 121.0);
+      final LatLng first = firstPolylinePoint(tester);
+      expect(first.latitude, closeTo(expected.lat, 1e-9));
+      expect(first.longitude, closeTo(expected.lon, 1e-9));
+    });
+
+    testWidgets('OSM 源：轨迹保持 WGS-84 原样', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(
+        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+        settings: const AppSettings(
+          maxHeartRate: 190,
+          weightKg: 70,
+          distanceUnit: DistanceUnit.kilometer,
+          mapTileUrlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final LatLng first = firstPolylinePoint(tester);
+      expect(first.latitude, 31.0);
+      expect(first.longitude, 121.0);
+    });
   });
 
   testWidgets('轨迹点没有坐标时不渲染地图，显示占位提示', (WidgetTester tester) async {

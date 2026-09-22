@@ -6763,14 +6763,67 @@ Plan A Task 22 与 Plan B Task 13 Step 7 已在 OPPO R9s Plus（Android 7.1.1）
 `_FakeRideRepository implements RideRepository` 因新增字段而编译失败，各补一个
 `onRideDataChanged => null` 的 getter。
 
-#### 其余 4 项待处理
+#### 缺陷：非 GCJ-02 瓦片源下轨迹偏约 310 m（已修复）
 
-1. **非 GCJ-02 瓦片源下轨迹偏约 500 m**：`route_segments.dart` 的 `_vertex` 无条件做 `wgs84ToGcj02`，
-   换成 OSM 等 WGS-84 源后会整体偏移（实测约 180 物理像素 ≈ 310 m）。设计文档 9.1 把「换源」当作
-   高德失效时的对冲措施，在 WGS-84 源上不成立。**未修**。
-2. **统计页 Y 轴刻度重复**：显示成 `0 / 1 / 1 / 2 / 2`，`fl_chart` 对小数刻度按 0 位格式化。**未修**。
-3. **爬升被异常跳变污染**：首个真实定位点 `altitude_m = 0.0` 跳到 mock 的 500 m 被计成 500 m 爬升。
+**现象**：把瓦片源换成 OSM 后，轨迹相对底图整体偏移（真机实测约 180 物理像素 ≈ 310 m）。
+
+**根因**：`route_segments.dart` 的 `_vertex` **无条件**做 `wgs84ToGcj02`。设计文档 9.1 把「换源」
+当作高德接口失效时的对冲措施，但 OSM、Carto 这类源本身就是 WGS-84，再转一次反而偏出去。
+
+**修复**：坐标用哪套跟着瓦片源走。
+
+| 文件 | 改动 |
+| --- | --- |
+| `lib/domain/analysis/gcj02.dart` | 新增 `isGcj02TileSource(urlTemplate)`：只取主机名判 `autonavi.com` / `amap.com` 及其子域 |
+| `lib/domain/analysis/route_segments.dart` | `buildRouteSegments` 新增 `toGcj02`（默认 `true`，与默认瓦片源一致），透传给 `_vertex` |
+| `lib/features/detail/detail_page.dart` | `buildRouteSegments(points, toGcj02: isGcj02TileSource(tileUrl))` |
+
+判定**只看域名不看路径**：`https://example.org/autonavi.com` 这种把域名写进路径的地址不是高德源，
+按子串判定会误判、轨迹白偏几百米。瓦片模板里的 `{s}`、`{x}` 不是合法 URL 字符，因此不用
+`Uri.parse`，手工切出 `scheme://` 与第一个 `/` 之间的部分（并去掉 userinfo 与端口）。
+
+#### 缺陷：统计页 Y 轴刻度重复（已修复）
+
+**现象**：真机上周视图 Y 轴印成 `0 / 1 / 1 / 2 / 2`。
+
+**根因**：`trend_chart.dart` 没给 `SideTitles.interval`，`fl_chart` 自己算出 0.5 的步长，
+而标签用 `value.round()` 格式化，`0.5→1`、`1.5→2` 就出现了重复。
+
+**修复**：显式给「好看」的 1/2/5 序列步长，并让轴顶落在步长序列上。
+
+| 文件 | 改动 |
+| --- | --- |
+| `lib/features/stats/trend_chart.dart` | 新增 `niceAxisInterval(maxY)`（目标最多 4 条刻度）与 `axisLabel(value, interval)`（步长 < 1 时保留一位小数）；`axisMax` 向上补到步长的整数倍 |
+
+补轴顶这一步是**第二次真机验证才发现的**：只加 `interval` 之后轴印成
+`0.0 / 0.5 / 1.0 / 1.5 / 1.7`——末尾那个 `1.7` 是 `fl_chart` 在 `maxY` 处补的原始轴顶，
+落在步长序列之外，看着仍像刻度算错了。
+
+**测试**（全量 **453 个测试通过**）：
+
+- `test/domain/analysis/gcj02_test.dart`：新增 6 条，含「域名只出现在路径里的第三方地址不算」
+  与「`notautonavi.com` 不算」两条边界用例。
+- `test/domain/analysis/route_segments_test.dart`：新增 3 条，含「`toGcj02` 两个取值的顶点不同」
+  （否则「原样输出」那条在「永远不转换」的实现下也会绿）。
+- `test/features/detail/detail_page_test.dart`：新增 2 条，直接读 `PolylineLayer` 收到的坐标，
+  分别断言高德源转成 GCJ-02、OSM 源保持 WGS-84。
+- `test/features/stats/stats_page_test.dart`：新增 4 条，含「刻度标签不重复」与「轴顶落在步长序列上」。
+- **变异自证**：把 `detail_page.dart` 的 `toGcj02` 参数去掉、把 `trend_chart.dart` 的
+  `interval: interval` 去掉后，**恰好**上述两条用例变红（`OSM 源：轨迹保持 WGS-84 原样`、
+  `Y 轴刻度 刻度标签不重复`），改回即全绿。
+- **真机复核**：重装 APK 后统计页 Y 轴印成 `0.0 / 0.5 / 1.0 / 1.5 / 2.0`，重复与越界刻度都消失。
+
+#### 其余 2 项待处理
+
+1. **爬升被异常跳变污染**：首个真实定位点 `altitude_m = 0.0` 跳到 mock 的 500 m 被计成 500 m 爬升。
    距离与速度有 `kMaxPlausibleSpeedMps` 兜底，爬升没有对应的异常值过滤。**未修**。
-4. **`android/app/build.gradle.kts` 两处偏离计划**：`compileSdk` 36→37（`permission_handler_android` 13.x 要求）、
+2. **`android/app/build.gradle.kts` 两处偏离计划**：`compileSdk` 36→37（`permission_handler_android` 13.x 要求）、
    `minSdk` 23→24（被 flutter 默认值改写）。**未处理**；`android/build/` 也未被 gitignore。
+
+> 瓦片源修复**没有做真机端到端复核**：默认高德源这条路径由
+> `detail_page_test.dart` 的「高德源：轨迹转成 GCJ-02」覆盖（与修复前行为一致），
+> 而 OSM 侧在该环境下无法真机验证——`tile.openstreetmap.org` 被 DNS 污染解析到
+> 31.13.112.4、100% 丢包（见第 14 节），底图根本加载不出来。
+> 复核时设备上还压着另一个会话的安装弹窗，未去点击。
+
 

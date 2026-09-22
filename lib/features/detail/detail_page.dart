@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/curve.dart';
+import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/heart_rate.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/ride.dart';
@@ -64,10 +65,15 @@ class _DetailBody extends ConsumerWidget {
     final List<CurveSample> cadence =
         buildCurve(points, metric: CurveMetric.cadence);
 
-    final List<RouteSegment> route = buildRouteSegments(points);
     final String tileUrl =
         ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
             kDefaultMapTileUrlTemplate;
+    // 只有 GCJ-02 的瓦片源（高德、腾讯）才把轨迹转过去；OSM 这类 WGS-84
+    // 源上再转一次会让轨迹整体偏出几百米。
+    final List<RouteSegment> route = buildRouteSegments(
+      points,
+      toGcj02: isGcj02TileSource(tileUrl),
+    );
 
     return ListView(
       children: <Widget>[

@@ -53,6 +53,52 @@ void main() {
       expect(segs.single.vertices.first.lat, 35.6762);
       expect(segs.single.vertices.first.lon, 139.6503);
     });
+
+    // 瓦片源不是 GCJ-02（OSM、Carto）时必须原样输出，否则轨迹整体偏几百米。
+    test('toGcj02 为 false 时坐标原样输出', () {
+      final List<RouteSegment> segs = buildRouteSegments(
+        <TrackPoint>[
+          pt(0, lat: 31.23042, lon: 121.47370, speed: 5),
+          pt(1000, lat: 31.23052, lon: 121.47380, speed: 6),
+        ],
+        toGcj02: false,
+      );
+
+      expect(segs.single.vertices.first.lat, 31.23042);
+      expect(segs.single.vertices.first.lon, 121.47370);
+      expect(segs.single.vertices.last.lat, 31.23052);
+      expect(segs.single.vertices.last.lon, 121.47380);
+    });
+
+    // 两个开关必须真的产生不同的结果，否则上一条用例在「永远不转换」的
+    // 实现下也会绿。
+    test('toGcj02 两个取值的顶点不同', () {
+      final List<TrackPoint> points = <TrackPoint>[
+        pt(0, lat: 31.23042, lon: 121.47370, speed: 5),
+        pt(1000, lat: 31.23052, lon: 121.47380, speed: 6),
+      ];
+
+      final RouteVertex converted =
+          buildRouteSegments(points).single.vertices.first;
+      final RouteVertex raw =
+          buildRouteSegments(points, toGcj02: false).single.vertices.first;
+
+      expect(converted.lat, isNot(raw.lat));
+      expect(converted.lon, isNot(raw.lon));
+    });
+
+    // 默认值就是高德的 GCJ-02：不传参数时行为与修复前一致，避免调用方
+    // 漏传时把默认源也画偏。
+    test('默认按 GCJ-02 转换', () {
+      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
+        pt(0, lat: 39.90750, lon: 116.39123, speed: 5),
+        pt(1000, lat: 39.90760, lon: 116.39133, speed: 6),
+      ]);
+
+      final ({double lat, double lon}) expected =
+          wgs84ToGcj02(39.90750, 116.39123);
+      expect(segs.single.vertices.first.lat, closeTo(expected.lat, 1e-9));
+    });
   });
 
   group('断线规则', () {

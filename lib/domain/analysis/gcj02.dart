@@ -20,6 +20,36 @@ const double _axis = 6378245.0;
 /// 偏心率平方。GCJ-02 算法规定值。
 const double _eccentricitySquared = 0.00669342162296594323;
 
+/// 该瓦片源用的是不是 GCJ-02 坐标。
+///
+/// 判定必须跟着瓦片源走，不能写死：设计文档 9.1 把「换源」当作高德接口失效
+/// 时的对冲措施，而 OSM、Carto 这类源都是 WGS-84。对 WGS-84 源再转一次
+/// GCJ-02，轨迹会整体偏出几百米——真机验证时在 OSM 源上实测偏约 310 米。
+///
+/// 只看域名，不看路径：`https://example.org/autonavi.com` 这种把域名写进路径
+/// 的地址不是高德源，按子串判定会误判，轨迹就白偏几百米。
+bool isGcj02TileSource(String urlTemplate) {
+  final String host = _hostOf(urlTemplate);
+  return _isUnderDomain(host, 'autonavi.com') || _isUnderDomain(host, 'amap.com');
+}
+
+/// 从瓦片地址模板里取主机名。模板里的 `{s}`、`{x}` 等占位符不是合法 URL
+/// 字符，所以不用 `Uri.parse`，手工切出 `scheme://` 与第一个 `/` 之间的部分。
+String _hostOf(String urlTemplate) {
+  final String lower = urlTemplate.toLowerCase();
+  final int scheme = lower.indexOf('://');
+  final String rest = scheme >= 0 ? lower.substring(scheme + 3) : lower;
+  final int slash = rest.indexOf('/');
+  String host = slash >= 0 ? rest.substring(0, slash) : rest;
+  final int at = host.indexOf('@'); // 去掉 userinfo
+  if (at >= 0) host = host.substring(at + 1);
+  final int colon = host.indexOf(':'); // 去掉端口
+  return colon >= 0 ? host.substring(0, colon) : host;
+}
+
+bool _isUnderDomain(String host, String domain) =>
+    host == domain || host.endsWith('.$domain');
+
 /// 是否在中国境外。境外不做偏移（算法只在中国境内标定）。
 ///
 /// 判定用闭区间：恰好落在边界上的点算境内。
