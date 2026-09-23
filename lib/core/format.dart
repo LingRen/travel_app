@@ -28,6 +28,23 @@ String formatSpeedValue(double mps, DistanceUnit unit) => unit == DistanceUnit.m
 String speedUnitLabel(DistanceUnit unit) =>
     unit == DistanceUnit.mile ? 'mph' : 'km/h';
 
+/// 距离单位标签，用于图表标题这类不跟具体数值走的地方。
+String distanceUnitLabel(DistanceUnit unit) =>
+    unit == DistanceUnit.mile ? 'mi' : 'km';
+
+/// 距离换算到当前单位下的数值，供图表的坐标轴使用。
+double distanceInUnit(double meters, DistanceUnit unit) =>
+    unit == DistanceUnit.mile ? meters / _metersPerMile : meters / 1000;
+
+/// 爬升文本。跟随距离单位：公里模式用米，英里模式用英尺。
+///
+/// 不像 [formatDistance] 那样在小数值时换小单位：爬升几十米是常态，换来换去
+/// 反而难比较。
+String formatElevation(double meters, DistanceUnit unit) =>
+    unit == DistanceUnit.mile
+        ? '${(meters * _feetPerMeter).round()} ft'
+        : '${meters.round()} m';
+
 /// 时长文本。不足一小时用 mm:ss，超过用 h:mm:ss。
 String formatDuration(int seconds) {
   final int safe = seconds < 0 ? 0 : seconds;

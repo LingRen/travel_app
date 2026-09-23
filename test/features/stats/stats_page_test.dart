@@ -150,6 +150,31 @@ void main() {
     expect(data.lineBarsData.single.spots[1].y, 10.0);
   });
 
+  testWidgets('切到英里后累计、爬升与趋势图纵轴都换算', (WidgetTester tester) async {
+    await pumpStats(
+      tester,
+      rides: <Ride>[ride(1, 2026, 9, 22)],
+      settings: const AppSettings(
+        maxHeartRate: 190,
+        weightKg: 70,
+        distanceUnit: DistanceUnit.mile,
+        mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
+      ),
+    );
+
+    // 10000 米 = 6.21 英里；100 米 = 328 英尺。
+    expect(totalsValue(tester, 'distance'), '6.21 mi');
+    expect(totalsValue(tester, 'gain'), '328 ft');
+    expect(find.text('距离趋势（mi）'), findsOneWidget);
+    // 个人最佳里的爬升同样跟着换。
+    expect(find.text('328 ft'), findsWidgets);
+
+    // 纵轴数值也要换：只换标题的话会出现「标题写 mi、轴上还是 km 的数」。
+    final LineChartData data =
+        tester.widget<LineChart>(find.byType(LineChart)).data;
+    expect(data.lineBarsData.single.spots[1].y, closeTo(10000 / 1609.344, 1e-6));
+  });
+
   testWidgets('渲染个人最佳卡片，四项都显示', (WidgetTester tester) async {
     await pumpStats(tester, rides: <Ride>[
       ride(1, 2026, 9, 22, distanceM: 30000),

@@ -99,6 +99,30 @@ void main() {
     });
   });
 
+  group('爬升与距离单位的展示', () {
+    test('爬升跟随距离单位：公里用米', () {
+      expect(formatElevation(500, DistanceUnit.kilometer), '500 m');
+      expect(formatElevation(0, DistanceUnit.kilometer), '0 m');
+    });
+
+    test('爬升跟随距离单位：英里用英尺', () {
+      // 500 × 3.28084 = 1640.42 → 1640
+      expect(formatElevation(500, DistanceUnit.mile), '1640 ft');
+      expect(formatElevation(0, DistanceUnit.mile), '0 ft');
+    });
+
+    test('距离单位标签', () {
+      expect(distanceUnitLabel(DistanceUnit.kilometer), 'km');
+      expect(distanceUnitLabel(DistanceUnit.mile), 'mi');
+    });
+
+    test('趋势图数值按单位换算', () {
+      expect(distanceInUnit(1000, DistanceUnit.kilometer), closeTo(1, 1e-9));
+      expect(distanceInUnit(1609.344, DistanceUnit.mile), closeTo(1, 1e-9));
+      expect(distanceInUnit(0, DistanceUnit.mile), 0);
+    });
+  });
+
   group('formatDateTime', () {
     test('按本地时区输出 yyyy-MM-dd HH:mm', () {
       final int ms = DateTime(2026, 9, 21, 8, 5).millisecondsSinceEpoch;

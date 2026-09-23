@@ -2,6 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../core/format.dart';
+import '../../data/settings_repository.dart';
 import '../../domain/analysis/trend.dart';
 
 /// Y 轴刻度步长。
@@ -30,17 +32,20 @@ String axisLabel(double value, double interval) =>
 ///
 /// 这里用 `fl_chart`：不需要按值着色，标准折线 + 坐标轴正好是它的强项。
 class TrendChart extends StatelessWidget {
-  const TrendChart({required this.trend, super.key});
+  const TrendChart({required this.trend, required this.unit, super.key});
 
   final TrendSummary trend;
+  final DistanceUnit unit;
 
   static const double height = 180;
 
   @override
   Widget build(BuildContext context) {
+    // 纵轴跟着设置里的距离单位走，否则切到英里后列表看 mi、趋势图看 km，
+    // 两处对不上。
     final List<FlSpot> spots = <FlSpot>[
       for (int i = 0; i < trend.buckets.length; i++)
-        FlSpot(i.toDouble(), trend.buckets[i].distanceM / 1000),
+        FlSpot(i.toDouble(), distanceInUnit(trend.buckets[i].distanceM, unit)),
     ];
 
     final double maxY = spots.fold(

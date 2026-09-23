@@ -28,7 +28,7 @@ class PersonalBestsCard extends StatelessWidget {
               '${speedUnitLabel(unit)}',
         ),
       if (bests.mostElevationGainM != null)
-        _row('最大爬升', '${bests.mostElevationGainM!.value.round()} m'),
+        _row('最大爬升', formatElevation(bests.mostElevationGainM!.value, unit)),
     ];
 
     return Card(

@@ -70,6 +70,23 @@ void main() {
     expect(s.maxSpeedMps! < 30, isTrue);
   });
 
+  test('首个定位点的高程异常不会变成爬升', () {
+    // 模拟定位验证时的真实场景：首点高程为 0，次点跳到 500，水平只差几米。
+    // 修复前这条轨迹会算出 500 米爬升。
+    final List<TrackPoint> points = <TrackPoint>[
+      _p(0, 121.4700, alt: 0, speed: 5),
+      _p(1000, 121.4701, alt: 500, speed: 5),
+      _p(2000, 121.4702, alt: 500, speed: 5),
+    ];
+    final RideSummary s = computeSummary(
+      points: points,
+      durationS: 2,
+      maxHeartRate: 190,
+      weightKg: 70,
+    );
+    expect(s.elevationGainM, 0);
+  });
+
   test('有心率时给出心率均值、峰值与卡路里', () {
     final List<TrackPoint> points = <TrackPoint>[
       _p(0, 121.4700, speed: 5, hr: 120),

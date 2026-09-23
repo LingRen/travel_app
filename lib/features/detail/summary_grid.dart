@@ -31,7 +31,7 @@ class SummaryGrid extends StatelessWidget {
       _Metric('移动均速', '${formatSpeedValue(s.movingAvgSpeedMps, unit)} ${speedUnitLabel(unit)}'),
       if (s.maxSpeedMps != null)
         _Metric('最高速', '${formatSpeedValue(s.maxSpeedMps!, unit)} ${speedUnitLabel(unit)}'),
-      _Metric('爬升', '${s.elevationGainM.round()} m'),
+      _Metric('爬升', formatElevation(s.elevationGainM, unit)),
       if (s.avgHr != null) _Metric('平均心率', '${s.avgHr!.round()} bpm'),
       if (s.maxHr != null) _Metric('最高心率', '${s.maxHr} bpm'),
       if (s.avgCadence != null) _Metric('平均踏频', '${s.avgCadence!.round()} rpm'),

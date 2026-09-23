@@ -52,16 +52,16 @@ class StatsPage extends ConsumerWidget {
                 ),
               ),
               _Totals(trend: trend, unit: unit),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Text(
-                  '距离趋势（km）',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  '距离趋势（${distanceUnitLabel(unit)}）',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 12, 16, 0),
-                child: TrendChart(trend: trend),
+                child: TrendChart(trend: trend, unit: unit),
               ),
               const SizedBox(height: 16),
               PersonalBestsCard(bests: personalBests(list), unit: unit),
@@ -88,7 +88,7 @@ class _Totals extends StatelessWidget {
           children: <Widget>[
             _tile('totals-distance', '距离', formatDistance(trend.distanceM, unit)),
             _tile('totals-duration', '时长', formatDuration(trend.durationS)),
-            _tile('totals-gain', '爬升', '${trend.elevationGainM.round()} m'),
+            _tile('totals-gain', '爬升', formatElevation(trend.elevationGainM, unit)),
             _tile('totals-count', '次数', '${trend.rideCount}'),
           ],
         ),

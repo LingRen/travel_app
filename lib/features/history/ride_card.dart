@@ -71,7 +71,7 @@ class RideCard extends ConsumerWidget {
                       '${formatSpeedValue(s.movingAvgSpeedMps, unit)} ${speedUnitLabel(unit)}',
                       style: _metaStyle,
                     ),
-                    Text('爬升 ${s.elevationGainM.round()} m', style: _metaStyle),
+                    Text('爬升 ${formatElevation(s.elevationGainM, unit)}', style: _metaStyle),
                   ],
                 ),
               ],
