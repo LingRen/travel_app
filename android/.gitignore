@@ -1,5 +1,8 @@
 gradle-wrapper.jar
 /.gradle
+# Gradle/AGP 的构建产物。模板里没忽略它，导致每次构建后 git status
+# 都多出一条 android/build/。
+/build/
 /captures/
 /gradlew
 /gradlew.bat
