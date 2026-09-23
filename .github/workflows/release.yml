@@ -1,0 +1,150 @@
+name: Release
+
+# 只在打 tag 时构建发布产物。tag 形如 v1.2.3，可带 -rc1 这类后缀；
+# 版本名与版本号都由 tag 推导（见「解析 tag」一步），不读 pubspec.yaml。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # secrets 不能直接在步骤的 if 里引用，先在这里落成环境变量再判断。
+      # 配了 KEYSTORE_BASE64 才用正式密钥签名，否则退回 debug 签名
+      # （见 android/app/build.gradle.kts）并给出警告。
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Flutter 版本以 .fvmrc 为唯一来源，避免 CI 与本地 fvm 漂移。
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: .fvmrc
+          cache: true
+
+      # JDK 17 与 android/app/build.gradle.kts 的 sourceCompatibility 对齐。
+      # cache: gradle 省掉每次重新下载 AGP 与依赖。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: 解析 tag 得到版本号
+        id: version
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if [[ ! "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::tag 必须形如 v1.2.3（可带 -rc1 这类后缀），当前是 ${tag}"
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          suffix="${BASH_REMATCH[4]}"
+
+          # versionCode 按 major*10000 + minor*100 + patch 编码，minor/patch
+          # 因此必须小于 100，否则会和相邻版本撞号。
+          if (( minor > 99 || patch > 99 )); then
+            echo "::error::minor 与 patch 必须小于 100（当前 ${minor}.${patch}），否则 versionCode 会撞号"
+            exit 1
+          fi
+          code=$(( major * 10000 + minor * 100 + patch ))
+          name="${major}.${minor}.${patch}${suffix}"
+
+          {
+            echo "name=$name"
+            echo "code=$code"
+            echo "prerelease=$([[ -n "$suffix" ]] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+          # 中文标点紧跟在变量后面时，bash 会把它当成变量名的一部分
+          # （`$name，` 会被解析成变量 `name，`），set -u 下直接报未绑定。
+          # 所以本文件里紧挨中文的变量一律写成 ${} 形式。
+          echo "版本名 ${name}，版本号 ${code}"
+
+      - name: 拉依赖
+        run: flutter pub get
+
+      # 测试门禁：不通过就不产出安装包。
+      - name: 静态分析
+        run: flutter analyze
+
+      - name: 单元测试
+        run: flutter test
+
+      - name: 写入 release 签名配置
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          # android/key.properties 已在 android/.gitignore 里，不会被提交。
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/release.jks" \
+            "$KEYSTORE_PASSWORD" \
+            "$KEY_ALIAS" \
+            "$KEY_PASSWORD" \
+            > android/key.properties
+
+      - name: 构建 release APK
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -euo pipefail
+          flutter build apk --release \
+            --build-name="$VERSION_NAME" \
+            --build-number="$VERSION_CODE"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "build/app/outputs/flutter-apk/cycling_app-$VERSION_NAME.apk"
+
+      # 直接核对产物里的版本号与签名，而不是相信构建参数已经生效。
+      - name: 核对 APK 的版本号与签名
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$sdk/build-tools/$(ls "$sdk/build-tools" | sort -V | tail -1)"
+
+          badging=$("$build_tools/aapt" dump badging "$apk" | head -1)
+          [[ "$badging" == *"versionCode='$VERSION_CODE'"* ]] \
+            || { echo "::error::versionCode 不是 ${VERSION_CODE}：${badging}"; exit 1; }
+          [[ "$badging" == *"versionName='$VERSION_NAME'"* ]] \
+            || { echo "::error::versionName 不是 ${VERSION_NAME}：${badging}"; exit 1; }
+
+          dn=$("$build_tools/apksigner" verify --print-certs "$apk" \
+               | grep -i 'certificate DN' | head -1)
+          echo "$badging"
+          echo "$dn"
+          if [[ "$dn" == *"Android Debug"* ]]; then
+            echo "::warning::APK 是 debug 签名（未配 KEYSTORE_BASE64 Secrets），不要用于上架"
+          fi
+
+          {
+            echo "### 版本 ${VERSION_NAME}（versionCode ${VERSION_CODE}）"
+            echo '```'
+            echo "$badging"
+            echo "$dn"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/cycling_app-*.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.prerelease }}
