@@ -10,9 +10,18 @@ import 'package:xml/xml.dart';
 Iterable<XmlElement> named(XmlNode node, String local) =>
     node.descendantElements.where((XmlElement e) => e.name.local == local);
 
+/// 无标题时的轨迹名用的是**本地**日期（用户看到的日历日），所以期望值必须按
+/// 本机时区现算：写死字符串会让 CI（UTC）与开发机（UTC+8）差一天。
+String localDateName(int startedAtMs) {
+  final DateTime start = DateTime.fromMillisecondsSinceEpoch(startedAtMs);
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '骑行 ${start.year}-${two(start.month)}-${two(start.day)}';
+}
+
 const Ride _ride = Ride(
   id: 1,
-  // 1758384000000 == 2025-09-20T16:00:00Z；在 UTC+8（本机时区）是 09-21 00:00。
+  // 1758384000000 == 2025-09-20T16:00:00Z：UTC 下是 09-20，UTC+8 下是 09-21。
+  // 轨迹名取本地日期，因此这里只断言 UTC 时刻，不断言当地日历日。
   startedAtMs: 1758384000000,
   endedAtMs: 1758387600000,
   status: RideStatus.finished,
@@ -231,21 +240,39 @@ void main() {
       final XmlDocument doc =
           XmlDocument.parse(buildGpx(ride: _ride, points: <TrackPoint>[pt(0)]));
 
-      expect(named(doc, 'name').first.innerText, '骑行 2025-09-21');
+      expect(named(doc, 'name').first.innerText, localDateName(_ride.startedAtMs));
     });
 
     test('标题只有空白时视为没有标题，回退到开始日期', () {
-      final XmlDocument doc = XmlDocument.parse(buildGpx(
-        ride: const Ride(
-          id: 1,
-          startedAtMs: 1758384000000,
-          status: RideStatus.finished,
-          title: '   ',
-        ),
-        points: <TrackPoint>[pt(0)],
-      ));
+      const Ride blankTitle = Ride(
+        id: 1,
+        startedAtMs: 1758384000000,
+        status: RideStatus.finished,
+        title: '   ',
+      );
+      final XmlDocument doc = XmlDocument.parse(
+        buildGpx(ride: blankTitle, points: <TrackPoint>[pt(0)]),
+      );
 
-      expect(named(doc, 'name').first.innerText, '骑行 2025-09-21');
+      expect(named(doc, 'name').first.innerText, localDateName(1758384000000));
+    });
+
+    // 上两条的期望值是按本机时区现算的，因此必须再钉一条与时区无关的断言，
+    // 否则实现里换成别的日期来源（比如用 endedAtMs）也照样会绿。
+    test('回退的日期跟着 startedAtMs 走', () {
+      const Ride later = Ride(
+        id: 1,
+        startedAtMs: 1758384000000 + 24 * 3600 * 1000,
+        status: RideStatus.finished,
+      );
+
+      final String name =
+          named(XmlDocument.parse(buildGpx(ride: later, points: <TrackPoint>[pt(0)])), 'name')
+              .first
+              .innerText;
+
+      expect(name, localDateName(later.startedAtMs));
+      expect(name, isNot(localDateName(_ride.startedAtMs)));
     });
 
     test('标题里的特殊字符被正确转义', () {
