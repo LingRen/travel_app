@@ -146,7 +146,7 @@ void main() {
     // 记录 tab 是当前 tab，另外三个真实页面虽然被建出来（`IndexedStack` 保留
     // 状态）但不绘制，对默认的 finder 来说等同于不存在。
     expect(find.byType(RecordPage), findsOneWidget);
-    expect(find.text('开始骑行'), findsOneWidget);
+    expect(find.text('未开始'), findsOneWidget);
     expect(find.byType(HistoryPage), findsNothing);
     expect(find.byType(StatsPage), findsNothing);
     expect(find.byType(SettingsPage), findsNothing);
@@ -159,7 +159,7 @@ void main() {
     expect(find.byType(RideCard), findsOneWidget);
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.byType(RecordPage), findsNothing);
-    expect(find.text('开始骑行'), findsNothing);
+    expect(find.text('未开始'), findsNothing);
     expect(find.byType(StatsPage), findsNothing);
     expect(find.byType(SettingsPage), findsNothing);
   });

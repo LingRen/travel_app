@@ -147,18 +147,88 @@ void main() {
 
   Widget wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-  Widget handlebar(RecordState state, {void Function(SensorKind)? onPickDevice}) =>
+  Widget handlebar(
+    RecordState state, {
+    void Function(SensorKind)? onPickDevice,
+    VoidCallback? onStart,
+    VoidCallback? onPause,
+    VoidCallback? onResume,
+    VoidCallback? onFinish,
+  }) =>
       HandlebarView(
         state: state,
         unit: DistanceUnit.kilometer,
         tileUrlTemplate: kDefaultMapTileUrlTemplate,
-        onPause: () {},
-        onResume: () {},
-        onFinish: () {},
+        onStart: onStart ?? () {},
+        onPause: onPause ?? () {},
+        onResume: onResume ?? () {},
+        onFinish: onFinish ?? () {},
         onPickDevice: onPickDevice ?? (_) {},
       );
 
   group('骑行界面', () {
+    testWidgets('未开始时底部是「开始」，没有暂停 / 结束', (WidgetTester tester) async {
+      int starts = 0;
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(),
+        onStart: () => starts++,
+      )));
+
+      // 记录 tab 落地就是这一页（设计文档 10.1），未开始态即入口态：
+      // 状态条写「未开始」，主按钮是「开始」，暂停键不出现（没东西可暂停）。
+      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('开始'), findsOneWidget);
+      expect(find.text('暂停'), findsNothing);
+      expect(find.text('继续'), findsNothing);
+      expect(find.text('结束'), findsNothing);
+
+      await tester.tap(find.text('开始'));
+      expect(starts, 1);
+    });
+
+    testWidgets('记录中主按钮是「结束」，暂停与继续是状态条上那颗小键',
+        (WidgetTester tester) async {
+      int pauses = 0;
+      int resumes = 0;
+      int finishes = 0;
+      await tester.pumpWidget(wrap(handlebar(
+        active,
+        onPause: () => pauses++,
+        onResume: () => resumes++,
+        onFinish: () => finishes++,
+      )));
+
+      // 主按钮只剩「结束」：屏幕上不该再出现第二个「结束」，否则骑行中要
+      // 分辨两颗几乎是同一个动作的键。
+      expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('结束'), findsOneWidget);
+      expect(find.text('暂停'), findsOneWidget);
+      expect(find.text('继续'), findsNothing);
+
+      await tester.tap(find.text('暂停'));
+      expect(pauses, 1);
+
+      await tester.tap(find.text('结束'));
+      expect(finishes, 1);
+      expect(resumes, 0);
+
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          rideId: 1,
+          phase: RecordingPhase.paused,
+          elapsedMs: 1000,
+        ),
+        onResume: () => resumes++,
+      )));
+
+      expect(find.text('已暂停'), findsOneWidget);
+      expect(find.text('继续'), findsOneWidget);
+      expect(find.text('暂停'), findsNothing);
+
+      await tester.tap(find.text('继续'));
+      expect(resumes, 1);
+    });
+
     testWidgets('并入缩略图后，360×640 的机器上不溢出', (WidgetTester tester) async {
       // 真机是 1080×1920 / 密度 480，即 360×640dp。加缩略图要占 121dp，
       // 靠让渡别处的间距才装得下——所以这条用例量的是余量，不是能不能跑。
@@ -176,6 +246,25 @@ void main() {
       final Text speed =
           tester.widget<Text>(find.byKey(const Key('handlebar-speed')));
       expect(speed.style!.fontSize, HandlebarView.primaryFontSize);
+    });
+
+    testWidgets('未开始态再挤进一条阻断类错误，360×640 上仍不溢出',
+        (WidgetTester tester) async {
+      // 畸形的最紧一屏：未开始（主按钮 + 状态条）+ 缩略图 + 三传感器指标格，
+      // 外加一条定位于「开始」失败的提示。这一条量的是主数字外面那层
+      // Flexible + FittedBox：多余的高度从它身上扣，而不是让整页溢出。
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        errorMessage: '定位权限已被永久拒绝，请到系统设置中开启',
+      ))));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('定位权限已被永久拒绝，请到系统设置中开启'), findsOneWidget);
+      expect(find.text('开始'), findsOneWidget);
     });
 
     testWidgets('主指标字号不小于 72 且各项指标齐全', (WidgetTester tester) async {
@@ -352,42 +441,51 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('未开始时显示「开始骑行」，不显示暂停 / 结束', (WidgetTester tester) async {
+    testWidgets('落地就是骑行界面，底部是「开始」而不是跳转前的准备页',
+        (WidgetTester tester) async {
       await pumpRecordPage(tester);
 
-      expect(find.text('开始骑行'), findsOneWidget);
+      // 原来的准备页已经并进这一屏（设计文档 10.1）：进来就能看到读数区、
+      // 缩略图与传感器灯，只是还没开始。
+      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('开始'), findsOneWidget);
+      expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
+      expect(find.byKey(const Key('live-route-map')), findsOneWidget);
+      expect(find.text('准备骑行'), findsNothing);
+      expect(find.text('开始骑行'), findsNothing);
+      expect(find.text('骑行方式'), findsNothing);
       expect(find.text('暂停'), findsNothing);
-      expect(find.text('继续'), findsNothing);
       expect(find.text('结束'), findsNothing);
-      expect(find.byKey(const Key('handlebar-speed')), findsNothing);
     });
 
     testWidgets('定位权限被拒时把阻断类错误显示在界面上', (WidgetTester tester) async {
       location.readiness = LocationReadiness.permissionDenied;
       await pumpRecordPage(tester);
 
-      await tester.tap(find.text('开始骑行'));
+      await tester.tap(find.text('开始'));
       await tester.pump();
 
       expect(find.text('未获得定位权限，无法记录骑行'), findsOneWidget);
       expect(repo.startRideCalls, 0, reason: '阻断类错误下不能创建骑行记录');
-      expect(find.text('开始骑行'), findsOneWidget, reason: '仍停在未开始状态');
+      expect(find.text('开始'), findsOneWidget, reason: '仍停在未开始状态');
+      // 失败时不该顺手把用户推进记录中：状态条与主按钮都得留在未开始态。
+      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('结束'), findsNothing);
     });
 
-    testWidgets('准备页不再有「骑行方式」二选一，开始后直接是骑行界面', (WidgetTester tester) async {
+    testWidgets('点「开始」后同一颗键变成「结束」，状态转进行中',
+        (WidgetTester tester) async {
       await pumpRecordPage(tester);
 
-      // 口袋模式已并进骑行界面（设计文档 10.1），准备页不该再出现这一组设置。
-      expect(find.text('骑行方式'), findsNothing);
-      expect(find.text('车把'), findsNothing);
-      expect(find.text('口袋'), findsNothing);
-
-      await tester.tap(find.text('开始骑行'));
+      await tester.tap(find.text('开始'));
       await tester.pump();
       await tester.pump();
 
-      expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
       expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('结束'), findsOneWidget);
+      expect(find.text('开始'), findsNothing);
+      expect(find.text('暂停'), findsOneWidget);
+      expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
       expect(find.byKey(const Key('live-route-map')), findsOneWidget);
     });
   });
