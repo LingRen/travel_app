@@ -23,7 +23,16 @@ const AppSettings _settings = AppSettings(
 /// 固定「现在」：2026-09-24（周四），因此本周是 09-21（周一）到 09-27。
 int get nowMs => DateTime(2026, 9, 24, 12).millisecondsSinceEpoch;
 
-Ride ride(int id, int y, int m, int d, {double distanceM = 10000}) => Ride(
+Ride ride(
+  int id,
+  int y,
+  int m,
+  int d, {
+  double distanceM = 10000,
+  double? avgPowerW,
+  int? maxPowerW,
+}) =>
+    Ride(
       id: id,
       startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
@@ -37,6 +46,8 @@ Ride ride(int id, int y, int m, int d, {double distanceM = 10000}) => Ride(
         maxSpeedMps: 11.1,
         elevationGainM: 100,
         pointCount: 1800,
+        avgPowerW: avgPowerW,
+        maxPowerW: maxPowerW,
       ),
     );
 
@@ -195,6 +206,16 @@ void main() {
     expect(find.text('21.2 km/h'), findsOneWidget);
     expect(find.text('最大爬升'), findsOneWidget);
     expect(find.text('100 m'), findsOneWidget);
+    // 这两次骑行都没配功率计，不能凭空多出一行 0 W 的「最佳」。
+    // 累计矩阵里本来就有「最高功率」这一格，所以要限定在个人最佳卡片里找。
+    expect(
+      find.descendant(
+        of: find.byType(PersonalBestsCard),
+        matching: find.text('最高功率'),
+      ),
+      findsNothing,
+    );
+    expect(card.bests.highestPowerW, isNull);
   });
 
   testWidgets('个人最佳跨范围统计，不受周月年切换影响', (WidgetTester tester) async {
@@ -221,6 +242,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('功率', () {
+    testWidgets('累计矩阵里的平均功率按移动时长加权', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[
+        ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300),
+        ride(2, 2026, 9, 24, avgPowerW: 180, maxPowerW: 420),
+      ]);
+
+      // 两次骑行移动时长一样（1700s），加权平均就是算术平均。
+      expect(totalsValue(tester, 'avg-power'), '150 W');
+      expect(totalsValue(tester, 'max-power'), '420 W');
+    });
+
+    testWidgets('范围外的骑行功率不计入累计', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[
+        ride(1, 2026, 9, 20, avgPowerW: 400, maxPowerW: 900), // 上周日，范围外
+        ride(2, 2026, 9, 24, avgPowerW: 150, maxPowerW: 300),
+      ]);
+
+      expect(totalsValue(tester, 'avg-power'), '150 W');
+      expect(totalsValue(tester, 'max-power'), '300 W');
+    });
+
+    testWidgets('没有功率数据时累计矩阵显示破折号而不是 0 W', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+
+      expect(totalsValue(tester, 'avg-power'), '—');
+      expect(totalsValue(tester, 'max-power'), '—');
+    });
+
+    testWidgets('个人最佳里的最高功率取单次峰值最大的一次', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[
+        ride(1, 2026, 9, 22, avgPowerW: 260, maxPowerW: 380),
+        ride(2, 2026, 9, 24, avgPowerW: 140, maxPowerW: 520),
+      ]);
+
+      // 累计矩阵里也有一格叫「最高功率」，这里只看个人最佳卡片里的那一行。
+      final Finder card = find.byType(PersonalBestsCard);
+      expect(
+        find.descendant(of: card, matching: find.text('最高功率')),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: card, matching: find.text('520 W')), findsOneWidget);
+
+      final PersonalBestsCard widget =
+          tester.widget<PersonalBestsCard>(card);
+      expect(widget.bests.highestPowerW!.rideId, 2);
+      expect(widget.bests.highestPowerW!.value, 520);
+    });
+  });
+
   group('Y 轴刻度', () {
     // 真机验证时看到的是 `0 / 1 / 1 / 2 / 2`：fl_chart 自己算出的步长是
     // 0.5，而标签按整数四舍五入就出现了重复。这条钉住重复不再出现。
@@ -239,12 +310,12 @@ void main() {
 
       final List<String> labels = <String>[
         for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
-          axisLabel(v, interval),
-      ];
+          axisLabel(v),
+        ];
 
       expect(labels.toSet().length, labels.length, reason: '刻度标签重复了：$labels');
       // 具体值也钉一下，避免「只印一个 0」这种退化也满足「不重复」。
-      expect(labels, <String>['0', '1', '2', '3']);
+      expect(labels, <String>['0.0', '1.0', '2.0', '3.0']);
     });
 
     // 小数步长也要满足：轴顶不能落在步长序列之外（真机上曾出现末尾补一个
@@ -263,8 +334,8 @@ void main() {
 
       final List<String> labels = <String>[
         for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
-          axisLabel(v, interval),
-      ];
+          axisLabel(v),
+        ];
       expect(labels, <String>['0.0', '0.5', '1.0', '1.5', '2.0']);
     });
 
@@ -282,12 +353,65 @@ void main() {
       }
     });
 
-    test('步长不足 1 时标签保留一位小数，避免刻度互相压成同一个整数', () {
-      expect(axisLabel(0.5, 0.5), '0.5');
-      expect(axisLabel(1, 0.5), '1.0');
-      expect(axisLabel(0.30000000000000004, 0.1), '0.3');
-      expect(axisLabel(5, 5), '5');
-      expect(axisLabel(4.999999999, 5), '5');
+    test('标签一律保留一位小数，不按步长切换精度', () {
+      expect(axisLabel(0.5), '0.5');
+      expect(axisLabel(1), '1.0');
+      expect(axisLabel(0.30000000000000004), '0.3');
+      expect(axisLabel(5), '5.0');
+      expect(axisLabel(4.999999999), '5.0');
+      expect(axisLabel(2.4), '2.4');
+    });
+  });
+
+  group('底部日期轴', () {
+    // 真机上月视图底下日期叠成一团，早先的做法是隔几个跳一个；跳过之后
+    // 剩下的日期对不上自己关心的那天，等于没标。现在改成竖排 + 全部列出。
+    testWidgets('周视图把 7 个日期全部列出来', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+
+      for (int d = 21; d <= 27; d++) {
+        final String label = '09-$d';
+        expect(find.text(label), findsOneWidget, reason: '缺少日期标签 $label');
+      }
+    });
+
+    testWidgets('月视图把整月 30 个日期全部列出来且不溢出', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await tester.tap(find.text('月'));
+      await tester.pumpAndSettle();
+
+      for (int d = 1; d <= 30; d++) {
+        final String label = '09-${d.toString().padLeft(2, '0')}';
+        expect(find.text(label), findsOneWidget, reason: '缺少日期标签 $label');
+      }
+      // 30 个日期全列出来，横排一定放不下；这条顺带确认竖排没把布局撑爆。
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('年视图把 12 个月份全部列出来', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await tester.tap(find.text('年'));
+      await tester.pumpAndSettle();
+
+      for (int m = 1; m <= 12; m++) {
+        final String label = '2026-${m.toString().padLeft(2, '0')}';
+        expect(find.text(label), findsOneWidget, reason: '缺少月份标签 $label');
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('日期标签竖排，避免相邻日期横向叠在一起', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+
+      // fl_chart 自己也会在图表外层套一个 `RotatedBox`（`quarterTurns` 为 0），
+      // 所以不能只数「有没有 RotatedBox」，要看其中有没有真的转 90° 的那个。
+      final Iterable<RotatedBox> boxes = tester.widgetList<RotatedBox>(
+        find.ancestor(
+          of: find.text('09-22'),
+          matching: find.byType(RotatedBox),
+        ),
+      );
+      expect(boxes.map((RotatedBox b) => b.quarterTurns), contains(3));
     });
   });
 }

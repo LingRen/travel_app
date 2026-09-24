@@ -35,12 +35,14 @@ class RideRepository {
     required int startedAtMs,
     String? hrDeviceName,
     String? cadenceDeviceName,
+    String? powerDeviceName,
   }) async {
     final int id = await _rides.insert(Ride(
       startedAtMs: startedAtMs,
       status: RideStatus.recording,
       hrDeviceName: hrDeviceName,
       cadenceDeviceName: cadenceDeviceName,
+      powerDeviceName: powerDeviceName,
     ));
     return Ride(
       id: id,
@@ -48,6 +50,7 @@ class RideRepository {
       status: RideStatus.recording,
       hrDeviceName: hrDeviceName,
       cadenceDeviceName: cadenceDeviceName,
+      powerDeviceName: powerDeviceName,
     );
   }
 

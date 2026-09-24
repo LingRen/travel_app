@@ -6,6 +6,7 @@ import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/ride_repository.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/domain/analysis/constants.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
@@ -41,6 +42,7 @@ class _FakeRideRepository implements RideRepository {
     required int startedAtMs,
     String? hrDeviceName,
     String? cadenceDeviceName,
+    String? powerDeviceName,
   }) async {
     startRideCalls++;
     return Ride(id: 1, startedAtMs: startedAtMs, status: RideStatus.recording);
@@ -128,7 +130,7 @@ const AppSettings _testSettings = AppSettings(
 );
 
 void main() {
-  // 一次进行中的记录：6 m/s = 21.6 km/h，1.234 km，90 秒，心率 132，踏频 85。
+  // 一次进行中的记录：6 m/s = 21.6 km/h，1.234 km，90 秒，心率 132，踏频 85，功率 210。
   const RecordState active = RecordState(
     rideId: 1,
     phase: RecordingPhase.recording,
@@ -137,22 +139,28 @@ void main() {
     currentSpeedMps: 6.0,
     hr: 132,
     cadence: 85,
+    power: 210,
     hrConnected: true,
     cadenceConnected: true,
+    powerConnected: true,
   );
 
   Widget wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-  group('车把模式与口袋模式', () {
-    testWidgets('车把模式主指标字号不小于 72 且五项指标齐全', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(HandlebarView(
-        state: active,
+  Widget handlebar(RecordState state, {void Function(SensorKind)? onPickDevice}) =>
+      HandlebarView(
+        state: state,
         unit: DistanceUnit.kilometer,
         onPause: () {},
         onResume: () {},
         onFinish: () {},
         onSwitchMode: () {},
-      )));
+        onPickDevice: onPickDevice ?? (_) {},
+      );
+
+  group('车把模式与口袋模式', () {
+    testWidgets('车把模式主指标字号不小于 72 且各项指标齐全', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
 
       final Text speed =
           tester.widget<Text>(find.byKey(const Key('handlebar-speed')));
@@ -163,9 +171,54 @@ void main() {
       expect(find.text('01:30'), findsOneWidget);
       expect(find.text('132'), findsOneWidget);
       expect(find.text('85'), findsOneWidget);
+      expect(find.text('功率'), findsOneWidget);
+      expect(find.text('210'), findsOneWidget);
     });
 
-    testWidgets('口袋模式只保留状态条', (WidgetTester tester) async {
+    testWidgets('没连功率计时车把上显示占位，标签写明是估算值', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+      ))));
+
+      // 这一格的值是 app 按速度、坡度、体重估出来的，标签必须说清楚，
+      // 否则会被当成功率计的读数。
+      expect(find.text('功率（估算）'), findsOneWidget);
+      expect(find.text('功率'), findsNothing);
+      // 距离、时长、心率、踏频、功率五项都没数据，全是占位符。
+      expect(find.text('--'), findsNWidgets(3));
+      expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('骑行中点传感器灯就是配对入口', (WidgetTester tester) async {
+      final List<SensorKind> picked = <SensorKind>[];
+      await tester.pumpWidget(wrap(handlebar(active, onPickDevice: picked.add)));
+
+      await tester.tap(find.byTooltip('心率已连接，点击更换设备'));
+      await tester.tap(find.byTooltip('踏频已连接，点击更换设备'));
+      await tester.tap(find.byTooltip('功率计已连接，点击更换设备'));
+
+      expect(picked, <SensorKind>[
+        SensorKind.heartRate,
+        SensorKind.cadence,
+        SensorKind.power,
+      ]);
+    });
+
+    testWidgets('未连接的传感器灯提示的是「点击连接」', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+      ))));
+
+      expect(find.byTooltip('点击连接心率设备'), findsOneWidget);
+      expect(find.byTooltip('点击连接踏频设备'), findsOneWidget);
+      expect(find.byTooltip('点击连接功率计'), findsOneWidget);
+    });
+
+    testWidgets('口袋模式保留距离、时长与功率，不显示心率与踏频', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(PocketView(
         state: active,
         unit: DistanceUnit.kilometer,
@@ -178,6 +231,8 @@ void main() {
       expect(find.text('记录中'), findsOneWidget);
       expect(find.text('1.23 km'), findsOneWidget);
       expect(find.text('01:30'), findsOneWidget);
+      expect(find.text('功率'), findsOneWidget);
+      expect(find.text('210'), findsOneWidget);
       // 口袋模式不渲染大字号主指标
       expect(find.byKey(const Key('handlebar-speed')), findsNothing);
       // 也不渲染心率 / 踏频这类车把模式才看得清的指标
@@ -185,6 +240,25 @@ void main() {
       expect(find.text('85'), findsNothing);
       expect(find.text('心率'), findsNothing);
       expect(find.text('踏频'), findsNothing);
+    });
+
+    testWidgets('口袋模式里没连功率计时，标签同样写明是估算值', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(PocketView(
+        state: const RecordState(
+          rideId: 1,
+          phase: RecordingPhase.recording,
+          elapsedMs: 1000,
+        ),
+        unit: DistanceUnit.kilometer,
+        onPause: () {},
+        onResume: () {},
+        onFinish: () {},
+        onSwitchMode: () {},
+      )));
+
+      // 与车把模式同一口径：估出来的读数不能冒充实测。
+      expect(find.text('功率（估算）'), findsOneWidget);
+      expect(find.text('功率'), findsNothing);
     });
 
     testWidgets('口袋模式里没有任何 ≥72pt 的文字', (WidgetTester tester) async {
@@ -223,6 +297,35 @@ void main() {
       )));
 
       expect(find.text('已暂停'), findsOneWidget);
+    });
+  });
+
+  group('速度刻度尺', () {
+    // 刻度尺是自绘的 `CustomPaint`，没有语义节点也拿不到画出来的像素，
+    // 所以把「当前速度换算成多少格」抽成纯函数再断言——这是项目里自绘画笔
+    // 的惯例（另有 `drawnMiniCurveSegments` / `drawnCurveSegments`）。
+    test('按满量程换算成 0..1 的填充比例', () {
+      expect(speedScaleFraction(0, maxMps: 12), 0);
+      expect(speedScaleFraction(6, maxMps: 12), 0.5);
+      expect(speedScaleFraction(12, maxMps: 12), 1);
+    });
+
+    test('超出量程被截到满格，不会画到轨道外', () {
+      expect(speedScaleFraction(30, maxMps: 12), 1);
+    });
+
+    // 对照组：不做钳制的话超速会得到 2.5，轨道外的填充会溢出到刻度尺外面。
+    test('对照组：不钳制时超速的比例会大于 1', () {
+      expect(30 / 12, greaterThan(1));
+    });
+
+    test('量程为 0 或负数时返回 0，不做除零', () {
+      expect(speedScaleFraction(6, maxMps: 0), 0);
+      expect(speedScaleFraction(6, maxMps: -1), 0);
+    });
+
+    test('默认量程等于数据色带的满速，满速时刚好满格', () {
+      expect(speedScaleFraction(kColorScaleMaxSpeedMps), 1);
     });
   });
 

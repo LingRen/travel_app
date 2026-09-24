@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/analysis/color_scale.dart';
+import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/curve.dart';
 
 /// 详情页的一条曲线。见设计文档 10.3 的第 3~5 块。
@@ -46,7 +47,8 @@ class CurveChart extends StatelessWidget {
 }
 
 /// 主题强调色的 ARGB 整数形式，供画笔使用（画笔只认 int，不认 Color 常量表）。
-const int kAppAccentArgb = 0xFF4CAF50;
+/// 与 `app/theme.dart` 里的 `kAppAccent` 保持一致；两处都改才算改。
+const int kAppAccentArgb = 0xFFFFA92B;
 
 /// 画笔真正会连出的相邻点下标对。
 ///
@@ -91,25 +93,42 @@ class _CurvePainter extends CustomPainter {
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
 
-    for (final (int i, int j) in drawnCurveSegments(samples)) {
-      final CurveSample a = samples[i];
-      final CurveSample b = samples[j];
+    // 控制点会略微越过极值（Catmull-Rom 的正常代价），按图表区域裁掉，
+    // 免得曲线顶到相邻区块上去。
+    canvas.clipRect(Offset.zero & size);
+
+    final List<CurveArc> arcs = curveArcs(
+      samples,
+      drawnCurveSegments(samples),
+      maxX: maxX,
+      // 顶部留白详见 kCurveTopHeadroom：不留的话峰顶被裁成平顶。
+      maxY: maxY * kCurveTopHeadroom,
+    );
+    for (final CurveArc arc in arcs) {
+      final CurveSample a = samples[arc.fromIndex];
+      final CurveSample b = samples[arc.toIndex];
       paint.color = Color(
         colorBySpeed ? segmentColorArgb(a.y, b.y) : baseColorArgb,
       );
-      canvas.drawLine(
-        Offset(
-          a.xSeconds / maxX * size.width,
-          size.height - a.y / maxY * size.height,
-        ),
-        Offset(
-          b.xSeconds / maxX * size.width,
-          size.height - b.y / maxY * size.height,
-        ),
+      canvas.drawPath(
+        Path()
+          ..moveTo(_px(arc.from, size).dx, _px(arc.from, size).dy)
+          ..cubicTo(
+            _px(arc.control1, size).dx,
+            _px(arc.control1, size).dy,
+            _px(arc.control2, size).dx,
+            _px(arc.control2, size).dy,
+            _px(arc.to, size).dx,
+            _px(arc.to, size).dy,
+          ),
         paint,
       );
     }
   }
+
+  /// 归一化坐标（y 向上）换算成画布像素（y 向下）。
+  Offset _px(CurvePoint p, Size size) =>
+      Offset(p.x * size.width, size.height - p.y * size.height);
 
   @override
   bool shouldRepaint(_CurvePainter old) =>

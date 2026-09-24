@@ -226,7 +226,17 @@ void main() {
   testWidgets('没有配对传感器时显示未配对，并提供连接入口', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    expect(find.textContaining('未配对'), findsNWidgets(2)); // 心率 + 踏频
+    expect(find.textContaining('未配对'), findsNWidgets(3)); // 心率 + 踏频 + 功率
+  });
+
+  testWidgets('功率计的配对状态与另外两种传感器一起显示', (WidgetTester tester) async {
+    pairing.stored[SensorKind.power] =
+        const PairedSensor(id: 'CC:03', name: 'ASSIOMA');
+
+    await pumpSettings(tester);
+
+    expect(find.textContaining('ASSIOMA'), findsOneWidget);
+    expect(find.text('解除'), findsOneWidget);
   });
 
   testWidgets('已配对的传感器显示名字与解除按钮', (WidgetTester tester) async {

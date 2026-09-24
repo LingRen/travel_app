@@ -11,6 +11,8 @@ class RideSummary {
     this.avgHr,
     this.maxHr,
     this.avgCadence,
+    this.avgPowerW,
+    this.maxPowerW,
     this.calories,
     required this.pointCount,
   });
@@ -32,6 +34,10 @@ class RideSummary {
   /// 无踏频数据时为 null。
   final double? avgCadence;
 
+  /// 无功率数据时为 null。
+  final double? avgPowerW;
+  final int? maxPowerW;
+
   /// 无心率数据时无法估算，为 null。
   final double? calories;
 
@@ -48,6 +54,8 @@ class RideSummary {
         'avg_hr': avgHr,
         'max_hr': maxHr,
         'avg_cadence': avgCadence,
+        'avg_power_w': avgPowerW,
+        'max_power_w': maxPowerW,
         'calories': calories,
         'point_count': pointCount,
       };
@@ -63,6 +71,8 @@ class RideSummary {
         avgHr: (m['avg_hr'] as num?)?.toDouble(),
         maxHr: (m['max_hr'] as num?)?.toInt(),
         avgCadence: (m['avg_cadence'] as num?)?.toDouble(),
+        avgPowerW: (m['avg_power_w'] as num?)?.toDouble(),
+        maxPowerW: (m['max_power_w'] as num?)?.toInt(),
         calories: (m['calories'] as num?)?.toDouble(),
         pointCount: (m['point_count'] as num?)?.toInt() ?? 0,
       );

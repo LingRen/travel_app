@@ -1,3 +1,4 @@
+import '../domain/analysis/constants.dart';
 import 'db/settings_dao.dart';
 
 /// 距离单位。仅支持公里与英里两种，不涉及多语言。
@@ -16,7 +17,10 @@ enum DistanceUnit {
 }
 
 const int kDefaultMaxHeartRate = 190;
-const double kDefaultWeightKg = 70;
+
+/// 用户没设体重时的默认值。与估算功率用的兜底值取同一个常量，避免两处分叉。
+const double kDefaultWeightKg = kDefaultRiderWeightKg;
+
 const int kMinPlausibleMaxHeartRate = 100;
 const int kMaxPlausibleMaxHeartRate = 230;
 

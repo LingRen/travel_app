@@ -47,6 +47,34 @@ void main() {
     });
   });
 
+  group('parseCyclingPowerMeasurement', () {
+    test('取紧随 flags 之后的 sint16 小端瞬时功率', () {
+      // flags=0x0000，瞬时功率 210
+      expect(parseCyclingPowerMeasurement(<int>[0x00, 0x00, 210, 0x00]), 210);
+    });
+
+    test('flags 置位时仍从第 3 字节开始读功率', () {
+      // flags=0x001F（含平衡、累积能量等位）不影响功率字段的位置
+      expect(parseCyclingPowerMeasurement(<int>[0x1F, 0x00, 0xD2, 0x00]), 210);
+    });
+
+    test('高位功率不被当成负数', () {
+      // 1500 W = 0x05DC：第 3 字节 0xDC 的最高位是 1，只有按 sint16 整体判读才对
+      expect(parseCyclingPowerMeasurement(<int>[0x00, 0x00, 0xDC, 0x05]), 1500);
+    });
+
+    test('负的瞬时功率夹到 0，码表上不显示负瓦数', () {
+      // -50 W = 0xFFCE
+      expect(parseCyclingPowerMeasurement(<int>[0x00, 0x00, 0xCE, 0xFF]), 0);
+    });
+
+    test('数据过短返回 null', () {
+      expect(parseCyclingPowerMeasurement(<int>[]), isNull);
+      expect(parseCyclingPowerMeasurement(<int>[0x00, 0x00]), isNull);
+      expect(parseCyclingPowerMeasurement(<int>[0x00, 0x00, 0xD2]), isNull);
+    });
+  });
+
   group('cadenceRpm', () {
     test('1 秒转 1 圈等于 60 rpm', () {
       const CscMeasurement prev = CscMeasurement(crankRevolutions: 0, crankEventTime1024: 0);

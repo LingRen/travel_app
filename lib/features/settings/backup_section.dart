@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../data/export/backup.dart';
 import '../../data/export/backup_store.dart';
 import '../../domain/models/ride.dart';
@@ -25,37 +26,44 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Text('备份与恢复', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _busy ? null : _export,
-                child: const Text('导出备份'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _busy ? null : _restore,
-                child: const Text('恢复备份'),
-              ),
-            ),
-          ],
+        const Divider(height: 1),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
+          child: Text('备份与恢复', style: kSectionTextStyle),
         ),
-        if (_message != null) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(
-            _message!,
-            style: TextStyle(
-              fontSize: 13,
-              color: _isError ? Theme.of(context).colorScheme.error : null,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _export,
+                  child: const Text('导出备份'),
+                ),
+              ),
+              const SizedBox(width: kSpaceM),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _restore,
+                  child: const Text('恢复备份'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+            child: Text(
+              _message!,
+              style: TextStyle(
+                fontSize: 13,
+                color: _isError ? kAppDanger : kAppTextMuted,
+              ),
             ),
           ),
-        ],
       ],
     );
   }
@@ -131,7 +139,7 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
             '这一步无法撤销。',
           ),
           actions: <Widget>[
-            TextButton(
+            OutlinedButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('取消'),
             ),

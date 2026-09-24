@@ -12,6 +12,7 @@ class Ride {
     this.summary,
     this.hrDeviceName,
     this.cadenceDeviceName,
+    this.powerDeviceName,
   });
 
   final int? id;
@@ -24,6 +25,7 @@ class Ride {
   final RideSummary? summary;
   final String? hrDeviceName;
   final String? cadenceDeviceName;
+  final String? powerDeviceName;
 
   Map<String, Object?> toDbMap() => <String, Object?>{
         if (id != null) 'id': id,
@@ -33,6 +35,7 @@ class Ride {
         'title': title,
         'hr_device_name': hrDeviceName,
         'cadence_device_name': cadenceDeviceName,
+        'power_device_name': powerDeviceName,
         if (summary != null) ...summary!.toDbColumns(),
       };
 
@@ -45,5 +48,6 @@ class Ride {
         summary: m['distance_m'] == null ? null : RideSummary.fromDbColumns(m),
         hrDeviceName: m['hr_device_name'] as String?,
         cadenceDeviceName: m['cadence_device_name'] as String?,
+        powerDeviceName: m['power_device_name'] as String?,
       );
 }

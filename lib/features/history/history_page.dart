@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/models/ride.dart';
 import '../detail/detail_page.dart';
@@ -29,9 +30,15 @@ class HistoryPage extends ConsumerWidget {
           if (list.isEmpty) {
             return const Center(child: Text('还没有骑行记录'));
           }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+          // 条目之间用细线分隔：线从内容左边缘起、右侧留白，和条目内部
+          // 分隔读数与缩略曲线的那条线同宽，纵向看是一排整齐的刻度。
+          return ListView.separated(
             itemCount: list.length,
+            separatorBuilder: (BuildContext context, int index) => const Divider(
+              height: 1,
+              indent: kSpaceL,
+              endIndent: kSpaceL,
+            ),
             itemBuilder: (BuildContext context, int index) {
               final Ride ride = list[index];
               final int? id = ride.id;

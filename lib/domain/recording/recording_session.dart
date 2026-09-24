@@ -1,5 +1,6 @@
 import '../analysis/constants.dart';
 import '../analysis/geo.dart';
+import '../analysis/power.dart';
 import '../models/location_fix.dart';
 import '../models/track_point.dart';
 import 'track_point_filter.dart';
@@ -20,6 +21,7 @@ class RecordingSnapshot {
     required this.currentSpeedMps,
     required this.hr,
     required this.cadence,
+    required this.power,
     required this.pointCount,
   });
 
@@ -32,6 +34,10 @@ class RecordingSnapshot {
   final double currentSpeedMps;
   final int? hr;
   final int? cadence;
+
+  /// 瞬时功率（瓦）。接了功率计就是实测值，否则是按速度、坡度与体重估算出来的；
+  /// 起步前（还没有定位点）为 null。
+  final int? power;
 
   /// 已写入的点数（含仍在缓冲中、尚未提交事务的点）。
   final int pointCount;
@@ -56,6 +62,7 @@ class RecordingSession {
     double initialDistanceM = 0,
     TrackPoint? lastWritten,
     int? resumedAtMs,
+    this.weightKg = kDefaultRiderWeightKg,
   })  : _elapsedMs = initialElapsedMs,
         _distanceM = initialDistanceM,
         _lastWritten = lastWritten,
@@ -64,6 +71,9 @@ class RecordingSession {
 
   final int rideId;
   final int startedAtMs;
+
+  /// 估算功率用的体重（公斤，含车重）。调用方从设置里取。
+  final double weightKg;
 
   final WriteBuffer _buffer = WriteBuffer();
 
@@ -75,11 +85,20 @@ class RecordingSession {
   double _currentSpeedMps = 0;
   int? _hr;
   double? _cadence;
+  int? _power;
+  int? _estimatedPower;
   LocationFix? _lastFix;
   TrackPoint? _lastWritten;
   int _pointCount = 0;
 
+  /// 拟合坡度用的近期样点：(定位时间, 累计距离, 高程)。只保留窗口内的。
+  final List<({int tMs, double distanceM, double altitudeM})> _gradeSamples =
+      <({int tMs, double distanceM, double altitudeM})>[];
+
   RecordingPhase get phase => _phase;
+
+  /// 落盘与读数共用的功率：接了功率计用实测值，否则用估算值。
+  int? get _effectivePower => _power ?? _estimatedPower;
 
   /// 是否已攒够 [kSensorBatchSize] 个点，可以提交一个事务。
   bool get shouldFlush => _buffer.isFull;
@@ -91,6 +110,7 @@ class RecordingSession {
         currentSpeedMps: _currentSpeedMps,
         hr: _hr,
         cadence: _cadence?.round(),
+        power: _effectivePower,
         pointCount: _pointCount,
       );
 
@@ -118,10 +138,47 @@ class RecordingSession {
     }
 
     _lastFix = fix;
+    _trackGradeSample(fix);
+    _estimatedPower = _estimatePower();
 
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
       _write(_toPoint(fix));
     }
+  }
+
+  /// 把本次定位压进坡度窗口，并丢掉窗口外的老样点。
+  void _trackGradeSample(LocationFix fix) {
+    final double? altitude = fix.altitudeM;
+    if (altitude == null) return;
+
+    _gradeSamples.add((
+      tMs: fix.tMs,
+      distanceM: _distanceM,
+      altitudeM: altitude,
+    ));
+    // 至少留一个样点：窗口里一个都不剩时，下一点就没有基线可拟合了。
+    while (_gradeSamples.length > 1 &&
+        fix.tMs - _gradeSamples.first.tMs > kGradeWindowMs) {
+      _gradeSamples.removeAt(0);
+    }
+  }
+
+  /// 没接功率计时，按当前速度、窗口拟合出的坡度与体重估算瞬时功率。
+  ///
+  /// 接了功率计时不调用：实测值更准，没有理由用估算值覆盖它。
+  int? _estimatePower() {
+    if (_power != null) return null;
+
+    final double? grade = fitGrade(
+      distanceM: <double>[for (final s in _gradeSamples) s.distanceM],
+      altitudeM: <double>[for (final s in _gradeSamples) s.altitudeM],
+    );
+    // 样点还不够长（刚起步、或一直在慢慢挪）时按平路算：这时候坡度本来也谈不上。
+    return estimatePowerW(
+      speedMps: _currentSpeedMps,
+      grade: grade ?? 0,
+      weightKg: weightKg,
+    ).round();
   }
 
   /// 接收一次心率采样（bpm）。
@@ -129,6 +186,9 @@ class RecordingSession {
 
   /// 接收一次踏频采样（RPM）。
   void ingestCadence(double rpm) => _cadence = rpm;
+
+  /// 接收一次功率采样（瓦）。
+  void ingestPower(int watts) => _power = watts;
 
   /// 由控制器以 1Hz 调用，推进时长、衰减速度、补写纯传感器点。
   void tick(int nowMs) {
@@ -144,6 +204,7 @@ class RecordingSession {
     _advanceElapsed(nowMs);
     _phase = RecordingPhase.paused;
     _currentSpeedMps = 0;
+    _estimatedPower = 0;
   }
 
   /// 恢复采样。暂停期间的位移不属于骑行，因此断开与暂停前状态的关联。
@@ -154,6 +215,8 @@ class RecordingSession {
     _lastFix = null;
     _lastWritten = null;
     _lastWrittenMs = nowMs;
+    // 坡度窗口横跨暂停段会把两段不同位置的样点连成一条假坡，一起清掉。
+    _gradeSamples.clear();
   }
 
   /// 结束记录，返回缓冲中剩余待落盘的点（未满一批不会自动提交）。
@@ -164,6 +227,7 @@ class RecordingSession {
       _advanceElapsed(nowMs);
       _phase = RecordingPhase.finished;
       _currentSpeedMps = 0;
+      _estimatedPower = 0;
     }
     return _buffer.drain();
   }
@@ -181,14 +245,18 @@ class RecordingSession {
     if (_phase == RecordingPhase.recording &&
         (last == null || nowMs - last.tMs > kGpsGapMs)) {
       _currentSpeedMps = 0;
+      _estimatedPower = 0;
     }
   }
 
   /// GPS 长时间没有更新时，仍按 2 秒节拍写纯传感器点，
-  /// 使心率与踏频曲线不断（这类点只有时间与传感器值，不上地图）。
+  /// 使心率、踏频与功率曲线不断（这类点只有时间与传感器值，不上地图）。
+  ///
+  /// 估算功率不写进这类点：没有定位就没有速度，估出来的只能是 0，白白把平均
+  /// 功率拉低。这里只写传感器的实测值。
   void _writeSensorOnlyPointIfNeeded(int nowMs) {
     if (_phase != RecordingPhase.recording) return;
-    if (_hr == null && _cadence == null) return;
+    if (_hr == null && _cadence == null && _power == null) return;
 
     final LocationFix? last = _lastFix;
     final bool gpsLost = last == null || nowMs - last.tMs >= kGpsGapMs;
@@ -199,6 +267,7 @@ class RecordingSession {
       tMs: nowMs,
       hr: _hr,
       cadence: _cadence?.round(),
+      powerW: _power,
     ));
   }
 
@@ -219,5 +288,6 @@ class RecordingSession {
         accuracyM: fix.accuracyM,
         hr: _hr,
         cadence: _cadence?.round(),
+        powerW: _effectivePower,
       );
 }

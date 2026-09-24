@@ -34,13 +34,13 @@ const RideSummary _summary = RideSummary(
   pointCount: 4,
 );
 
-Ride ride(int id, {String? title, int? startedAtMs}) => Ride(
+Ride ride(int id, {String? title, int? startedAtMs, RideSummary? summary}) => Ride(
       id: id,
       startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
       status: RideStatus.finished,
       title: title,
-      summary: _summary,
+      summary: summary ?? _summary,
     );
 
 List<TrackPoint> points() => <TrackPoint>[
@@ -142,6 +142,35 @@ void main() {
     // 卡片渲染的是移动均速（7.44 m/s），不是 avgSpeedMps（7.03 m/s）。
     expect(find.text('26.8 km/h'), findsOneWidget);
     expect(find.text('爬升 180 m'), findsOneWidget);
+    // 这次骑行没有功率数据，不能摆一个 `功率 0 W`。
+    expect(find.textContaining('功率'), findsNothing);
+  });
+
+  testWidgets('配了功率计时卡片多一项功率读数', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Ride>[
+        ride(
+          1,
+          summary: const RideSummary(
+            distanceM: 25300,
+            durationS: 3600,
+            movingS: 3400,
+            avgSpeedMps: 7.03,
+            movingAvgSpeedMps: 7.44,
+            maxSpeedMps: 12.5,
+            elevationGainM: 180,
+            pointCount: 4,
+            avgPowerW: 135.4,
+            maxPowerW: 412,
+          ),
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    // 平均功率保留到瓦，135.4 → 135 W。
+    expect(find.text('功率 135 W'), findsOneWidget);
   });
 
   testWidgets('卡片里渲染迷你速度曲线', (WidgetTester tester) async {

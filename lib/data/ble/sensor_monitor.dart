@@ -6,22 +6,18 @@ import 'ble_platform.dart';
 import 'reconnect_backoff.dart';
 
 /// 传感器类型。
-enum SensorKind { heartRate, cadence }
+enum SensorKind { heartRate, cadence, power }
 
-/// 传感器读数回调。心率单位为 bpm，踏频单位为 RPM。
+/// 传感器读数回调。心率单位为 bpm，踏频单位为 RPM，功率单位为瓦。
 typedef SensorReadingCallback = void Function(SensorKind kind, num value);
 
 /// 连接状态回调。
-typedef SensorConnectionCallback = void Function(
-  SensorKind kind,
-  bool connected,
-);
+typedef SensorConnectionCallback =
+    void Function(SensorKind kind, bool connected);
 
 /// 创建重连定时器。默认走真实时钟，测试注入假实现以免真的等待退避时长。
-typedef BleTimerFactory = Timer Function(
-  Duration delay,
-  void Function() callback,
-);
+typedef BleTimerFactory =
+    Timer Function(Duration delay, void Function() callback);
 
 /// 默认定时器工厂：真实时钟。
 Timer defaultBleTimerFactory(Duration delay, void Function() callback) =>
@@ -29,8 +25,9 @@ Timer defaultBleTimerFactory(Duration delay, void Function() callback) =>
 
 /// 监控一个传感器的连接：枚举服务、订阅特征值、断线后指数退避重连。
 ///
-/// 数据帧解析全部交给 domain 层的 [parseHeartRateMeasurement] 与
-/// [parseCscMeasurement]，本类只负责 IO 与重连时序。
+/// 数据帧解析全部交给 domain 层的 [parseHeartRateMeasurement]、
+/// [parseCscMeasurement] 与 [parseCyclingPowerMeasurement]，本类只负责 IO
+/// 与重连时序。
 class SensorMonitor {
   SensorMonitor({
     required this.device,
@@ -102,12 +99,16 @@ class SensorMonitor {
     await _valueSub?.cancel();
     _valueSub = null;
 
-    final String serviceShort = kind == SensorKind.heartRate
-        ? kHeartRateServiceShort
-        : kCscServiceShort;
-    final String characteristicShort = kind == SensorKind.heartRate
-        ? kHeartRateMeasurementShort
-        : kCscMeasurementShort;
+    final String serviceShort = switch (kind) {
+      SensorKind.heartRate => kHeartRateServiceShort,
+      SensorKind.cadence => kCscServiceShort,
+      SensorKind.power => kCpsServiceShort,
+    };
+    final String characteristicShort = switch (kind) {
+      SensorKind.heartRate => kHeartRateMeasurementShort,
+      SensorKind.cadence => kCscMeasurementShort,
+      SensorKind.power => kCpsMeasurementShort,
+    };
 
     final List<BleCharacteristicHandle> characteristics = await device
         .discoverCharacteristics();
@@ -124,28 +125,31 @@ class SensorMonitor {
 
     // 走到这里说明没找到标准特征值。抛给 _connect 统一走重连，
     // 「心率广播未开启」的针对性指引由 UI 层根据 [lastError] 给出（设计文档 11.2）。
-    throw StateError(
-      kind == SensorKind.heartRate
-          ? '设备未提供标准心率服务 0x180D'
-          : '设备未提供标准踏频服务 0x1816',
-    );
+    throw StateError(switch (kind) {
+      SensorKind.heartRate => '设备未提供标准心率服务 0x180D',
+      SensorKind.cadence => '设备未提供标准踏频服务 0x1816',
+      SensorKind.power => '设备未提供标准功率服务 0x1818',
+    });
   }
 
   void _onValue(List<int> data) {
-    if (kind == SensorKind.heartRate) {
-      final int? bpm = parseHeartRateMeasurement(data);
-      if (bpm != null) onReading(kind, bpm);
-      return;
+    switch (kind) {
+      case SensorKind.heartRate:
+        final int? bpm = parseHeartRateMeasurement(data);
+        if (bpm != null) onReading(kind, bpm);
+      case SensorKind.cadence:
+        final CscMeasurement? cur = parseCscMeasurement(data);
+        if (cur == null) return;
+        final CscMeasurement? prev = _lastCsc;
+        _lastCsc = cur;
+        // 第一次收到数据时还没有上一次，无法算踏频，跳过。
+        if (prev == null) return;
+        final double? rpm = cadenceRpm(prev, cur);
+        if (rpm != null) onReading(kind, rpm);
+      case SensorKind.power:
+        final int? watts = parseCyclingPowerMeasurement(data);
+        if (watts != null) onReading(kind, watts);
     }
-
-    final CscMeasurement? cur = parseCscMeasurement(data);
-    if (cur == null) return;
-    final CscMeasurement? prev = _lastCsc;
-    _lastCsc = cur;
-    // 第一次收到数据时还没有上一次，无法算踏频，跳过。
-    if (prev == null) return;
-    final double? rpm = cadenceRpm(prev, cur);
-    if (rpm != null) onReading(kind, rpm);
   }
 
   void _scheduleReconnect() {

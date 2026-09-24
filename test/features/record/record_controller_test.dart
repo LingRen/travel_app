@@ -41,6 +41,7 @@ class _FakeRideRepository implements RideRepository {
   int? startedAtMs;
   String? hrDeviceName;
   String? cadenceDeviceName;
+  String? powerDeviceName;
 
   /// 大于 0 时 `appendPoints` 抛出异常，每次调用减一。
   int failAppendTimes = 0;
@@ -53,11 +54,13 @@ class _FakeRideRepository implements RideRepository {
     required int startedAtMs,
     String? hrDeviceName,
     String? cadenceDeviceName,
+    String? powerDeviceName,
   }) async {
     startRideCalls++;
     this.startedAtMs = startedAtMs;
     this.hrDeviceName = hrDeviceName;
     this.cadenceDeviceName = cadenceDeviceName;
+    this.powerDeviceName = powerDeviceName;
     return Ride(id: 1, startedAtMs: startedAtMs, status: RideStatus.recording);
   }
 
@@ -238,6 +241,18 @@ _FakeCharacteristic _hrCharacteristic() => _FakeCharacteristic(
       serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
       uuid: '00002a37-0000-1000-8000-00805f9b34fb',
     );
+
+/// 标准 CPS 特征值：服务 0x1818、测量 0x2A63。
+_FakeCharacteristic _cpsCharacteristic() =>
+    _FakeCharacteristic(serviceUuid: '1818', uuid: '2a63');
+
+/// 组装一帧骑行功率数据：flags=0x0000 + sint16 小端瞬时功率。
+List<int> _cpsFrame(int watts) => <int>[
+      0x00,
+      0x00,
+      watts & 0xFF,
+      (watts >> 8) & 0xFF,
+    ];
 
 void main() {
   late _FakeRideRepository repo;
@@ -586,6 +601,37 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('连接功率计后读数进入会话，设备名写入骑行记录',
+      (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    final _FakeCharacteristic cps = _cpsCharacteristic();
+    final _FakeBleDevice device = _FakeBleDevice(
+      id: 'AA:03',
+      name: 'ASSIOMA',
+      characteristics: <BleCharacteristicHandle>[cps],
+    );
+
+    await controller.connectSensor(SensorKind.power, device);
+    expect(container.read(recordControllerProvider).powerConnected, isTrue);
+    expect(device.connectCalls, 1);
+
+    await controller.start();
+    expect(repo.powerDeviceName, 'ASSIOMA');
+    // 没连心率与踏频时这两项不该被写成空串之外的东西。
+    expect(repo.hrDeviceName, isNull);
+    expect(repo.cadenceDeviceName, isNull);
+
+    cps.emit(_cpsFrame(210));
+    await tester.pump(const Duration(seconds: 1));
+
+    final RecordState state = container.read(recordControllerProvider);
+    expect(state.power, 210);
+    expect(state.powerConnected, isTrue);
+    container.dispose();
+  });
+
   testWidgets('reset 回到未开始状态', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller =
@@ -654,6 +700,7 @@ void main() {
 
     expect(container.read(recordControllerProvider).hrConnected, isFalse);
     expect(container.read(recordControllerProvider).cadenceConnected, isFalse);
+    expect(container.read(recordControllerProvider).powerConnected, isFalse);
     expect(repo.hrDeviceName, isNull);
     expect(container.read(recordControllerProvider).phase, RecordingPhase.recording);
     container.dispose();

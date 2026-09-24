@@ -2,9 +2,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme.dart';
 import '../../domain/analysis/heart_rate.dart';
 
 /// 心率区间分布条。见设计文档 10.3 的第 4 块与 8.2 的区间定义。
+///
+/// 五段颜色是数据色（由冷到热就是区间本身的含义），不跟着主题的强调色走；
+/// 但方块本身不带圆角修饰，底色由细线兜住，与页面的器件语言一致。
 class HrZoneBar extends StatelessWidget {
   const HrZoneBar({required this.breakdown, super.key});
 
@@ -23,18 +27,20 @@ class HrZoneBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (breakdown.totalSeconds <= 0) {
       return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        child: Text('这次骑行没有心率数据'),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceL),
+        child: Text('这次骑行没有心率数据', style: kMutedTextStyle),
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+          DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border.fromBorderSide(kHairline),
+            ),
             child: SizedBox(
               height: 14,
               child: Row(
@@ -52,18 +58,20 @@ class HrZoneBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: kSpaceS),
           Wrap(
-            spacing: 12,
-            runSpacing: 4,
+            spacing: kSpaceM,
+            runSpacing: kSpaceXs,
             children: <Widget>[
               for (final HrZone zone in kHrZones)
                 Text(
                   '${zone.label} ${(breakdown.ratioOf(zone.index) * 100).round()}%'
                   ' · ${breakdown.secondsByZone[zone.index]?.round() ?? 0}s',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontFamily: kMonoFamily,
+                    fontSize: kFontLabel,
                     color: zoneColors[zone.index - 1],
+                    fontFeatures: kTabularFigures,
                   ),
                 ),
             ],

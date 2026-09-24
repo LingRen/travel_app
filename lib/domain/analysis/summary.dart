@@ -41,6 +41,11 @@ RideSummary computeSummary({
       if (p.cadence != null) p.cadence!.toDouble(),
   ];
 
+  final List<double> powers = <double>[
+    for (final TrackPoint p in points)
+      if (p.powerW != null) p.powerW!.toDouble(),
+  ];
+
   final int movingS = moving.movingSeconds.round();
 
   return RideSummary(
@@ -56,6 +61,12 @@ RideSummary computeSummary({
     avgCadence: cadences.isEmpty
         ? null
         : cadences.reduce((double a, double b) => a + b) / cadences.length,
+    avgPowerW: powers.isEmpty
+        ? null
+        : powers.reduce((double a, double b) => a + b) / powers.length,
+    maxPowerW: powers.isEmpty
+        ? null
+        : powers.reduce((double a, double b) => a > b ? a : b).round(),
     calories: estimateCalories(zones: zones, weightKg: weightKg),
     pointCount: points.length,
   );

@@ -9,9 +9,16 @@ void main() {
     int tMs, {
     double lat = 31.0,
     double? lon = 121.0,
+    double? altitudeM,
     double? speedMps,
   }) =>
-      LocationFix(tMs: tMs, lat: lat, lon: lon, speedMps: speedMps);
+      LocationFix(
+        tMs: tMs,
+        lat: lat,
+        lon: lon,
+        altitudeM: altitudeM,
+        speedMps: speedMps,
+      );
 
   group('RecordingSession 时长', () {
     test('tick 累计有效时长', () {
@@ -127,14 +134,67 @@ void main() {
       expect(s.takePendingPoints(), isEmpty);
     });
 
-    test('心率与踏频附加到写入的点上', () {
+    test('心率、踏频与功率附加到写入的点上', () {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
       s.ingestHeartRate(120);
       s.ingestCadence(85.4);
+      s.ingestPower(210);
       s.ingestFix(fixAt(0));
       final TrackPoint p = s.takePendingPoints().single;
       expect(p.hr, 120);
       expect(p.cadence, 85);
+      expect(p.powerW, 210);
+    });
+
+    test('没接功率计时写入的点带估算功率，不是空值', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestHeartRate(120);
+      s.ingestFix(fixAt(0, speedMps: 6.0));
+      // 6 m/s、平路、70 公斤 ≈ 63 W（算法与常量见 analysis/power.dart）。
+      expect(s.takePendingPoints().single.powerW, 63);
+    });
+
+    test('接了功率计时写实测值，不被估算值顶掉', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestPower(210);
+      s.ingestFix(fixAt(0, speedMps: 6.0));
+      expect(s.takePendingPoints().single.powerW, 210);
+    });
+
+    test('上坡时估算功率明显高于同样速度的平路', () {
+      // 0.0001 度纬度约 11.13 米，6 个点爬 5 米、水平位移约 56 米（越过拟合所需的
+      // 最小位移 50 米），坡度约 9%。
+      int flatPower(RecordingSession s) {
+        s.ingestFix(fixAt(0, speedMps: 6.0));
+        return s.takePendingPoints().single.powerW!;
+      }
+
+      final RecordingSession flat = RecordingSession(rideId: 1, startedAtMs: 0);
+      final int flatW = flatPower(flat);
+
+      final RecordingSession uphill = RecordingSession(rideId: 2, startedAtMs: 0);
+      int climbW = 0;
+      for (int i = 0; i < 6; i++) {
+        uphill.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + i * 0.0001,
+          altitudeM: 100.0 + i,
+          speedMps: 6.0,
+        ));
+        final List<TrackPoint> batch = uphill.takePendingPoints();
+        if (batch.isNotEmpty) climbW = batch.last.powerW!;
+      }
+
+      expect(climbW, greaterThan(flatW * 2));
+    });
+
+    test('暂停后估算功率归零，不会停在暂停前的读数上', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 6.0));
+      expect(s.snapshot.power, 63);
+
+      s.pause(1000);
+      expect(s.snapshot.power, 0);
     });
 
     test('GPS 丢失超过 10 秒时写入纯传感器点', () {
@@ -147,6 +207,21 @@ void main() {
       expect(batch.length, 1);
       expect(batch.single.hasPosition, isFalse);
       expect(batch.single.hr, 120);
+      // 没有定位就没有速度，估算功率写进去只会是 0，白白拉低平均功率。
+      expect(batch.single.powerW, isNull);
+    });
+
+    test('只连了功率计时也要写纯传感器点，功率曲线不能断', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestPower(210);
+      s.ingestFix(fixAt(0));
+      s.takePendingPoints();
+      s.tick(12000);
+      final List<TrackPoint> batch = s.takePendingPoints();
+      expect(batch.length, 1);
+      expect(batch.single.hasPosition, isFalse);
+      expect(batch.single.hr, isNull);
+      expect(batch.single.powerW, 210);
     });
 
     test('结束时返回缓冲中剩余的点', () {

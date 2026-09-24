@@ -55,6 +55,9 @@ String formatDuration(int seconds) {
   return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
 }
 
+/// 功率文本。没配功率计时没有功率数据，用破折号占位。
+String formatPower(double? watts) => watts == null ? '—' : '${watts.round()} W';
+
 /// 日期时间文本，形如 `2026-09-21 08:05`。用本地时区。
 ///
 /// 不做「今年省略年份」的压缩：列表里跨年的记录混在一起时，省略年份会看不出

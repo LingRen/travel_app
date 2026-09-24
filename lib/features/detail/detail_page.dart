@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/curve.dart';
@@ -9,6 +10,7 @@ import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/heart_rate.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/ride.dart';
+import '../../domain/models/ride_summary.dart';
 import '../../domain/models/track_point.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
@@ -64,6 +66,12 @@ class _DetailBody extends ConsumerWidget {
         buildCurve(points, metric: CurveMetric.heartRate);
     final List<CurveSample> cadence =
         buildCurve(points, metric: CurveMetric.cadence);
+    final List<CurveSample> power =
+        buildCurve(points, metric: CurveMetric.power);
+
+    final RideSummary? s = ride.summary;
+    final String speedUnit = speedUnitLabel(unit);
+    String speedText(double mps) => '${formatSpeedValue(mps, unit)} $speedUnit';
 
     final String tileUrl =
         ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
@@ -83,54 +91,86 @@ class _DetailBody extends ConsumerWidget {
           subdomains: kDefaultMapTileSubdomains,
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
           child: Text(
             formatDateTime(ride.startedAtMs),
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: const TextStyle(
+              fontSize: 13,
+              color: kAppTextMuted,
+              fontFeatures: kTabularFigures,
+            ),
           ),
         ),
         SummaryGrid(ride: ride, unit: unit),
         if (points.isEmpty)
           const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('这次骑行没有轨迹数据'),
+            padding: EdgeInsets.all(kSpaceL),
+            child: Text('这次骑行没有轨迹数据', style: kMutedTextStyle),
           ),
-        if (speed.length >= 2) ...<Widget>[
-          const _SectionTitle('速度'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+        // 每项指标自成一组：标题 → 该项的读数 → 该项的曲线。原来所有读数挤在
+        // 顶部一张规格表里、所有曲线排在下面，读「心率多少、心率怎么变的」
+        // 要在两处之间来回对；并到一组之后从上往下读一遍就够。
+        if (speed.length >= 2)
+          _MetricSection(
+            title: '速度',
+            readouts: <SpecEntry>[
+              if (s != null) ('总均速', speedText(s.avgSpeedMps)),
+              if (s != null) ('移动均速', speedText(s.movingAvgSpeedMps)),
+              if (s?.maxSpeedMps != null) ('最高速', speedText(s!.maxSpeedMps!)),
+            ],
             child: CurveChart(
               samples: speed,
-              unitLabel: speedUnitLabel(unit),
+              unitLabel: speedUnit,
               colorBySpeed: true,
             ),
           ),
-        ],
-        if (hr.length >= 2) ...<Widget>[
-          const _SectionTitle('心率'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: CurveChart(samples: hr, unitLabel: 'bpm'),
+        if (hr.length >= 2)
+          _MetricSection(
+            title: '心率',
+            readouts: <SpecEntry>[
+              if (s?.avgHr != null) ('平均心率', '${s!.avgHr!.round()} bpm'),
+              if (s?.maxHr != null) ('最高心率', '${s!.maxHr} bpm'),
+            ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                CurveChart(samples: hr, unitLabel: 'bpm'),
+                const SizedBox(height: kSpaceM),
+                HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
-        ],
-        if (cadence.length >= 2) ...<Widget>[
-          const _SectionTitle('踏频'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+        if (cadence.length >= 2)
+          _MetricSection(
+            title: '踏频',
+            readouts: <SpecEntry>[
+              if (s?.avgCadence != null)
+                ('平均踏频', '${s!.avgCadence!.round()} rpm'),
+            ],
             child: CurveChart(samples: cadence, unitLabel: 'rpm'),
           ),
-        ],
+        if (power.length >= 2)
+          _MetricSection(
+            // 没接功率计的那次骑行，这里的功率是按速度、坡度与体重估出来的
+            // （见 `analysis/power.dart`）。存进库里的数值与实测功率长得一模一样，
+            // 只有设备名能区分，所以标题里写明。
+            title: ride.powerDeviceName == null ? '功率（估算）' : '功率',
+            readouts: <SpecEntry>[
+              if (s?.avgPowerW != null)
+                ('平均功率', '${s!.avgPowerW!.round()} W'),
+              if (s?.maxPowerW != null) ('最高功率', '${s!.maxPowerW} W'),
+            ],
+            child: CurveChart(samples: power, unitLabel: 'W'),
+          ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceXl, kSpaceL, 0),
           child: FilledButton.icon(
             onPressed: () => _exportGpx(context, ride, points),
             icon: const Icon(Icons.ios_share),
             label: const Text('导出 GPX'),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: kSpaceXxl),
       ],
     );
   }
@@ -150,17 +190,49 @@ class _DetailBody extends ConsumerWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+/// 一个指标区块：标题 → 该项读数 → 该项曲线。
+///
+/// 上方一条从边到边的细线把它和前一组分开——曲线区块之间原本只靠留白分隔，
+/// 一屏里三段曲线连在一起，容易误读成同一块内容。
+///
+/// [readouts] 为空时（没有汇总指标，或该项本身没有读数）只画曲线，不留下
+/// 一段空白。
+class _MetricSection extends StatelessWidget {
+  const _MetricSection({
+    required this.title,
+    required this.readouts,
+    required this.child,
+  });
 
-  final String text;
+  final String title;
+  final List<SpecEntry> readouts;
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              kSpaceL,
+              kSpaceL,
+              kSpaceL,
+              kSpaceS,
+            ),
+            child: Text(title, style: kSectionTextStyle),
+          ),
+          if (readouts.isNotEmpty) ...<Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+              child: SpecList(entries: readouts),
+            ),
+            const SizedBox(height: kSpaceM),
+          ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+            child: child,
+          ),
+        ],
       );
 }

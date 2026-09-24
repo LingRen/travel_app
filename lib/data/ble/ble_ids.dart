@@ -6,6 +6,8 @@ const String kHeartRateServiceShort = '180d';
 const String kHeartRateMeasurementShort = '2a37';
 const String kCscServiceShort = '1816';
 const String kCscMeasurementShort = '2a2b';
+const String kCpsServiceShort = '1818';
+const String kCpsMeasurementShort = '2a63';
 
 /// 把任意形式的 UUID 归一化成 16 位短形式（小写）。
 ///

@@ -39,6 +39,19 @@ CscMeasurement? parseCscMeasurement(List<int> data) {
   return CscMeasurement(crankRevolutions: revolutions, crankEventTime1024: eventTime);
 }
 
+/// 解析骑行功率测量特征值（0x2A63），返回瞬时功率（瓦）。长度不足时返回 null。
+///
+/// 前两字节是 flags（小端 uint16），紧随其后的 sint16 就是瞬时功率。flags 里
+/// 的平衡、累积能量等位只影响后面的字段，这里不读功率以外的内容。
+///
+/// 标准允许瞬时功率为负（滑行时反拖），但负瓦数在码表上没有意义，夹到 0。
+int? parseCyclingPowerMeasurement(List<int> data) {
+  if (data.length < 4) return null;
+  final int raw = data[2] | (data[3] << 8);
+  final int signed = raw >= 0x8000 ? raw - 0x10000 : raw;
+  return signed < 0 ? 0 : signed;
+}
+
 /// 由两次 CSC 测量计算踏频（RPM）。无法判定时返回 null。
 ///
 /// 转数与事件时间都是 16 位会回绕的量，用按位与 0xFFFF 处理回绕。

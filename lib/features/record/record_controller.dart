@@ -9,6 +9,7 @@ import '../../data/ble/sensor_monitor.dart';
 import '../../data/location/location_service.dart';
 import '../../data/ride_repository.dart';
 import '../../data/sensor_pairing.dart';
+import '../../data/settings_repository.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/geo.dart';
 import '../../domain/models/location_fix.dart';
@@ -31,8 +32,10 @@ class RecordState {
     this.currentSpeedMps = 0,
     this.hr,
     this.cadence,
+    this.power,
     this.hrConnected = false,
     this.cadenceConnected = false,
+    this.powerConnected = false,
     this.gpsWeak = false,
     this.errorMessage,
   });
@@ -48,8 +51,10 @@ class RecordState {
   final double currentSpeedMps;
   final int? hr;
   final int? cadence;
+  final int? power;
   final bool hrConnected;
   final bool cadenceConnected;
+  final bool powerConnected;
 
   /// GPS 超过 10 秒没有新点。见设计文档 11.2 的「信号弱」。
   final bool gpsWeak;
@@ -78,8 +83,13 @@ class RecordController extends Notifier<RecordState> {
   RecordingSession? _session;
   Timer? _ticker;
   StreamSubscription<LocationFix>? _fixSub;
-  SensorMonitor? _hrMonitor;
-  SensorMonitor? _cadenceMonitor;
+
+  /// 每种传感器至多一个连接。用 Map 而不是三个字段：连接/断开/记配对/
+  /// 取设备名这些地方是按「类型」做的同一件事，写三遍迟早会漏一个。
+  final Map<SensorKind, SensorMonitor> _monitors = <SensorKind, SensorMonitor>{};
+
+  /// 当前已连上的传感器类型。
+  final Set<SensorKind> _connected = <SensorKind>{};
 
   /// 自动重连的整体时间预算。
   ///
@@ -93,8 +103,6 @@ class RecordController extends Notifier<RecordState> {
 
   int? _rideId;
   RecordViewMode _mode = RecordViewMode.handlebar;
-  bool _hrConnected = false;
-  bool _cadenceConnected = false;
   bool _finished = false;
   int _lastFixMs = 0;
   int _writeFailures = 0;
@@ -132,16 +140,27 @@ class RecordController extends Notifier<RecordState> {
     }
 
     // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
-    // 这样 rides.hr_device_name / cadence_device_name 才有值。
+    // 这样 rides 的三个 *_device_name 才有值。
     await _autoConnectPairedSensors().timeout(_kAutoConnectBudget, onTimeout: () {});
+
+    // 估算功率要用体重。只在这里取一次：骑行中途改设置不该让已经记下的读数变样。
+    // 设置还没读出来时（首帧）退回默认体重，不影响记录本身。
+    // riverpod 3 的 `AsyncValue` 没有 `valueOrNull`，用 `.value`（可为 null）。
+    final double weightKg =
+        ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg;
 
     final Ride ride = await ref.read(rideRepositoryProvider).startRide(
           startedAtMs: _now(),
-          hrDeviceName: _hrMonitor?.deviceName,
-          cadenceDeviceName: _cadenceMonitor?.deviceName,
+          hrDeviceName: _monitors[SensorKind.heartRate]?.deviceName,
+          cadenceDeviceName: _monitors[SensorKind.cadence]?.deviceName,
+          powerDeviceName: _monitors[SensorKind.power]?.deviceName,
         );
     _rideId = ride.id;
-    _session = RecordingSession(rideId: ride.id!, startedAtMs: ride.startedAtMs);
+    _session = RecordingSession(
+      rideId: ride.id!,
+      startedAtMs: ride.startedAtMs,
+      weightKg: weightKg,
+    );
     _startStreams();
     _publish();
   }
@@ -171,6 +190,8 @@ class RecordController extends Notifier<RecordState> {
     _session = RecordingSession(
       rideId: rideId,
       startedAtMs: ride.startedAtMs,
+      weightKg:
+          ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg,
       initialElapsedMs: elapsedMs,
       initialDistanceM: distanceM,
       lastWritten: points.isEmpty ? null : points.last,
@@ -212,12 +233,7 @@ class RecordController extends Notifier<RecordState> {
     // 而广播流本身取消是立即生效的，等它没有任何收益。
     unawaited(_fixSub?.cancel());
     _fixSub = null;
-    await _hrMonitor?.dispose();
-    await _cadenceMonitor?.dispose();
-    _hrMonitor = null;
-    _cadenceMonitor = null;
-    _hrConnected = false;
-    _cadenceConnected = false;
+    await _disposeMonitors();
 
     final int now = _now();
     final List<TrackPoint> remaining = session.finish(now);
@@ -244,27 +260,27 @@ class RecordController extends Notifier<RecordState> {
   }
 
   /// 连接一个传感器。失败不阻断骑行，[SensorMonitor] 会自动退避重连。
+  ///
+  /// 同一类型已有连接时先释放：换设备不应该留下一个还在后台重连的旧连接。
   Future<void> connectSensor(SensorKind kind, BleDeviceHandle device) async {
-    if (kind == SensorKind.heartRate) {
-      await _hrMonitor?.dispose();
-      _hrMonitor = SensorMonitor(
-        device: device,
-        kind: kind,
-        onReading: _onSensorReading,
-        onConnectionChanged: _onSensorConnection,
-      );
-      await _hrMonitor!.start();
-      return;
-    }
+    await _monitors.remove(kind)?.dispose();
 
-    await _cadenceMonitor?.dispose();
-    _cadenceMonitor = SensorMonitor(
+    final SensorMonitor monitor = SensorMonitor(
       device: device,
       kind: kind,
       onReading: _onSensorReading,
       onConnectionChanged: _onSensorConnection,
     );
-    await _cadenceMonitor!.start();
+    _monitors[kind] = monitor;
+    await monitor.start();
+  }
+
+  Future<void> _disposeMonitors() async {
+    for (final SensorMonitor monitor in _monitors.values) {
+      await monitor.dispose();
+    }
+    _monitors.clear();
+    _connected.clear();
   }
 
   /// App 退到后台时强制落盘一次，缩小崩溃丢数据的窗口。见设计文档 6.3。
@@ -300,28 +316,30 @@ class RecordController extends Notifier<RecordState> {
   void _onSensorReading(SensorKind kind, num value) {
     final RecordingSession? session = _session;
     if (session == null) return;
-    if (kind == SensorKind.heartRate) {
-      session.ingestHeartRate(value.round());
-    } else {
-      session.ingestCadence(value.toDouble());
+    switch (kind) {
+      case SensorKind.heartRate:
+        session.ingestHeartRate(value.round());
+      case SensorKind.cadence:
+        session.ingestCadence(value.toDouble());
+      case SensorKind.power:
+        session.ingestPower(value.round());
     }
   }
 
   void _onSensorConnection(SensorKind kind, bool connected) {
-    if (kind == SensorKind.heartRate) {
-      _hrConnected = connected;
+    if (connected) {
+      _connected.add(kind);
     } else {
-      _cadenceConnected = connected;
+      _connected.remove(kind);
     }
-    // 只有真的连上了才记住：用户点错设备（那个设备不提供标准 HRS）时
+    // 只有真的连上了才记住：用户点错设备（那个设备不提供标准服务）时
     // 不该被写进配对，否则下次开记录会一直去连一个连不上的设备。
     if (connected) unawaited(_rememberSensor(kind));
     _publish();
   }
 
   Future<void> _rememberSensor(SensorKind kind) async {
-    final SensorMonitor? monitor =
-        kind == SensorKind.heartRate ? _hrMonitor : _cadenceMonitor;
+    final SensorMonitor? monitor = _monitors[kind];
     if (monitor == null) return;
     await _pairing.save(
       kind,
@@ -397,8 +415,10 @@ class RecordController extends Notifier<RecordState> {
       currentSpeedMps: snap?.currentSpeedMps ?? 0,
       hr: snap?.hr,
       cadence: snap?.cadence,
-      hrConnected: _hrConnected,
-      cadenceConnected: _cadenceConnected,
+      power: snap?.power,
+      hrConnected: _connected.contains(SensorKind.heartRate),
+      cadenceConnected: _connected.contains(SensorKind.cadence),
+      powerConnected: _connected.contains(SensorKind.power),
       gpsWeak: _isGpsWeak(),
       errorMessage: _error,
     );
@@ -414,7 +434,8 @@ class RecordController extends Notifier<RecordState> {
   void _teardown() {
     _ticker?.cancel();
     _fixSub?.cancel();
-    _hrMonitor?.dispose();
-    _cadenceMonitor?.dispose();
+    for (final SensorMonitor monitor in _monitors.values) {
+      monitor.dispose();
+    }
   }
 }

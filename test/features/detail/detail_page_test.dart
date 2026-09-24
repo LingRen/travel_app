@@ -26,12 +26,13 @@ const AppSettings _settings = AppSettings(
   mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
 );
 
-Ride rideWith({RideSummary? summary}) => Ride(
+Ride rideWith({RideSummary? summary, String? powerDeviceName}) => Ride(
       id: 1,
       startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
       status: RideStatus.finished,
       title: '晨骑',
+      powerDeviceName: powerDeviceName,
       summary: summary ??
           const RideSummary(
             distanceM: 25300,
@@ -48,6 +49,37 @@ Ride rideWith({RideSummary? summary}) => Ride(
             pointCount: 4,
           ),
     );
+
+/// 带功率的汇总，用来核对功率区块的读数与标题。
+const RideSummary _powerSummary = RideSummary(
+  distanceM: 25300,
+  durationS: 3600,
+  movingS: 3400,
+  avgSpeedMps: 7.03,
+  movingAvgSpeedMps: 7.44,
+  maxSpeedMps: 12.5,
+  elevationGainM: 180,
+  avgHr: 142,
+  maxHr: 176,
+  avgCadence: 78,
+  avgPowerW: 205.3,
+  maxPowerW: 230,
+  calories: 900,
+  pointCount: 4,
+);
+
+/// 每个点都带功率，功率区块才会渲染。
+List<TrackPoint> pointsWithPower() => <TrackPoint>[
+      for (int i = 0; i < 4; i++)
+        TrackPoint(
+          rideId: 1,
+          tMs: 1000 + i * 1000,
+          lat: 31.0 + i * 0.0001,
+          lon: 121.0,
+          speedMps: 4.0 + i,
+          powerW: 200 + i * 10,
+        ),
+    ];
 
 /// 每秒一个点，速度与心率递增，用来产生可断言的曲线与区间分布。
 List<TrackPoint> pointsWithHr() => <TrackPoint>[
@@ -164,6 +196,39 @@ void main() {
 
     expect(find.text('踏频'), findsNothing);
     expect(find.text('心率'), findsOneWidget);
+  });
+
+  // 没接功率计的那次骑行，库里存的功率是按速度、坡度与体重估出来的，和实测
+  // 功率长得一模一样，只有 `Ride.powerDeviceName` 能区分，所以标题必须跟着变。
+  group('功率区块的标题', () {
+    testWidgets('没接功率计：标题写明「估算」', (WidgetTester tester) async {
+      await pumpDetail(
+        tester,
+        detail: RideDetail(
+          ride: rideWith(summary: _powerSummary),
+          points: pointsWithPower(),
+        ),
+      );
+
+      expect(find.text('功率（估算）'), findsOneWidget);
+      expect(find.text('功率'), findsNothing);
+      expect(find.text('平均功率'), findsOneWidget);
+      expect(find.text('205 W'), findsOneWidget);
+      expect(find.text('230 W'), findsOneWidget);
+    });
+
+    testWidgets('接了功率计：标题就是「功率」', (WidgetTester tester) async {
+      await pumpDetail(
+        tester,
+        detail: RideDetail(
+          ride: rideWith(summary: _powerSummary, powerDeviceName: 'ASSIOMA'),
+          points: pointsWithPower(),
+        ),
+      );
+
+      expect(find.text('功率'), findsOneWidget);
+      expect(find.text('功率（估算）'), findsNothing);
+    });
   });
 
   testWidgets('轨迹点为空时显示空数据提示且不崩溃', (WidgetTester tester) async {

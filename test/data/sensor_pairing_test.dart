@@ -51,6 +51,41 @@ void main() {
     expect((await repo.load(SensorKind.cadence))!.id, 'BB:02');
   });
 
+  test('功率计与心率、踏频各自独立，互不覆盖', () async {
+    await repo.save(
+      SensorKind.heartRate,
+      const PairedSensor(id: 'AA:01', name: 'FIT 3'),
+    );
+    await repo.save(
+      SensorKind.cadence,
+      const PairedSensor(id: 'BB:02', name: 'CADENCE'),
+    );
+    await repo.save(
+      SensorKind.power,
+      const PairedSensor(id: 'CC:03', name: 'ASSIOMA'),
+    );
+
+    expect((await repo.load(SensorKind.power))!.id, 'CC:03');
+    expect((await repo.load(SensorKind.heartRate))!.id, 'AA:01');
+    expect((await repo.load(SensorKind.cadence))!.id, 'BB:02');
+  });
+
+  test('clear 功率计不影响另外两种传感器', () async {
+    await repo.save(
+      SensorKind.cadence,
+      const PairedSensor(id: 'BB:02', name: 'CADENCE'),
+    );
+    await repo.save(
+      SensorKind.power,
+      const PairedSensor(id: 'CC:03', name: 'ASSIOMA'),
+    );
+
+    await repo.clear(SensorKind.power);
+
+    expect(await repo.load(SensorKind.power), isNull);
+    expect((await repo.load(SensorKind.cadence))!.id, 'BB:02');
+  });
+
   test('重复保存同一种传感器时覆盖旧值', () async {
     await repo.save(
       SensorKind.heartRate,

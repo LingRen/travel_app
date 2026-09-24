@@ -175,6 +175,18 @@ FakeCharacteristic hrCharacteristic() => FakeCharacteristic(
 FakeCharacteristic cscCharacteristic() =>
     FakeCharacteristic(serviceUuid: '1816', uuid: '2a2b');
 
+/// CPS 特征值：服务 0x1818、测量 0x2A63，故意用短形式。
+FakeCharacteristic cpsCharacteristic() =>
+    FakeCharacteristic(serviceUuid: '1818', uuid: '2a63');
+
+/// 组装一帧骑行功率数据：flags=0x0000 + sint16 小端瞬时功率。
+List<int> cpsFrame(int watts) => <int>[
+      0x00,
+      0x00,
+      watts & 0xFF,
+      (watts >> 8) & 0xFF,
+    ];
+
 /// 组装一帧 CSC 曲柄数据（flags bit1，只带曲柄）。
 List<int> cscFrame({required int revolutions, required int eventTime1024}) =>
     <int>[
@@ -290,6 +302,81 @@ void main() {
       await pumpEventQueue();
 
       expect(h.readings, isEmpty);
+    });
+  });
+
+  group('功率订阅', () {
+    test('订阅标准 CPS 特征值并把瓦数原样交给回调', () async {
+      final FakeCharacteristic cps = cpsCharacteristic();
+      final FakeCharacteristic hr = hrCharacteristic();
+      final FakeCharacteristic csc = cscCharacteristic();
+      final FakeBleDevice device = FakeBleDevice(
+        id: 'AA:03',
+        name: 'POWER',
+        characteristics: <BleCharacteristicHandle>[hr, csc, cps],
+      );
+      final Harness h = Harness(device: device, kind: SensorKind.power);
+
+      await h.monitor.start();
+
+      expect(cps.notifyValue, isTrue);
+      expect(hr.notifyValue, isNull, reason: '不能订阅到心率特征值上');
+      expect(csc.notifyValue, isNull, reason: '不能订阅到踏频特征值上');
+      expect(h.connections.last, const Connection(SensorKind.power, true));
+      expect(h.monitor.deviceName, 'POWER');
+
+      cps.emit(cpsFrame(210));
+      await pumpEventQueue();
+
+      expect(h.readings.single.kind, SensorKind.power);
+      expect(h.readings.single.value, 210);
+      expect(h.readings.single.value, isA<int>());
+    });
+
+    test('每帧都是一个独立读数，不像踏频那样要等上一帧', () async {
+      final FakeCharacteristic cps = cpsCharacteristic();
+      final FakeBleDevice device = FakeBleDevice(
+        id: 'AA:03',
+        characteristics: <BleCharacteristicHandle>[cps],
+      );
+      final Harness h = Harness(device: device, kind: SensorKind.power);
+      await h.monitor.start();
+
+      cps.emit(cpsFrame(180));
+      await pumpEventQueue();
+      cps.emit(cpsFrame(1500));
+      await pumpEventQueue();
+
+      expect(h.readings.map((Reading r) => r.value), <num>[180, 1500]);
+    });
+
+    test('长度不足的帧不产生读数', () async {
+      final FakeCharacteristic cps = cpsCharacteristic();
+      final FakeBleDevice device = FakeBleDevice(
+        id: 'AA:03',
+        characteristics: <BleCharacteristicHandle>[cps],
+      );
+      final Harness h = Harness(device: device, kind: SensorKind.power);
+      await h.monitor.start();
+
+      cps.emit(<int>[]);
+      cps.emit(<int>[0x00, 0x00, 0xD2]);
+      await pumpEventQueue();
+
+      expect(h.readings, isEmpty);
+    });
+
+    test('功率计缺少标准 CPS 服务时给出指向 0x1818 的原因', () async {
+      final FakeBleDevice device = FakeBleDevice(
+        id: 'AA:03',
+        characteristics: <BleCharacteristicHandle>[hrCharacteristic()],
+      );
+      final Harness h = Harness(device: device, kind: SensorKind.power);
+
+      await h.monitor.start();
+
+      expect(h.connections.last, const Connection(SensorKind.power, false));
+      expect(h.monitor.lastError, contains('0x1818'));
     });
   });
 

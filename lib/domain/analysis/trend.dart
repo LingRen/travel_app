@@ -42,6 +42,8 @@ class TrendSummary {
     required this.elevationGainM,
     required this.rideCount,
     required this.buckets,
+    this.avgPowerW,
+    this.maxPowerW,
   });
 
   final int rangeStartMs;
@@ -51,6 +53,16 @@ class TrendSummary {
   final double elevationGainM;
   final int rideCount;
   final List<TrendBucket> buckets;
+
+  /// 范围内的平均功率，按各次骑行的移动时长加权。
+  ///
+  /// 不加权的话，一次十分钟的通勤和一次三小时的拉练在「本月平均功率」里权重
+  /// 一样，读出来会偏高。范围内一次功率数据都没有时为 null（不显示 0 W——
+  /// 那会让人以为真的踩不出功率）。
+  final double? avgPowerW;
+
+  /// 范围内出现过的最高功率。没有功率数据时为 null。
+  final int? maxPowerW;
 }
 
 /// 个人最佳纪录。
@@ -66,19 +78,21 @@ class PersonalBest {
   final double value;
 }
 
-/// 四项个人最佳。没有对应数据时为 null。
+/// 五项个人最佳。没有对应数据时为 null。
 class PersonalBests {
   const PersonalBests({
     this.longestDistanceM,
     this.longestDurationS,
     this.fastestMovingAvgMps,
     this.mostElevationGainM,
+    this.highestPowerW,
   });
 
   final PersonalBest? longestDistanceM;
   final PersonalBest? longestDurationS;
   final PersonalBest? fastestMovingAvgMps;
   final PersonalBest? mostElevationGainM;
+  final PersonalBest? highestPowerW;
 }
 
 /// 按日历范围聚合骑行。
@@ -102,15 +116,32 @@ TrendSummary buildTrend(
   final List<double> gains = List<double>.filled(spans.length, 0);
   final List<int> counts = List<int>.filled(spans.length, 0);
 
+  // 功率按移动时长加权累加（见 [TrendSummary.avgPowerW]）。
+  double powerWeightedSum = 0;
+  int powerWeightS = 0;
+  int? highestPowerW;
+
   for (final Ride ride in rides) {
     if (ride.status != RideStatus.finished) continue;
     final RideSummary? summary = ride.summary;
     if (summary == null) continue;
 
+    final double? ridePower = summary.avgPowerW;
+    final int? ridePeak = summary.maxPowerW;
+
     final int index = spans.indexWhere(
       (_Span s) => ride.startedAtMs >= s.startMs && ride.startedAtMs < s.endMs,
     );
+    // 范围外的骑行连功率也不能算进去，否则「本周」的功率会混进上个月的骑行。
     if (index < 0) continue;
+
+    if (ridePower != null && summary.movingS > 0) {
+      powerWeightedSum += ridePower * summary.movingS;
+      powerWeightS += summary.movingS;
+    }
+    if (ridePeak != null && (highestPowerW == null || ridePeak > highestPowerW)) {
+      highestPowerW = ridePeak;
+    }
 
     distances[index] += summary.distanceM;
     durations[index] += summary.durationS;
@@ -150,15 +181,18 @@ TrendSummary buildTrend(
     elevationGainM: totalGain,
     rideCount: totalCount,
     buckets: buckets,
+    avgPowerW: powerWeightS == 0 ? null : powerWeightedSum / powerWeightS,
+    maxPowerW: highestPowerW,
   );
 }
 
-/// 四项个人最佳。并列时保留**更早**的那次（先到先得），便于稳定测试。
+/// 五项个人最佳。并列时保留**更早**的那次（先到先得），便于稳定测试。
 PersonalBests personalBests(List<Ride> rides) {
   PersonalBest? distance;
   PersonalBest? duration;
   PersonalBest? speed;
   PersonalBest? gain;
+  PersonalBest? power;
 
   for (final Ride ride in rides) {
     final int? id = ride.id;
@@ -179,6 +213,10 @@ PersonalBests personalBests(List<Ride> rides) {
     duration = better(duration, summary.durationS.toDouble());
     speed = better(speed, summary.movingAvgSpeedMps);
     gain = better(gain, summary.elevationGainM);
+    // 最高功率按「单次骑行的峰值」比：没有功率计的骑行没有这个数，
+    // 整段跳过，否则会把 0 W 当成一次最佳记录。
+    final int? peak = summary.maxPowerW;
+    if (peak != null) power = better(power, peak.toDouble());
   }
 
   return PersonalBests(
@@ -186,6 +224,7 @@ PersonalBests personalBests(List<Ride> rides) {
     longestDurationS: duration,
     fastestMovingAvgMps: speed,
     mostElevationGainM: gain,
+    highestPowerW: power,
   );
 }
 

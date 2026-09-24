@@ -24,9 +24,18 @@ double niceAxisInterval(double maxY) {
   return 1000;
 }
 
-/// 刻度标签。步长不足 1 时保留一位小数，否则印整数。
-String axisLabel(double value, double interval) =>
-    interval >= 1 ? '${value.round()}' : value.toStringAsFixed(1);
+/// 刻度标签：一律保留一位小数。
+///
+/// 轴上是距离，相邻两天的差距常常不到一公里，印成整数会把 3.2 和 3.8 都读成
+/// 3。统一一位小数，读数和曲线才对得上（此前按步长定精度，真机上出现过
+/// `0 / 1 / 2` 与 `0.0 / 0.5 / 1.0` 两种精度混着出现）。
+String axisLabel(double value) => value.toStringAsFixed(1);
+
+/// 底部日期轴的预留高度。
+///
+/// 日期竖排，预留高度要放得下最长的一个标签（年视图的 `2026-01` 七个字符，
+/// 9pt 等宽下约 38px），上下各留几像素余量，免得末尾被裁掉。
+const double kBottomAxisHeight = 52;
 
 /// 趋势折线。见设计文档 10.4。
 ///
@@ -37,7 +46,9 @@ class TrendChart extends StatelessWidget {
   final TrendSummary trend;
   final DistanceUnit unit;
 
-  static const double height = 180;
+  /// 连底部竖排日期轴一起的总高度。日期轴吃掉 48px，绘图区留一百五十来像素，
+  /// 和改造前（180 减去 24 的行标签）相当。
+  static const double height = 200;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +76,17 @@ class TrendChart extends StatelessWidget {
           maxX: (spots.length - 1).toDouble(),
           minY: 0,
           maxY: axisMax,
-          gridData: const FlGridData(show: false),
+          gridData: FlGridData(
+            // 只画横线：竖线只会和柱/点的位置抢注意力，而横线是刻度尺本身，
+            // 让人能对着左边的数读出某一天大概骑了多少。
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: interval,
+            getDrawingHorizontalLine: (double value) => const FlLine(
+              color: kAppHairline,
+              strokeWidth: 1,
+            ),
+          ),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
             topTitles: const AxisTitles(),
@@ -76,28 +97,36 @@ class TrendChart extends StatelessWidget {
                 reservedSize: 40,
                 interval: interval,
                 getTitlesWidget: (double value, TitleMeta meta) => Text(
-                  axisLabel(value, interval),
-                  style: const TextStyle(fontSize: 10),
+                  axisLabel(value),
+                  style: _axisLabelStyle,
                 ),
               ),
             ),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 24,
+                reservedSize: kBottomAxisHeight,
                 interval: 1,
                 getTitlesWidget: (double value, TitleMeta meta) {
                   final int index = value.round();
                   if (index < 0 || index >= trend.buckets.length) {
                     return const SizedBox.shrink();
                   }
-                  // 桶多的时候标签会挤成一团，隔一个显示一个。
-                  if (trend.buckets.length > 10 && index.isOdd) {
-                    return const SizedBox.shrink();
-                  }
-                  return Text(
-                    trend.buckets[index].label,
-                    style: const TextStyle(fontSize: 10),
+                  // 每个桶的日期都列出来，不再隔几个跳一个：跳过之后剩下的
+                  // 日期对不上自己关心的那天，等于没标。
+                  //
+                  // 横排放不下——月视图 30 个 `MM-DD`，每个三十来像素，手机
+                  // 绘图区只有三百来像素，必然叠成一团（真机验证就是这个
+                  // 现象）。转 90° 竖排后每个标签只占一个字符高的宽度，
+                  // `Center` 让它落在预留高度中间，既居中又不会被裁掉。
+                  return Center(
+                    child: RotatedBox(
+                      quarterTurns: 3,
+                      child: Text(
+                        trend.buckets[index].label,
+                        style: _bottomLabelStyle,
+                      ),
+                    ),
                   );
                 },
               ),
@@ -106,7 +135,11 @@ class TrendChart extends StatelessWidget {
           lineBarsData: <LineChartBarData>[
             LineChartBarData(
               spots: spots,
-              isCurved: false,
+              // 日桶之间直连，30 天就是一条折来折去的锯齿。这里允许插值成曲线，
+              // 但禁止越过极值——否则没骑车的日子会被插到 0 以下，看着像负距离。
+              isCurved: true,
+              curveSmoothness: 0.25,
+              preventCurveOverShooting: true,
               color: kAppAccent,
               barWidth: 2,
               dotData: const FlDotData(show: false),
@@ -121,3 +154,20 @@ class TrendChart extends StatelessWidget {
     );
   }
 }
+
+/// 竖排日期：比纵轴刻度再小一档。月视图 30 个桶时相邻两天的间距在手机上只有
+/// 十来像素，字号不降下来，竖排也会挨在一起。
+const TextStyle _bottomLabelStyle = TextStyle(
+  fontFamily: kMonoFamily,
+  fontSize: 9,
+  color: kAppTextMuted,
+  fontFeatures: kTabularFigures,
+);
+
+/// 轴刻度标签：等宽 tabular，随折线一起当刻度尺用。
+const TextStyle _axisLabelStyle = TextStyle(
+  fontFamily: kMonoFamily,
+  fontSize: 10,
+  color: kAppTextMuted,
+  fontFeatures: kTabularFigures,
+);

@@ -13,6 +13,7 @@ class TrackPoint {
     this.accuracyM,
     this.hr,
     this.cadence,
+    this.powerW,
   });
 
   final int? id;
@@ -25,6 +26,11 @@ class TrackPoint {
   final double? accuracyM;
   final int? hr;
   final int? cadence;
+
+  /// 功率（瓦）。接了功率计就是实测值；没接时是按速度、坡度与体重估算出来的值
+  /// （见 `analysis/power.dart`），两种都非空，靠 `Ride.powerDeviceName` 区分。
+  /// 没有定位的纯传感器点为 null。
+  final int? powerW;
 
   bool get hasPosition => lat != null && lon != null;
 
@@ -39,6 +45,7 @@ class TrackPoint {
         'accuracy_m': accuracyM,
         'hr': hr,
         'cadence': cadence,
+        'power_w': powerW,
       };
 
   static TrackPoint fromDbMap(Map<String, Object?> m) => TrackPoint(
@@ -52,5 +59,6 @@ class TrackPoint {
         accuracyM: (m['accuracy_m'] as num?)?.toDouble(),
         hr: (m['hr'] as num?)?.toInt(),
         cadence: (m['cadence'] as num?)?.toInt(),
+        powerW: (m['power_w'] as num?)?.toInt(),
       );
 }

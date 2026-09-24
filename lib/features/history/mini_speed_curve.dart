@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/analysis/color_scale.dart';
+import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/curve.dart';
 import '../../domain/models/track_point.dart';
 
@@ -83,17 +84,38 @@ class _MiniSpeedPainter extends CustomPainter {
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
 
-    for (final (int i, int j) in pairs) {
-      final CurveSample a = samples[i];
-      final CurveSample b = samples[j];
+    canvas.clipRect(Offset.zero & size);
+
+    // 缩略图只有 60 个采样点铺满卡片宽度，每段五六个像素，直连看着就是锯齿。
+    // 平滑方式与详情页曲线共用 [curveArcs]。
+    for (final CurveArc arc in curveArcs(
+      samples,
+      pairs,
+      maxX: maxX,
+      maxY: maxY * kCurveTopHeadroom,
+    )) {
+      final CurveSample a = samples[arc.fromIndex];
+      final CurveSample b = samples[arc.toIndex];
       paint.color = Color(segmentColorArgb(a.y, b.y));
-      canvas.drawLine(
-        Offset(a.xSeconds / maxX * size.width, size.height - a.y / maxY * size.height),
-        Offset(b.xSeconds / maxX * size.width, size.height - b.y / maxY * size.height),
+      canvas.drawPath(
+        Path()
+          ..moveTo(_px(arc.from, size).dx, _px(arc.from, size).dy)
+          ..cubicTo(
+            _px(arc.control1, size).dx,
+            _px(arc.control1, size).dy,
+            _px(arc.control2, size).dx,
+            _px(arc.control2, size).dy,
+            _px(arc.to, size).dx,
+            _px(arc.to, size).dy,
+          ),
         paint,
       );
     }
   }
+
+  /// 归一化坐标（y 向上）换算成画布像素（y 向下）。
+  Offset _px(CurvePoint p, Size size) =>
+      Offset(p.x * size.width, size.height - p.y * size.height);
 
   @override
   bool shouldRepaint(_MiniSpeedPainter old) => !identical(old.samples, samples);

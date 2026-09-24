@@ -24,6 +24,8 @@ class SensorPairingRepository {
   static const String _hrNameKey = 'hr_sensor_name';
   static const String _cadenceIdKey = 'cadence_sensor_id';
   static const String _cadenceNameKey = 'cadence_sensor_name';
+  static const String _powerIdKey = 'power_sensor_id';
+  static const String _powerNameKey = 'power_sensor_name';
 
   /// 读取已配对的传感器。没配对过、或存下来的 id 是空串时返回 null。
   Future<PairedSensor?> load(SensorKind kind) async {
@@ -43,9 +45,15 @@ class SensorPairingRepository {
     await _dao.remove(_nameKey(kind));
   }
 
-  String _idKey(SensorKind kind) =>
-      kind == SensorKind.heartRate ? _hrIdKey : _cadenceIdKey;
+  String _idKey(SensorKind kind) => switch (kind) {
+        SensorKind.heartRate => _hrIdKey,
+        SensorKind.cadence => _cadenceIdKey,
+        SensorKind.power => _powerIdKey,
+      };
 
-  String _nameKey(SensorKind kind) =>
-      kind == SensorKind.heartRate ? _hrNameKey : _cadenceNameKey;
+  String _nameKey(SensorKind kind) => switch (kind) {
+        SensorKind.heartRate => _hrNameKey,
+        SensorKind.cadence => _cadenceNameKey,
+        SensorKind.power => _powerNameKey,
+      };
 }
