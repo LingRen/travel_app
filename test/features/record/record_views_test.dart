@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/ride_repository.dart';
@@ -186,7 +187,39 @@ void main() {
       expect(starts, 1);
     });
 
-    testWidgets('记录中主按钮是「结束」，暂停与继续是状态条上那颗小键',
+    testWidgets('记录中底部按频率分宽：「结束」1/3，「暂停 / 继续」2/3',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
+
+      // 骑行中真正频繁按的是暂停（红灯、休息），它拿走 2/3 宽并落在右下拇指
+      // 区；一次骑行只按一次的「结束」只占 1/3，被推到左侧并隔开一个 kSpaceL。
+      expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('结束'), findsOneWidget);
+      expect(find.text('暂停'), findsOneWidget);
+      expect(find.text('继续'), findsNothing);
+
+      final Finder finish = find.widgetWithText(OutlinedButton, '结束');
+      final Finder toggle = find.widgetWithText(FilledButton, '暂停');
+      final Size finishSize = tester.getSize(finish);
+      final Size toggleSize = tester.getSize(toggle);
+
+      expect(
+        toggleSize.width / finishSize.width,
+        closeTo(HandlebarView.toggleFlex / HandlebarView.finishFlex, 0.05),
+      );
+      // 两颗键同高同底：拇指在同一个高度带里找键，不必分辨上下。
+      expect(finishSize.height, closeTo(HandlebarView.buttonHeight, 0.01));
+      expect(toggleSize.height, closeTo(HandlebarView.buttonHeight, 0.01));
+      expect(
+        tester.getBottomLeft(toggle).dx - tester.getBottomRight(finish).dx,
+        closeTo(kSpaceL, 0.01),
+        reason: '主动作与「结束」之间要有实体间隔，阻止连击误触',
+      );
+      expect(tester.getCenter(finish).dx, lessThan(tester.getCenter(toggle).dx),
+          reason: '右下角留给主动作，破坏性的「结束」推到左侧');
+    });
+
+    testWidgets('暂停 / 继续 落在底部动作区，状态条只剩状态与传感器灯',
         (WidgetTester tester) async {
       int pauses = 0;
       int resumes = 0;
@@ -198,12 +231,12 @@ void main() {
         onFinish: () => finishes++,
       )));
 
-      // 主按钮只剩「结束」：屏幕上不该再出现第二个「结束」，否则骑行中要
-      // 分辨两颗几乎是同一个动作的键。
-      expect(find.text('进行中'), findsOneWidget);
-      expect(find.text('结束'), findsOneWidget);
-      expect(find.text('暂停'), findsOneWidget);
-      expect(find.text('继续'), findsNothing);
+      // 这条量的是「够得着」：暂停曾经是状态条上那颗 40dp 小键，既在屏幕最难
+      // 够到的顶部，又紧挨三盏配对入口的灯（误触会弹出模态选设备面板）。现在
+      // 它必须落在页面下部的动作区里。
+      final double pageHeight = tester.getSize(find.byType(HandlebarView)).height;
+      final Rect toggle = tester.getRect(find.widgetWithText(FilledButton, '暂停'));
+      expect(toggle.center.dy, greaterThan(pageHeight * 0.6));
 
       await tester.tap(find.text('暂停'));
       expect(pauses, 1);
@@ -212,6 +245,7 @@ void main() {
       expect(finishes, 1);
       expect(resumes, 0);
 
+      // 暂停后同一颗键换成「继续」：它就在拇指刚才落下的位置，不必重新找。
       await tester.pumpWidget(wrap(handlebar(
         const RecordState(
           rideId: 1,
@@ -224,6 +258,7 @@ void main() {
       expect(find.text('已暂停'), findsOneWidget);
       expect(find.text('继续'), findsOneWidget);
       expect(find.text('暂停'), findsNothing);
+      expect(find.text('结束'), findsOneWidget);
 
       await tester.tap(find.text('继续'));
       expect(resumes, 1);
@@ -473,7 +508,7 @@ void main() {
       expect(find.text('结束'), findsNothing);
     });
 
-    testWidgets('点「开始」后同一颗键变成「结束」，状态转进行中',
+    testWidgets('点「开始」后底部换成两键动作区，状态转进行中',
         (WidgetTester tester) async {
       await pumpRecordPage(tester);
 
@@ -481,10 +516,16 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      // 未开始只有一件事可做，那颗「开始」整宽独占；进入记录后底部换成按频率
+      // 分宽的两键（设计文档 10.1），主动作是那颗 2/3 宽的「暂停」。
       expect(find.text('进行中'), findsOneWidget);
       expect(find.text('结束'), findsOneWidget);
-      expect(find.text('开始'), findsNothing);
       expect(find.text('暂停'), findsOneWidget);
+      expect(find.text('开始'), findsNothing);
+      expect(
+        tester.getSize(find.widgetWithText(FilledButton, '暂停')).width,
+        greaterThan(tester.getSize(find.widgetWithText(OutlinedButton, '结束')).width),
+      );
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
       expect(find.byKey(const Key('live-route-map')), findsOneWidget);
     });

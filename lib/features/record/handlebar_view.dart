@@ -22,10 +22,15 @@ double speedScaleFraction(
 
 /// 骑行界面（车把与口袋合并后的唯一一个）。见设计文档 10.1。
 ///
-/// **记录 tab 落地就是这一页**，不再有独立的准备页：未开始态由底部那颗
-/// 「开始」进入记录，记录中同一个位置的同一颗键变成「结束」——拇指只学一个
-/// 位置，也就不会在骑行中把「结束」和别的大键按混。传感器配对入口由顶部
-/// 三盏灯与未连接的指标格承担，因此也不需要一个专门的准备页。
+/// **记录 tab 落地就是这一页**，不再有独立的准备页：未开始态由底部那颗整宽
+/// 「开始」进入记录。传感器配对入口由顶部三盏灯与未连接的指标格承担，因此也
+/// 不需要一个专门的准备页。
+///
+/// 底部动作区按**按频率分宽**，不是按语义分主次：记录中真正频繁按的是
+/// 「暂停 / 继续」（红灯、休息），它拿走 2/3 宽；一次骑行只按一次的「结束」
+/// 只占 1/3 宽，与主动作隔开一个 [kSpaceL]，误触成本靠这段距离与确认弹窗共同
+/// 兜底。所以未开始与记录中的底部布局刻意不同——位置跟着动作频率走，而不是
+/// 让拇指在同一颗键上分辨两个含义相反的动作。
 ///
 /// 这一页的目标不是「好看」，是**在骑行中一步扫读**：骑到 30km/h 时瞄一眼
 /// 屏幕只有约 200ms，还要在户外强光下。因此：
@@ -58,8 +63,13 @@ class HandlebarView extends StatelessWidget {
   /// 轨迹缩略图高度。见设计文档 10.1 的布局预算。
   static const double mapHeight = 120;
 
-  /// 状态条上「暂停 / 继续」小键的高度。与传感器灯同高，状态条不因此变厚。
-  static const double toggleHeight = 40;
+  /// 底部动作区里「结束」与「暂停 / 继续」的宽度配比。
+  ///
+  /// 1:2 是照动作频率分的：骑行中红灯、休息都要按暂停，结束一次骑行只按一次。
+  /// 主键拿走 2/3 也就落在右手拇指最容易够到的右下角，而「结束」被推到左侧、
+  /// 变窄——不为好看，是为误触多付一点代价。
+  static const int finishFlex = 1;
+  static const int toggleFlex = 2;
 
   final RecordState state;
   final DistanceUnit unit;
@@ -67,10 +77,12 @@ class HandlebarView extends StatelessWidget {
   /// 瓦片源，与详情页同一个口径（来自设置，接口失效时可换源）。
   final String tileUrlTemplate;
 
-  /// 未开始时「开始」。与 [onFinish] 是同一颗按钮的两个字。
+  /// 未开始时的「开始」。整宽独占底部动作区——未开始态只有这一个动作。
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onResume;
+
+  /// 记录中的「结束」。
   final VoidCallback onFinish;
 
   /// 骑行中点传感器灯或未连接的指标格时打开的配对入口。
@@ -89,8 +101,6 @@ class HandlebarView extends StatelessWidget {
             state: state,
             idle: idle,
             paused: paused,
-            onPause: onPause,
-            onResume: onResume,
             onPickDevice: onPickDevice,
           ),
           const Divider(height: 1),
@@ -142,10 +152,10 @@ class HandlebarView extends StatelessWidget {
           // 前者让「开始」点了没反应，不说清楚就成了哑键；后者发生在骑行中。
           // 不用 SnackBar——它自己会消失，而这两个错误在用户处理前一直成立。
           if (state.errorMessage != null) _InlineNotice(message: state.errorMessage!),
-          // 主按钮：未开始是「开始」，记录中是「结束」。主动作（暂停 / 继续）
-          // 由状态条右侧那颗小键承担，于是这颗大键永远只意味着「开一次记录」
-          // 或「收一次记录」，位置与尺寸都不变，拇指不必分辨两个几乎一样大的
-          // 键哪个是哪个。
+          // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；记录中
+          // 按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，「结束」占
+          // 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满 buttonHeight 高，
+          // 骑车戴手套也按得中（见 10.1）。
           Padding(
             padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, kSpaceS),
             child: SizedBox(
@@ -166,19 +176,48 @@ class HandlebarView extends StatelessWidget {
                         ),
                       ),
                     )
-                  : OutlinedButton(
-                      onPressed: onFinish,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kAppDanger,
-                        side: const BorderSide(color: kAppDanger, width: 1),
-                      ),
-                      child: const Text(
-                        '结束',
-                        style: TextStyle(
-                          fontSize: kFontTitle,
-                          fontWeight: FontWeight.w700,
+                  : Row(
+                      // stretch：两颗键都要撑满 buttonHeight，而不是各自取
+                      // 固有高度后在 64 高的槽里居中——那会让它们看起来比
+                      // 未开始态那颗「开始」小一圈。
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Expanded(
+                          flex: finishFlex,
+                          child: OutlinedButton(
+                            onPressed: onFinish,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: kAppDanger,
+                              side: const BorderSide(color: kAppDanger, width: 1),
+                            ),
+                            child: const Text(
+                              '结束',
+                              style: TextStyle(
+                                fontSize: kFontTitle,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: kSpaceL),
+                        Expanded(
+                          flex: toggleFlex,
+                          child: FilledButton(
+                            onPressed: paused ? onResume : onPause,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: kAppAccent,
+                              foregroundColor: kAppOnAccent,
+                            ),
+                            child: Text(
+                              paused ? '继续' : '暂停',
+                              style: const TextStyle(
+                                fontSize: kFontTitle,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
@@ -188,27 +227,23 @@ class HandlebarView extends StatelessWidget {
   }
 }
 
-/// 器件边框条：状态灯 + 传感器连接态 + 暂停 / 继续小键。
+/// 器件边框条：状态灯 + 传感器连接态 + 三盏传感器灯。
 ///
-/// 三个传感器灯同时是骑行中的配对入口——不用切到别的页面就能补连设备。
-/// 暂停 / 继续也放这里：它和「结束」曾经是并排的两颗同样大的键，骑行中要分
-/// 辨哪颗是哪颗；现在主按钮只留「开始 / 结束」，暂停降级成这颗小键，两个动作
-/// 在视觉上再也混不到一起。
+/// 这里刻意**不放**任何动作键。它原来挂过「暂停 / 继续」那颗 40dp 小键，问题
+/// 有两个：一是骑行中最频繁的动作被放在屏幕最难够到的顶部，二是它紧挨三盏
+/// 传感器灯，而灯是配对入口——误触会当场弹出模态选设备面板，骑行中弹模态比
+/// 按错键更糟。暂停因此下移到 [HandlebarView] 的底部动作区，这一条只剩状态。
 class _StatusStrip extends StatelessWidget {
   const _StatusStrip({
     required this.state,
     required this.idle,
     required this.paused,
-    required this.onPause,
-    required this.onResume,
     required this.onPickDevice,
   });
 
   final RecordState state;
   final bool idle;
   final bool paused;
-  final VoidCallback onPause;
-  final VoidCallback onResume;
   final void Function(SensorKind kind) onPickDevice;
 
   @override
@@ -263,23 +298,6 @@ class _StatusStrip extends StatelessWidget {
               ],
             ),
           ),
-          // 未开始时没有可暂停的东西，这颗键不出现——否则一个点了没反应的键
-          // 比没有更糟。
-          if (!idle)
-            SizedBox(
-              height: HandlebarView.toggleHeight,
-              child: OutlinedButton(
-                onPressed: paused ? onResume : onPause,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: kAppAccent,
-                  side: const BorderSide(color: kAppAccent, width: 1),
-                  padding: const EdgeInsets.symmetric(horizontal: kSpaceM),
-                  // 状态条的高度由传感器灯定（40），这颗键不能把它撑厚。
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(paused ? '继续' : '暂停'),
-              ),
-            ),
           _SensorLamp(
             icon: Icons.favorite,
             connected: state.hrConnected,
