@@ -393,7 +393,7 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
     final bool ok = await _confirm(
       title: '生成 $_seedCount 条模拟记录？',
       body: '会在最近两个半月里铺一批假骑行，走的是和真实记录一样的写入路径。'
-          '已有的记录不会被改动。',
+          '上次生成的模拟记录会被覆盖成同一批（不会越点越多），真实记录不动。',
       action: '生成',
     );
     if (!ok) return;

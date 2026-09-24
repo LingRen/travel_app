@@ -188,6 +188,30 @@ void main() {
       }
     });
 
+    test('覆盖式生成：连点两次仍是同一批，不堆重复', () async {
+      await seedMockRides(repo, nowMs: nowMs);
+      await seedMockRides(repo, nowMs: nowMs);
+
+      final List<Ride> rides = await repo.listFinished();
+      expect(rides.length, 16);
+      // 时间戳也不重复，说明是覆盖而不是在旧数据上又叠了一层。
+      expect(<int>{for (final Ride r in rides) r.startedAtMs}.length, 16);
+    });
+
+    test('覆盖时不动时间戳不撞排期的记录', () async {
+      // 一条「真实」记录：起点落在排期之外（差 12 秒）。
+      final Ride real = await repo.startRide(startedAtMs: nowMs - 12345);
+      await repo.finishRide(real.id!, endedAtMs: nowMs, durationS: 60);
+
+      await seedMockRides(repo, nowMs: nowMs);
+      await seedMockRides(repo, nowMs: nowMs);
+
+      final List<Ride> rides = await repo.listFinished();
+      expect(rides.length, 17);
+      expect(rides.any((Ride r) => r.id == real.id), isTrue,
+          reason: '真实记录被模拟数据的覆盖逻辑误删了');
+    });
+
     test('清空会删掉全部记录（含真实记录），返回删除条数', () async {
       await seedMockRides(repo, nowMs: nowMs);
       // 再塞一条进行中的记录，确认未完成的也一起清掉。

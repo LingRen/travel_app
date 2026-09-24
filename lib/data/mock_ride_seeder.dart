@@ -156,12 +156,31 @@ List<TrackPoint> generateMockPoints({
 ///
 /// 返回写入的条数。走的是与真实记录完全相同的写入路径，所以历史页、统计页、
 /// 详情页看到的数据和真骑出来的没有区别。
+///
+/// **覆盖式**：写入前先删掉本次排期时间戳命中的既有记录。原来是纯追加，设置页
+/// 上点两次「生成模拟数据」就是两份一模一样的数据，真机上曾经堆到 16 组各 4 份。
+/// 判重只认 `started_at`：排期的时间戳是写死的（见 [mockRidePlan]），真实骑行的
+/// 起点不可能正好撞上。
 Future<int> seedMockRides(
   RideRepository repository, {
   required int nowMs,
   int seed = 20260923,
 }) async {
   final List<MockRidePlan> plan = mockRidePlan(nowMs: nowMs, seed: seed);
+  final Set<int> stamps = <int>{
+    for (final MockRidePlan p in plan) p.startedAtMs,
+  };
+
+  final List<Ride> existing = <Ride>[
+    ...await repository.listFinished(),
+    ...await repository.findUnfinished(),
+  ];
+  for (final Ride ride in existing) {
+    if (stamps.contains(ride.startedAtMs)) {
+      await repository.deleteRide(ride.id!);
+    }
+  }
+
   for (int i = 0; i < plan.length; i++) {
     final MockRidePlan p = plan[i];
     // 带上功率设备名：这批数据是「模拟一个功率计记下来的骑行」，不是 app 按

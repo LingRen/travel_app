@@ -1,7 +1,7 @@
 /// 标准 GATT 标识的 16 位短 UUID。见设计文档 4 与 14。
 ///
-/// 华为 Fit 3 的心率广播是否为标准 HRS（0x180D）由 Task 3 的真机验证确认，
-/// 结论记录在设计文档第 14 节。
+/// 华为 Fit 3 的心率广播**已真机验证**是标准 HRS（0x180D）：扫描能发现该服务，
+/// 按标准 HRS 订阅后读数正常，所以这里直接用标准 UUID，不改心率来源。
 const String kHeartRateServiceShort = '180d';
 const String kHeartRateMeasurementShort = '2a37';
 const String kCscServiceShort = '1816';
