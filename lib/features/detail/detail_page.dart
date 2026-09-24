@@ -121,6 +121,10 @@ class _DetailBody extends ConsumerWidget {
             child: CurveChart(
               samples: speed,
               unitLabel: speedUnit,
+              // 用总均速而不是移动均速：曲线是按时间铺开的，静止的时间也在
+              // 里面，它的时间平均就是「总距离 / 总时长」，也就是总均速。
+              averageValue: s?.avgSpeedMps,
+              formatValue: (double v) => formatSpeedValue(v, unit),
               colorBySpeed: true,
             ),
           ),
@@ -134,7 +138,12 @@ class _DetailBody extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                CurveChart(samples: hr, unitLabel: 'bpm'),
+                CurveChart(
+                  samples: hr,
+                  unitLabel: 'bpm',
+                  averageValue: s?.avgHr?.toDouble(),
+                  formatValue: _wholeNumber,
+                ),
                 const SizedBox(height: kSpaceM),
                 HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
               ],
@@ -147,7 +156,12 @@ class _DetailBody extends ConsumerWidget {
               if (s?.avgCadence != null)
                 ('平均踏频', '${s!.avgCadence!.round()} rpm'),
             ],
-            child: CurveChart(samples: cadence, unitLabel: 'rpm'),
+            child: CurveChart(
+              samples: cadence,
+              unitLabel: 'rpm',
+              averageValue: s?.avgCadence,
+              formatValue: _wholeNumber,
+            ),
           ),
         if (power.length >= 2)
           _MetricSection(
@@ -160,7 +174,12 @@ class _DetailBody extends ConsumerWidget {
                 ('平均功率', '${s!.avgPowerW!.round()} W'),
               if (s?.maxPowerW != null) ('最高功率', '${s!.maxPowerW} W'),
             ],
-            child: CurveChart(samples: power, unitLabel: 'W'),
+            child: CurveChart(
+              samples: power,
+              unitLabel: 'W',
+              averageValue: s?.avgPowerW,
+              formatValue: _wholeNumber,
+            ),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceXl, kSpaceL, 0),
@@ -189,6 +208,12 @@ class _DetailBody extends ConsumerWidget {
     }
   }
 }
+
+/// 心率 / 踏频 / 功率在曲线上的标注口径：取整。
+///
+/// 与上方读数同源——汇总里写着「平均心率 142」，曲线上的标注就不能是 141.7，
+/// 两个地方对不上时用户会以为是算错了。
+String _wholeNumber(double value) => value.round().toString();
 
 /// 一个指标区块：标题 → 该项读数 → 该项曲线。
 ///

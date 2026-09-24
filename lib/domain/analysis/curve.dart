@@ -123,6 +123,48 @@ List<CurveSample> _downsample(List<CurveSample> samples, int maxSamples) {
   return out;
 }
 
+/// 一条曲线上的极值：最大与最小各自落在哪个采样点。
+///
+/// 取的是**画出来的这条曲线**的极值，不是 `summary.dart` 里的读数：读数用
+/// [kSpeedFilterWindow]（口径是「最高速」），曲线用 [kSpeedCurveFilterWindow]，
+/// 两者不是同一个数。标在曲线上的点必须真的落在曲线上，否则标注本身成了误导。
+class CurveExtremes {
+  const CurveExtremes({
+    required this.maxIndex,
+    required this.maxY,
+    required this.minIndex,
+    required this.minY,
+  });
+
+  /// 最大值所在的采样点下标与数值。
+  final int maxIndex;
+  final double maxY;
+
+  /// 最小值所在的采样点下标与数值。
+  final int minIndex;
+  final double minY;
+
+  /// 曲线是平的（上下限重合）——标一个点就够了，两个标签会叠在一起。
+  bool get isFlat => maxY == minY;
+}
+
+/// 找出曲线上的最高点与最低点。空曲线返回 null。
+CurveExtremes? curveExtremes(List<CurveSample> samples) {
+  if (samples.isEmpty) return null;
+  int maxIndex = 0;
+  int minIndex = 0;
+  for (int i = 1; i < samples.length; i++) {
+    if (samples[i].y > samples[maxIndex].y) maxIndex = i;
+    if (samples[i].y < samples[minIndex].y) minIndex = i;
+  }
+  return CurveExtremes(
+    maxIndex: maxIndex,
+    maxY: samples[maxIndex].y,
+    minIndex: minIndex,
+    minY: samples[minIndex].y,
+  );
+}
+
 /// 归一化到 0..1 的一个点：x 是时间轴、y 是数值轴，y 不翻转。
 class CurvePoint {
   const CurvePoint(this.x, this.y);

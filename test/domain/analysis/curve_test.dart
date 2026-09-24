@@ -322,4 +322,51 @@ void main() {
       expect(arcsOf(samples), isEmpty);
     });
   });
+
+  group('curveExtremes', () {
+    test('找出最高点与最低点，返回它们的下标与数值', () {
+      final List<CurveSample> samples = <CurveSample>[
+        const CurveSample(xSeconds: 0, y: 20, segment: 0),
+        const CurveSample(xSeconds: 1, y: 45.5, segment: 0),
+        const CurveSample(xSeconds: 2, y: 8, segment: 0),
+      ];
+
+      final CurveExtremes extremes = curveExtremes(samples)!;
+      expect(extremes.maxIndex, 1);
+      expect(extremes.maxY, 45.5);
+      expect(extremes.minIndex, 2);
+      expect(extremes.minY, 8);
+      expect(extremes.isFlat, isFalse);
+    });
+
+    test('极值取自平滑后的曲线，不是原始轨迹', () {
+      // 静止中夹一个 10 m/s 的 GPS 毛刺。曲线用 kSpeedCurveFilterWindow 抹过，
+      // 峰值被拉平到 10/7；标注必须跟着曲线走，否则圆点会飘在曲线的上方。
+      // 若改成从原始点取极值，这里就是 10.0。
+      final List<TrackPoint> points = <TrackPoint>[
+        for (int i = 0; i < 7; i++)
+          TrackPoint(rideId: 1, tMs: i * 1000, speedMps: i == 3 ? 10.0 : 0.0),
+      ];
+      final List<CurveSample> curve =
+          buildCurve(points, metric: CurveMetric.speed);
+
+      expect(curveExtremes(curve)!.maxY, closeTo(10 / 7, 1e-6));
+    });
+
+    test('曲线是平的时 isFlat 为真', () {
+      final List<CurveSample> samples = <CurveSample>[
+        for (int i = 0; i < 3; i++)
+          CurveSample(xSeconds: i.toDouble(), y: 12, segment: 0),
+      ];
+
+      final CurveExtremes extremes = curveExtremes(samples)!;
+      expect(extremes.maxY, 12);
+      expect(extremes.minY, 12);
+      expect(extremes.isFlat, isTrue);
+    });
+
+    test('空曲线返回 null', () {
+      expect(curveExtremes(const <CurveSample>[]), isNull);
+    });
+  });
 }

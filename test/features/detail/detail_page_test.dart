@@ -153,6 +153,68 @@ void main() {
     expect(find.byType(CurveChart), findsNWidgets(3));
   });
 
+  // 曲线上的最高 / 最低 / 平均三个标注。极值取自曲线本身（见 `curve_test.dart`
+  // 的 curveExtremes 用例），平均值与格式化口径必须和上方读数同源——否则同一屏
+  // 里会出现「平均心率 142」和曲线上「平均 141.7」两个数。
+  group('曲线标注', () {
+    testWidgets('平均线与格式化口径跟着上方读数走', (WidgetTester tester) async {
+      await pumpDetail(
+        tester,
+        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      );
+
+      // 顺序与区块一致：速度、心率、踏频。
+      final List<CurveChart> charts =
+          tester.widgetList<CurveChart>(find.byType(CurveChart)).toList();
+
+      // 速度：平均线画在总均速 7.03 m/s 上，标注一位小数、单位 km/h。
+      expect(charts[0].averageValue, 7.03);
+      expect(charts[0].formatValue(7.03), '25.3');
+      expect(charts[0].unitLabel, 'km/h');
+
+      // 心率：平均线画在平均心率 142 上，标注取整。
+      expect(charts[1].averageValue, 142);
+      expect(charts[1].formatValue(141.6), '142');
+
+      // 踏频同理。
+      expect(charts[2].averageValue, 78);
+      expect(charts[2].formatValue(78.4), '78');
+    });
+
+    testWidgets('带功率的骑行：功率曲线也带上平均线', (WidgetTester tester) async {
+      await pumpDetail(
+        tester,
+        detail: RideDetail(
+          ride: rideWith(summary: _powerSummary),
+          points: pointsWithPower(),
+        ),
+      );
+
+      final CurveChart power =
+          tester.widgetList<CurveChart>(find.byType(CurveChart)).last;
+      expect(power.averageValue, 205.3);
+      expect(power.formatValue(205.3), '205');
+      expect(power.unitLabel, 'W');
+    });
+
+    testWidgets('汇总缺失（进行中的骑行）时不画平均线，曲线照常画', (WidgetTester tester) async {
+      await pumpDetail(
+        tester,
+        detail: RideDetail(
+          ride: Ride(id: 1, startedAtMs: 1000, status: RideStatus.finished),
+          points: pointsWithHr(),
+        ),
+      );
+
+      final List<CurveChart> charts =
+          tester.widgetList<CurveChart>(find.byType(CurveChart)).toList();
+      expect(charts, isNotEmpty);
+      for (final CurveChart chart in charts) {
+        expect(chart.averageValue, isNull);
+      }
+    });
+  });
+
   testWidgets('没有心率数据时不渲染心率曲线与区间条', (WidgetTester tester) async {
     final List<TrackPoint> noHr = <TrackPoint>[
       for (final TrackPoint p in pointsWithHr())
