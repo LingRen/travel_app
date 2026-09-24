@@ -150,7 +150,31 @@ void main() {
     elevationGainM: 342.0,
   );
 
+  /// 状态栏高度（dp）。真机 1080×1920 / 密度 480 上实测 54px。
+  const double statusBarHeight = 18;
+
+  /// 底部 `NavigationBar` 高度（dp），见 `theme.dart` 的 `navigationBarTheme`。
+  const double navBarHeight = 64;
+
   Widget wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+  /// 真机几何：360×640dp 的屏幕上，状态栏占 18dp、底部 `NavigationBar` 占 64dp，
+  /// 骑行界面拿到的正文区因此只有 558dp。
+  ///
+  /// 量「中间留了多少地图」必须用这个盒子而不是裸的 640dp：少了这两条，正文区凭空
+  /// 多出 82dp，量出来的余量会比真机宽出一大截，阈值也就守不住真机。
+  Widget wrapDevice(Widget child) => MaterialApp(
+        home: Scaffold(
+          body: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(360, 640),
+              padding: EdgeInsets.only(top: statusBarHeight),
+            ),
+            child: child,
+          ),
+          bottomNavigationBar: const SizedBox(height: navBarHeight),
+        ),
+      );
 
   Widget handlebar(
     RecordState state, {
@@ -270,13 +294,16 @@ void main() {
 
     testWidgets('整页铺满地图后，360×640 的机器上不溢出', (WidgetTester tester) async {
       // 真机是 1080×1920 / 密度 480，即 360×640dp。地图从一条 120dp 的缩略图
-      // 变成整页底，读数与按钮改成浮层叠在上面，上下两块加起来约 432dp，
-      // 中间仍留出看路窗口。溢出在测试里会直接抛 FlutterError，pumpWidget 就会失败。
+      // 变成整页底，读数与按钮压在上面。溢出在测试里会直接抛 FlutterError，
+      // pumpWidget 就会失败。
+      //
+      // 用真机几何（正文区只有 558dp）而不是裸的 640dp：溢出是高度不够才会发生的
+      // 事，给多了反而测不出窄屏上的问题。
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(wrap(handlebar(active)));
+      await tester.pumpWidget(wrapDevice(handlebar(active)));
       await tester.pump();
 
       expect(tester.takeException(), isNull);
@@ -287,12 +314,12 @@ void main() {
       expect(speed.style!.fontSize, HandlebarView.primaryFontSize);
     });
 
-    testWidgets('地图铺满整页，读数面板浮在它上面', (WidgetTester tester) async {
+    testWidgets('地图铺满整页，读数浮在它上面', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(wrap(handlebar(active)));
+      await tester.pumpWidget(wrapDevice(handlebar(active)));
       await tester.pump();
 
       // 「全屏」是可断言的：地图容器与整页同尺寸，而不是某一条高度。
@@ -305,6 +332,54 @@ void main() {
       final Rect bottom = tester.getRect(find.widgetWithText(FilledButton, '暂停'));
       expect(top.top, lessThan(page.height * 0.35));
       expect(bottom.bottom, greaterThan(page.height * 0.8));
+
+      // 中间那条**完全没有读数压着的**地图带有多高：上块的下沿（顶部四格里最低
+      // 的那个值，即「爬升」的数值）到下块的上沿（速度大数字）。
+      //
+      // 阈值取 200（实测 221.9）。这条是**兜底**，不是主判据：真正把地图还回来的是
+      // 「读数不再压在不透明底色上」（见下一条用例）。面板的 12dp 内边距去掉后这条
+      // 带子只长高了 24dp，真正让人能看路的，是原来被面板盖住的那一大片现在透出来了。
+      // 所以阈值定得松一些——它只负责在有人把上下两块堆到一起时报警。
+      final double band =
+          tester.getRect(find.byKey(const Key('handlebar-speed'))).top -
+              tester.getRect(find.text('342 m')).bottom;
+      expect(band, greaterThan(200),
+          reason: '上下两块之间要留出能看路的地图带，实测 ${band.toStringAsFixed(1)}dp');
+    });
+
+    testWidgets('读数下面没有底色块，整页地图是露出来的', (WidgetTester tester) async {
+      // 浮层曾经是 0.86 不透明的实体面板，真机上把整页地图上下各切掉一大块，
+      // 「全屏地图」名存实亡。这条用例守的就是那件事：从每个读数往上找，一路
+      // 都不该碰到铺了不透明底色的容器——对比度只能来自文字自带的投影。
+      //
+      // 断言放在「祖先链上有没有不透明底色」而不是量高度：遮挡感来自底色块，
+      // 不是来自块的高度。读数之间空出来的地图本来就是能看见的。
+      await tester.pumpWidget(wrap(handlebar(active)));
+
+      // 名字单独给：`Finder.description` 已废弃，用 (名字, Finder) 成对写更直接。
+      for (final (String name, Finder probe) in <(String, Finder)>[
+        ('距离', find.text('距离')),
+        ('爬升', find.text('爬升')),
+        ('心率', find.text('心率')),
+        ('主速度', find.byKey(const Key('handlebar-speed'))),
+      ]) {
+        final List<Type> opaque = <Type>[];
+        tester.element(probe).visitAncestorElements((Element element) {
+          final Widget widget = element.widget;
+          // 两种都要认：`Container(color:)` 内部建的是 [ColoredBox]，
+          // `Container(decoration:)` 建的才是 [DecoratedBox]。只认后者会漏掉最
+          // 常见的那种写法——变异自证时正是这里漏掉了回归。
+          final Color? fill = switch (widget) {
+            ColoredBox(:final Color color) => color,
+            DecoratedBox(:final Decoration decoration) =>
+              decoration is BoxDecoration ? decoration.color : null,
+            _ => null,
+          };
+          if (fill != null && fill.a > 0.5) opaque.add(widget.runtimeType);
+          return true;
+        });
+        expect(opaque, isEmpty, reason: '「$name」压在不透明底色上，地图被它挡住了');
+      }
     });
 
     testWidgets('每一项读数都在：距离 / 时长 / 海拔 / 爬升 / 心率 / 踏频 / 功率',

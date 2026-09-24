@@ -26,16 +26,17 @@ double speedScaleFraction(
 /// **记录 tab 落地就是这一页**，不再有独立的准备页：未开始态由底部那颗整宽
 /// 「开始」进入记录。传感器配对入口由顶部三盏灯与未连接的指标格承担。
 ///
-/// 整页是**一张铺满全屏的轨迹地图**，读数与按钮浮在它上面 —— 上下各一块半透明
-/// 面板（顶部：状态 + 距离/时长/海拔/爬升；底部：主速度 + 刻度尺 + 心率/踏频/功率
-/// + 动作区），中间留出干净的看路窗口。之前地图只是一条 120pt 的缩略图，骑行中
-/// 「我在哪、前面往哪拐」是第二个高频问题，值得给它整个屏幕。
+/// 整页是**一张铺满全屏的轨迹地图**，读数与按钮浮在它上面 —— 顶部是状态 +
+/// 距离/时长/海拔/爬升，底部是主速度 + 刻度尺 + 心率/踏频/功率 + 动作区。
+/// 两块浮层**不留底色、不画边框**，地图在字缝里照样看得见；对比度靠文字投影
+/// （见 [_kHudShadows]）。之前地图只是一条 120pt 的缩略图，骑行中「我在哪、
+/// 前面往哪拐」是第二个高频问题，值得给它整个屏幕。
 ///
 /// 这一页的目标不是「好看」，是**在骑行中一步扫读**：骑到 30km/h 时瞄一眼
 /// 屏幕只有约 200ms，还要在户外强光下。因此：
 ///   - 主指标 120pt 等宽数字，读数跳动时整数位不横向抖动；
 ///   - 刻度尺让速度有「现在处于什么位置」的参照，不必等下一帧数字；
-///   - 面板半透明而不是全黑，地图在下面若隐若现，压暗只为了让文字站得住；
+///   - 浮层不铺底色，只有文字带一圈投影——地图要真的看得见，压暗只发生在笔画边缘；
 ///   - 全页可点区域都撑到 40 高以上，戴手套也按得中；
 ///   - 除数据色带外一律不上色（见 app/theme.dart 的颜色说明）。
 ///
@@ -109,59 +110,53 @@ class HandlebarView extends StatelessWidget {
           subdomains: kDefaultMapTileSubdomains,
           placeholderAlignment: _kPlaceholderAlignment,
         ),
-        // 瓦片是浅色底，白色读数直接压上去会糊掉。上下两条渐变把读数所在区域
-        // 压暗，中间留出干净的看路窗口——比给面板加更深的底色更好，阴影与
-        // 大色块都不在这套视觉语言里。
-        const _Scrim(alignment: Alignment.topCenter, height: _kTopScrimHeight),
-        const _Scrim(alignment: Alignment.bottomCenter, height: _kBottomScrimHeight),
         SafeArea(
           child: Column(
             children: <Widget>[
-              // 顶部浮层：状态 + 本次骑行的总量与环境读数。
+              // 顶部一块：状态 + 本次骑行的总量与环境读数。**不留底色**——地图
+              // 穿过字缝露出来，对比度靠每个字的投影（见 [_kHudShadows]）。
               Padding(
-                padding: const EdgeInsets.fromLTRB(kSpaceM, kSpaceM, kSpaceM, 0),
-                child: _OverlayPanel(
-                  child: Column(
-                    children: <Widget>[
-                      _StatusStrip(
-                        state: state,
-                        idle: idle,
-                        paused: paused,
-                        onPickDevice: onPickDevice,
-                      ),
-                      const SizedBox(height: kSpaceM),
-                      _MetricRow(
-                        dividerMargin: kSpaceS,
-                        cells: <Widget>[
-                          _MetricCell(
-                            label: '距离',
-                            value: formatDistance(state.distanceM, unit),
-                            valueFontSize: kFontBody,
-                          ),
-                          _MetricCell(
-                            label: '时长',
-                            value: formatDuration(state.elapsedSeconds),
-                            valueFontSize: kFontBody,
-                          ),
-                          // 海拔与爬升：前者是「现在多高」，后者是「一共爬了多少」。
-                          // 设备不给高程时海拔显示 `--`，不显示 0——0 米海拔是
-                          // 一个具体读数，会和「没有数据」混起来。
-                          _MetricCell(
-                            label: '海拔',
-                            value: altitudeM == null
-                                ? '--'
-                                : formatElevation(altitudeM, unit),
-                            valueFontSize: kFontBody,
-                          ),
-                          _MetricCell(
-                            label: '爬升',
-                            value: formatElevation(state.elevationGainM, unit),
-                            valueFontSize: kFontBody,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                padding: const EdgeInsets.fromLTRB(kSpaceM, kSpaceS, kSpaceM, 0),
+                child: Column(
+                  children: <Widget>[
+                    _StatusStrip(
+                      state: state,
+                      idle: idle,
+                      paused: paused,
+                      onPickDevice: onPickDevice,
+                    ),
+                    const SizedBox(height: kSpaceS),
+                    _MetricRow(
+                      dividerMargin: kSpaceS,
+                      cells: <Widget>[
+                        _MetricCell(
+                          label: '距离',
+                          value: formatDistance(state.distanceM, unit),
+                          valueFontSize: kFontBody,
+                        ),
+                        _MetricCell(
+                          label: '时长',
+                          value: formatDuration(state.elapsedSeconds),
+                          valueFontSize: kFontBody,
+                        ),
+                        // 海拔与爬升：前者是「现在多高」，后者是「一共爬了多少」。
+                        // 设备不给高程时海拔显示 `--`，不显示 0——0 米海拔是一个
+                        // 具体读数，会和「没有数据」混起来。
+                        _MetricCell(
+                          label: '海拔',
+                          value: altitudeM == null
+                              ? '--'
+                              : formatElevation(altitudeM, unit),
+                          valueFontSize: kFontBody,
+                        ),
+                        _MetricCell(
+                          label: '爬升',
+                          value: formatElevation(state.elevationGainM, unit),
+                          valueFontSize: kFontBody,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               // 中间这条是留给地图的：提示横幅浮在它正中。放在 Stack 里而不是
@@ -178,146 +173,152 @@ class HandlebarView extends StatelessWidget {
                   ],
                 ),
               ),
-              // 底部浮层：当下读数（速度、传感器）与动作区。拇指与视线都在这儿，
-              // 所以把「现在多少」放这一块，把「一共多少」放到上面那块。
+              // 底部一块：当下读数（速度、传感器）与动作区。拇指与视线都在这儿，
+              // 所以把「现在多少」放这一块，把「一共多少」放到上面那块。同样不留
+              // 底色——底部正是你此刻在骑的那一段，最不该被盖住。
               Padding(
-                padding: const EdgeInsets.fromLTRB(kSpaceM, 0, kSpaceM, kSpaceM),
-                child: _OverlayPanel(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      // 主数字用 FittedBox 兜底：正常尺寸下它不参与布局，字号始终
-                      // 由 kInstrumentTextStyle 决定（缩放的只是绘制框）；只有横向
-                      // 真的放不下时才缩小，而不是溢出。
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Column(
-                          children: <Widget>[
-                            Text(
-                              formatSpeedValue(state.currentSpeedMps, unit),
-                              key: const Key('handlebar-speed'),
-                              style: kInstrumentTextStyle,
-                            ),
-                            const SizedBox(height: kSpaceXs),
-                            Text(speedUnitLabel(unit), style: kLabelTextStyle),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: kSpaceM),
-                      _SpeedScale(speedMps: state.currentSpeedMps),
-                      const SizedBox(height: kSpaceM),
-                      _MetricRow(
-                        dividerMargin: kSpaceS,
-                        cells: <Widget>[
-                          _MetricCell(
-                            label: '心率',
-                            value: state.hr?.toString() ?? '--',
-                            tooltip: state.hrConnected ? null : '心率未连接，点击连接',
-                            onTap: state.hrConnected
-                                ? null
-                                : () => onPickDevice(SensorKind.heartRate),
+                padding: const EdgeInsets.fromLTRB(kSpaceM, 0, kSpaceM, kSpaceS),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    // 速度与单位排成一行：单位原本在数字下面独占一行，改成贴着
+                    // 基线放在右侧，省下的那十几像素留给地图。数字仍由 FittedBox
+                    // 兜底——正常尺寸下它不参与布局，字号始终由 kInstrumentTextStyle
+                    // 决定（缩放的只是绘制框），只有横向真的放不下时才缩小。
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: <Widget>[
+                          Text(
+                            formatSpeedValue(state.currentSpeedMps, unit),
+                            key: const Key('handlebar-speed'),
+                            style: _hud(kInstrumentTextStyle),
                           ),
-                          _MetricCell(
-                            label: '踏频',
-                            value: state.cadence?.toString() ?? '--',
-                            tooltip: state.cadenceConnected ? null : '踏频未连接，点击连接',
-                            onTap: state.cadenceConnected
-                                ? null
-                                : () => onPickDevice(SensorKind.cadence),
-                          ),
-                          // 没接功率计时这一格是估算值（速度 + 坡度 + 体重），标签里
-                          // 直接写明：骑到一半才发现「功率」其实不是功率计读数，
-                          // 不是好体验。
-                          _MetricCell(
-                            label: state.powerConnected ? '功率' : '功率（估算）',
-                            value: state.power?.toString() ?? '--',
-                            tooltip: state.powerConnected ? null : '功率计未连接，点击连接',
-                            onTap: state.powerConnected
-                                ? null
-                                : () => onPickDevice(SensorKind.power),
+                          const SizedBox(width: kSpaceS),
+                          Text(
+                            speedUnitLabel(unit),
+                            style: _hud(kLabelTextStyle),
                           ),
                         ],
                       ),
-                      // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
-                      // 这一屏：前者让「开始」点了没反应，不说清楚就成了哑键；
-                      // 后者发生在骑行中。不用 SnackBar——它自己会消失，而这两个
-                      // 错误在用户处理前一直成立。
-                      if (state.errorMessage != null) ...<Widget>[
-                        const SizedBox(height: kSpaceM),
-                        _InlineNotice(message: state.errorMessage!),
+                    ),
+                    const SizedBox(height: kSpaceS),
+                    _SpeedScale(speedMps: state.currentSpeedMps),
+                    const SizedBox(height: kSpaceS),
+                    _MetricRow(
+                      dividerMargin: kSpaceS,
+                      cells: <Widget>[
+                        _MetricCell(
+                          label: '心率',
+                          value: state.hr?.toString() ?? '--',
+                          tooltip: state.hrConnected ? null : '心率未连接，点击连接',
+                          onTap: state.hrConnected
+                              ? null
+                              : () => onPickDevice(SensorKind.heartRate),
+                        ),
+                        _MetricCell(
+                          label: '踏频',
+                          value: state.cadence?.toString() ?? '--',
+                          tooltip: state.cadenceConnected ? null : '踏频未连接，点击连接',
+                          onTap: state.cadenceConnected
+                              ? null
+                              : () => onPickDevice(SensorKind.cadence),
+                        ),
+                        // 没接功率计时这一格是估算值（速度 + 坡度 + 体重），标签里
+                        // 直接写明：骑到一半才发现「功率」其实不是功率计读数，
+                        // 不是好体验。
+                        _MetricCell(
+                          label: state.powerConnected ? '功率' : '功率（估算）',
+                          value: state.power?.toString() ?? '--',
+                          tooltip: state.powerConnected ? null : '功率计未连接，点击连接',
+                          onTap: state.powerConnected
+                              ? null
+                              : () => onPickDevice(SensorKind.power),
+                        ),
                       ],
-                      const SizedBox(height: kSpaceM),
-                      // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；
-                      // 记录中按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，
-                      // 「结束」占 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满
-                      // buttonHeight 高，骑车戴手套也按得中（见 10.1）。
-                      SizedBox(
-                        width: double.infinity,
-                        height: buttonHeight,
-                        child: idle
-                            ? FilledButton(
-                                onPressed: onStart,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: kAppAccent,
-                                  foregroundColor: kAppOnAccent,
-                                ),
-                                child: const Text(
-                                  '开始',
-                                  style: TextStyle(
-                                    fontSize: kFontTitle,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              )
-                            : Row(
-                                // stretch：两颗键都要撑满 buttonHeight，而不是各自
-                                // 取固有高度后在 64 高的槽里居中——那会让它们看起来
-                                // 比未开始态那颗「开始」小一圈。
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: <Widget>[
-                                  Expanded(
-                                    flex: finishFlex,
-                                    child: OutlinedButton(
-                                      onPressed: onFinish,
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: kAppDanger,
-                                        side: const BorderSide(
-                                          color: kAppDanger,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        '结束',
-                                        style: TextStyle(
-                                          fontSize: kFontTitle,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: kSpaceL),
-                                  Expanded(
-                                    flex: toggleFlex,
-                                    child: FilledButton(
-                                      onPressed: paused ? onResume : onPause,
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: kAppAccent,
-                                        foregroundColor: kAppOnAccent,
-                                      ),
-                                      child: Text(
-                                        paused ? '继续' : '暂停',
-                                        style: const TextStyle(
-                                          fontSize: kFontTitle,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
+                    ),
+                    // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
+                    // 这一屏：前者让「开始」点了没反应，不说清楚就成了哑键；
+                    // 后者发生在骑行中。不用 SnackBar——它自己会消失，而这两个
+                    // 错误在用户处理前一直成立。
+                    if (state.errorMessage != null) ...<Widget>[
+                      const SizedBox(height: kSpaceS),
+                      _InlineNotice(message: state.errorMessage!),
                     ],
-                  ),
+                    const SizedBox(height: kSpaceS),
+                    // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；
+                    // 记录中按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，
+                    // 「结束」占 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满
+                    // buttonHeight 高，骑车戴手套也按得中（见 10.1）。
+                    SizedBox(
+                      width: double.infinity,
+                      height: buttonHeight,
+                      child: idle
+                          ? FilledButton(
+                              onPressed: onStart,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: kAppAccent,
+                                foregroundColor: kAppOnAccent,
+                              ),
+                              child: const Text(
+                                '开始',
+                                style: TextStyle(
+                                  fontSize: kFontTitle,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : Row(
+                              // stretch：两颗键都要撑满 buttonHeight，而不是各自
+                              // 取固有高度后在 64 高的槽里居中——那会让它们看起来
+                              // 比未开始态那颗「开始」小一圈。
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                Expanded(
+                                  flex: finishFlex,
+                                  child: OutlinedButton(
+                                    onPressed: onFinish,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: kAppDanger,
+                                      side: const BorderSide(
+                                        color: kAppDanger,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      '结束',
+                                      style: TextStyle(
+                                        fontSize: kFontTitle,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: kSpaceL),
+                                Expanded(
+                                  flex: toggleFlex,
+                                  child: FilledButton(
+                                    onPressed: paused ? onResume : onPause,
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: kAppAccent,
+                                      foregroundColor: kAppOnAccent,
+                                    ),
+                                    child: Text(
+                                      paused ? '继续' : '暂停',
+                                      style: const TextStyle(
+                                        fontSize: kFontTitle,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -328,68 +329,27 @@ class HandlebarView extends StatelessWidget {
   }
 }
 
-/// 顶部压暗渐变的覆盖高度。
-const double _kTopScrimHeight = 240;
-
-/// 底部压暗渐变的覆盖高度。要盖住整块底部浮层再往上一段，让它的上沿不至于
-/// 突兀地切在地图中间。
-const double _kBottomScrimHeight = 460;
-
-/// 压暗渐变：从底色实到全透明，把浮层所在的区域压暗。
+/// 压在地图上的文字所用的投影。
 ///
-/// 不用阴影、也不用给面板堆更深的底色：这两样都会在浅色瓦片上形成一圈硬边，
-/// 而渐变是连续的，地图在它下面还能看出走向。
-class _Scrim extends StatelessWidget {
-  const _Scrim({required this.alignment, required this.height});
-
-  final AlignmentGeometry alignment;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool atTop = alignment == Alignment.topCenter;
-    return Align(
-      alignment: alignment,
-      child: Container(
-        width: double.infinity,
-        height: height,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: atTop ? Alignment.topCenter : Alignment.bottomCenter,
-            end: atTop ? Alignment.bottomCenter : Alignment.topCenter,
-            colors: <Color>[
-              kAppBackground.withValues(alpha: 0.92),
-              kAppBackground.withValues(alpha: 0),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 浮在地图上的半透明面板。
+/// 浮层不留底色之后，读数直接落在瓦片上，而瓦片的明度不可控：浅灰路面、白色
+/// 建筑底、林地深绿都会出现，冷白字压在浅灰上会直接糊掉。投影是唯一既不吃掉
+/// 地图、又能把字从任意底色里拎出来的办法——画的只是笔画外围一圈暗，字身下面
+/// 的地图照样看得见。
 ///
-/// 完全不透明就成了一块黑板，把「全屏地图」的意义抹掉；再透一点，浅色瓦片会
-/// 吃掉文字对比度。0.86 是这两者之间的取值。
-class _OverlayPanel extends StatelessWidget {
-  const _OverlayPanel({required this.child});
+/// 两层是分工的：2px 那层几乎不虚化，沿笔画勾出一圈实边——11pt 的标签笔画只有
+/// 一两个像素宽，糊一点的影子就把它整条吃掉；8px 那层铺一圈软底，遇到街道名、
+/// 建筑轮廓这类花哨底图时正文不至于和它搅在一起。
+///
+/// 半径刻意压得比「好看」更小、不透明度更高：这里要的是**描边**的效果而不是投影
+/// 的层次，浅色瓦片上一个 12px 的半透明影子摊开之后只剩一片灰雾，字反而更糊。
+const List<Shadow> _kHudShadows = <Shadow>[
+  Shadow(color: Color(0xF2000000), blurRadius: 2),
+  Shadow(color: Color(0xB3000000), blurRadius: 8),
+];
 
-  final Widget child;
-
-  static const double _opacity = 0.86;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(kSpaceM),
-        decoration: BoxDecoration(
-          color: kAppSurface.withValues(alpha: _opacity),
-          borderRadius: const BorderRadius.all(Radius.circular(kRadiusPanel)),
-          border: Border.all(color: kAppHairline, width: 1),
-        ),
-        child: child,
-      );
-}
+/// 给压在地图上的文字套投影。所有浮层文字都要过这一道，否则换一张浅色底图
+/// 就会读不出来。按钮不用：它们自带底色或描边，本来就不依赖投影。
+TextStyle _hud(TextStyle base) => base.copyWith(shadows: _kHudShadows);
 
 /// 器件边框条：状态灯 + 传感器连接态 + 三盏传感器灯。
 ///
@@ -398,7 +358,7 @@ class _OverlayPanel extends StatelessWidget {
 /// 传感器灯，而灯是配对入口——误触会当场弹出模态选设备面板，骑行中弹模态比
 /// 按错键更糟。暂停因此下移到 [HandlebarView] 的底部动作区，这一条只剩状态。
 ///
-/// 外层的边距由 [_OverlayPanel] 提供，这里不再自带 padding。
+/// 外层的边距由 [HandlebarView] 的两处 Padding 提供，这里不再自带 padding。
 class _StatusStrip extends StatelessWidget {
   const _StatusStrip({
     required this.state,
@@ -443,19 +403,22 @@ class _StatusStrip extends StatelessWidget {
                     : paused
                         ? '已暂停'
                         : '进行中',
-                style: const TextStyle(
+                style: _hud(const TextStyle(
                   fontSize: kFontBody,
                   fontWeight: FontWeight.w600,
                   color: kAppTextPrimary,
-                ),
+                )),
               ),
               if (state.gpsWeak) ...<Widget>[
                 const SizedBox(width: kSpaceM),
-                const Flexible(
+                Flexible(
                   child: Text(
                     'GPS 信号弱',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: kFontBody, color: kAppWarning),
+                    style: _hud(const TextStyle(
+                      fontSize: kFontBody,
+                      color: kAppWarning,
+                    )),
                   ),
                 ),
               ],
@@ -491,7 +454,9 @@ class _StatusStrip extends StatelessWidget {
 /// 传感器连接指示灯，同时是可点的配对入口。
 ///
 /// 图标只有 18px，直接点太难点，所以撑出 [tapSize] 的可点区域——骑行中手指
-/// 本来就抖，小目标按不中。未连接时降成灰，不用红：红在这套颜色语言里是「错误」。
+/// 本来就抖，小目标按不中。未连接时降成半透明的次级灰，不用红：红在这套颜色
+/// 语言里是「错误」。未连接态**不降到结构色**（`kAppHairline`）——浮层没有底色
+/// 之后，那点明度的图标落在深色瓦片上就等于没画。
 class _SensorLamp extends StatelessWidget {
   const _SensorLamp({
     required this.icon,
@@ -521,7 +486,9 @@ class _SensorLamp extends StatelessWidget {
         icon: Icon(
           icon,
           size: 18,
-          color: connected ? onColor : kAppHairline,
+          color: connected ? onColor : kAppTextMuted.withValues(alpha: 0.6),
+          // 图标没有文字那样的 TextStyle 可以挂投影，只能自己带。
+          shadows: _kHudShadows,
         ),
       );
 }
@@ -563,9 +530,11 @@ class _SpeedScalePainter extends CustomPainter {
     final RRect trackRrect =
         RRect.fromRectAndRadius(track, const Radius.circular(kRadiusLine));
 
+    // 轨道用半透明底色而不是实体面板色：它压在瓦片上，实色会在地图上切出
+    // 一条硬边，半透明则只是把身后的地图压暗一点，填充色的对比度也够。
     canvas.drawRRect(
       trackRrect,
-      Paint()..color = kAppSurfaceRaised,
+      Paint()..color = kAppBackground.withValues(alpha: 0.5),
     );
     if (fraction > 0) {
       // 填充宽度至少一个圆角直径，否则低速时看不出有进度。
@@ -579,7 +548,9 @@ class _SpeedScalePainter extends CustomPainter {
       );
     }
 
-    final Paint tickPaint = Paint()..color = kAppHairline;
+    // 刻度画在轨道下面、也就是画在瓦片上，因此用亮色而不是结构线色。
+    final Paint tickPaint = Paint()
+      ..color = kAppTextPrimary.withValues(alpha: 0.75);
     for (int i = 0; i < tickCount; i++) {
       final double x = size.width * i / (tickCount - 1);
       // 首尾与中点画长刻度，其余短刻度——读数时有三个锚点可对。
@@ -605,6 +576,9 @@ class _SpeedScalePainter extends CustomPainter {
 ///
 /// [dividerMargin] 由调用方定：顶部那行是四格，分隔线两侧留 [kSpaceS] 就够，
 /// 留 [kSpaceM] 的话 360dp 的机器上每格只剩六十来像素，「1.23 km」会被截断。
+///
+/// 分隔线是半透明的次级灰而不是结构线色：浮层没有底色之后它直接压在瓦片上，
+/// 结构线那个明度在深色底图上会整条消失，格与格糊成一片。
 class _MetricRow extends StatelessWidget {
   const _MetricRow({required this.cells, this.dividerMargin = kSpaceM});
 
@@ -620,7 +594,7 @@ class _MetricRow extends StatelessWidget {
                 width: 1,
                 height: 30,
                 margin: EdgeInsets.symmetric(horizontal: dividerMargin),
-                color: kAppHairline,
+                color: kAppTextMuted.withValues(alpha: 0.4),
               ),
             Expanded(child: cells[i]),
           ],
@@ -656,15 +630,23 @@ class _MetricCell extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(label, style: kLabelTextStyle),
+            Text(label, style: _hud(kLabelTextStyle)),
             if (onTap != null) ...<Widget>[
               const SizedBox(width: kSpaceXs),
-              const Icon(Icons.add_circle_outline, size: 14, color: kAppTextMuted),
+              const Icon(
+                Icons.add_circle_outline,
+                size: 14,
+                color: kAppTextMuted,
+                shadows: _kHudShadows,
+              ),
             ],
           ],
         ),
         const SizedBox(height: kSpaceXs),
-        Text(value, style: kMetricTextStyle.copyWith(fontSize: valueFontSize)),
+        Text(
+          value,
+          style: _hud(kMetricTextStyle).copyWith(fontSize: valueFontSize),
+        ),
       ],
     );
 
@@ -694,16 +676,21 @@ class _InlineNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         children: <Widget>[
-          const Icon(Icons.error_outline, size: 18, color: kAppDanger),
+          const Icon(
+            Icons.error_outline,
+            size: 18,
+            color: kAppDanger,
+            shadows: _kHudShadows,
+          ),
           const SizedBox(width: kSpaceS),
           Expanded(
             child: Text(
               message,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: _hud(const TextStyle(
                 fontSize: kFontBody,
                 color: kAppTextPrimary,
-              ),
+              )),
             ),
           ),
         ],
