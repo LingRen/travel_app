@@ -63,11 +63,18 @@ class RecordingSession {
     TrackPoint? lastWritten,
     int? resumedAtMs,
     this.weightKg = kDefaultRiderWeightKg,
+    List<TrackPoint> recentTrack = const <TrackPoint>[],
   })  : _elapsedMs = initialElapsedMs,
         _distanceM = initialDistanceM,
         _lastWritten = lastWritten,
         _lastTickMs = resumedAtMs ?? startedAtMs,
-        _lastWrittenMs = lastWritten?.tMs ?? startedAtMs;
+        _lastWrittenMs = lastWritten?.tMs ?? startedAtMs {
+    // 崩溃恢复时把已落盘的那段轨迹接上，否则恢复后缩略图是空的，
+    // 要等新点攒够才慢慢长出来。走同一条抽稀路径，不另写一套。
+    for (final TrackPoint p in recentTrack) {
+      _appendToLiveTrack(p);
+    }
+  }
 
   final int rideId;
   final int startedAtMs;
@@ -91,11 +98,24 @@ class RecordingSession {
   TrackPoint? _lastWritten;
   int _pointCount = 0;
 
+  /// 实时轨迹，供骑行界面的缩略图使用。见设计文档 9.4。
+  ///
+  /// 与落盘那批点是两回事：落盘按 5m / 2s 记，一张 120pt 高的缩略图铺不下几千
+  /// 个点，也不需要那么密。这里按 [kLiveTrackMinDistanceM] /
+  /// [kLiveTrackMaxIntervalMs] 抽稀，超过 [kLiveTrackMaxPoints] 时折半压缩。
+  ///
+  /// **永不原地改动已经交出去的列表**：压缩时换一个新的列表对象，界面才能用
+  /// `identical` 判断「轨迹到底变没变」，不必每秒重算折线（见 `LiveRouteMap`）。
+  List<TrackPoint> _liveTrack = const <TrackPoint>[];
+
   /// 拟合坡度用的近期样点：(定位时间, 累计距离, 高程)。只保留窗口内的。
   final List<({int tMs, double distanceM, double altitudeM})> _gradeSamples =
       <({int tMs, double distanceM, double altitudeM})>[];
 
   RecordingPhase get phase => _phase;
+
+  /// 本次骑行到此刻为止的轨迹（已抽稀）。见设计文档 9.4。
+  List<TrackPoint> get liveTrack => _liveTrack;
 
   /// 落盘与读数共用的功率：接了功率计用实测值，否则用估算值。
   int? get _effectivePower => _power ?? _estimatedPower;
@@ -276,6 +296,33 @@ class RecordingSession {
     _lastWrittenMs = point.tMs;
     _pointCount++;
     _buffer.add(point);
+    _appendToLiveTrack(point);
+  }
+
+  /// 往实时轨迹里追加一个点，按距离或时间抽稀。只有带定位的点才进得来：
+  /// 缩略图上画的是轨迹，隧道里那些纯传感器点没有坐标，接进去会变成假直线。
+  void _appendToLiveTrack(TrackPoint point) {
+    if (!point.hasPosition) return;
+
+    if (_liveTrack.isNotEmpty) {
+      final TrackPoint last = _liveTrack.last;
+      final bool farEnough =
+          segmentDistanceMeters(last, point) >= kLiveTrackMinDistanceM;
+      final bool lateEnough = point.tMs - last.tMs >= kLiveTrackMaxIntervalMs;
+      if (!farEnough && !lateEnough) return;
+    }
+
+    _liveTrack = <TrackPoint>[..._liveTrack, point];
+    if (_liveTrack.length > kLiveTrackMaxPoints) _compactLiveTrack();
+  }
+
+  /// 折半压缩：隔一个取一个，并保证最新点留在里面（否则轨迹末端会缺一截）。
+  void _compactLiveTrack() {
+    final List<TrackPoint> kept = <TrackPoint>[
+      for (int i = 0; i < _liveTrack.length; i += 2) _liveTrack[i],
+    ];
+    if (!identical(kept.last, _liveTrack.last)) kept.add(_liveTrack.last);
+    _liveTrack = kept;
   }
 
   TrackPoint _toPoint(LocationFix fix) => TrackPoint(

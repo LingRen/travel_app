@@ -12,10 +12,9 @@ import '../../data/ble/sensor_monitor.dart';
 import '../../data/settings_repository.dart';
 import 'device_picker_sheet.dart';
 import 'handlebar_view.dart';
-import 'pocket_view.dart';
 import 'record_controller.dart';
 
-/// 记录页。见设计文档 10.1：两种模式共用同一个记录引擎，只切换渲染层。
+/// 记录页。见设计文档 10.1：准备页与骑行界面共用同一个记录引擎。
 class RecordPage extends ConsumerStatefulWidget {
   const RecordPage({super.key});
 
@@ -42,6 +41,9 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 退到后台时强制落盘一次，缩小崩溃丢数据的窗口。
     ref.read(recordControllerProvider.notifier).handleLifecycle(state);
+    // 常亮不能只靠上面的 listen 兜：暂停中息屏、或 listen 还没收到通知，
+    // 都会让屏幕在黑屏状态下继续耗电。离开前台一律先关掉。
+    if (state != AppLifecycleState.resumed) unawaited(_setWakelock(false));
   }
 
   /// 崩溃恢复时用户在启动弹窗里选了「继续」，这里接着写那个会话。
@@ -100,14 +102,17 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final RecordState state = ref.watch(recordControllerProvider);
     final RecordController controller = ref.read(recordControllerProvider.notifier);
-    final DistanceUnit unit =
-        ref.watch(appSettingsProvider).value?.distanceUnit ?? DistanceUnit.kilometer;
+    final AppSettings? settings = ref.watch(appSettingsProvider).value;
+    final DistanceUnit unit = settings?.distanceUnit ?? DistanceUnit.kilometer;
+    final String tileUrl =
+        settings?.mapTileUrlTemplate ?? kDefaultMapTileUrlTemplate;
 
-    // 车把模式且正在记录时屏幕常亮。见设计文档 10.1。
+    // 正在记录且 App 在前台时屏幕常亮。见设计文档 10.1 的「熄屏与常亮」：
+    // 亮着就常亮，用户按电源键熄屏后随生命周期自动停。
     ref.listen<RecordState>(recordControllerProvider,
         (RecordState? _, RecordState next) {
       unawaited(_setWakelock(
-        next.isActive && !next.isPaused && next.mode == RecordViewMode.handlebar,
+        next.isActive && !next.isPaused && next.foreground,
       ));
     });
 
@@ -115,30 +120,20 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
     if (state.isFinished) {
       body = _FinishedView(state: state, unit: unit, onReset: controller.reset);
     } else if (state.isActive) {
-      body = state.mode == RecordViewMode.handlebar
-          ? HandlebarView(
-              state: state,
-              unit: unit,
-              onPause: controller.pause,
-              onResume: controller.resume,
-              onFinish: () => _confirmFinish(controller),
-              onSwitchMode: () => controller.setMode(RecordViewMode.pocket),
-              onPickDevice: _pickDevice,
-            )
-          : PocketView(
-              state: state,
-              unit: unit,
-              onPause: controller.pause,
-              onResume: controller.resume,
-              onFinish: () => _confirmFinish(controller),
-              onSwitchMode: () => controller.setMode(RecordViewMode.handlebar),
-            );
+      body = HandlebarView(
+        state: state,
+        unit: unit,
+        tileUrlTemplate: tileUrl,
+        onPause: controller.pause,
+        onResume: controller.resume,
+        onFinish: () => _confirmFinish(controller),
+        onPickDevice: _pickDevice,
+      );
     } else {
       body = _IdleView(
         state: state,
         onStart: controller.start,
         onPickDevice: _pickDevice,
-        onModeChanged: controller.setMode,
       );
     }
 
@@ -146,23 +141,24 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   }
 }
 
-/// 未开始时的准备界面：选模式、连传感器、开始。见设计文档 6.1 与 10.1。
+/// 未开始时的准备界面：连传感器、开始。见设计文档 6.1 与 10.1。
 ///
 /// 按器件的「待机画面」来做，而不是传统的「空状态页」：顶部一条状态栏交代
-/// 传感器就绪情况，中间是两组待确认的设置，底部一个开始键。没有大图标与
+/// 传感器就绪情况，中间是待确认的传感器设置，底部一个开始键。没有大图标与
 /// 居中大标题——那是通用空状态的写法，和这台设备的语言不一致。
+///
+/// 原来这里有「车把 / 口袋」二选一。口袋模式并进骑行界面后（设计文档 10.1），
+/// 这一组设置不再有任何分支，留着只会让人以为选错了会怎样。
 class _IdleView extends StatelessWidget {
   const _IdleView({
     required this.state,
     required this.onStart,
     required this.onPickDevice,
-    required this.onModeChanged,
   });
 
   final RecordState state;
   final Future<void> Function() onStart;
   final void Function(SensorKind kind) onPickDevice;
-  final void Function(RecordViewMode mode) onModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -194,40 +190,13 @@ class _IdleView extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(kSpaceL),
               children: <Widget>[
-                const _GroupLabel('骑行方式'),
-                const SizedBox(height: kSpaceS),
-                // 车把模式在骑行中看，口袋模式不用看。两者的取舍是「屏幕常亮
-                // 耗电」换「读数方便」，用一句话说清楚，别让人去猜。
-                SegmentedButton<RecordViewMode>(
-                  segments: const <ButtonSegment<RecordViewMode>>[
-                    ButtonSegment<RecordViewMode>(
-                      value: RecordViewMode.handlebar,
-                      label: Text('车把'),
-                      icon: Icon(Icons.phone_android, size: 16),
-                    ),
-                    ButtonSegment<RecordViewMode>(
-                      value: RecordViewMode.pocket,
-                      label: Text('口袋'),
-                      icon: Icon(Icons.screen_lock_portrait, size: 16),
-                    ),
-                  ],
-                  selected: <RecordViewMode>{state.mode},
-                  onSelectionChanged: (Set<RecordViewMode> selected) =>
-                      onModeChanged(selected.first),
-                ),
-                const SizedBox(height: kSpaceS),
-                Text(
-                  state.mode == RecordViewMode.handlebar
-                      ? '车把模式：屏幕常亮，骑行中可随时看读数。'
-                      : '口袋模式：屏幕不常亮，省电，采集照常进行。',
-                  style: const TextStyle(fontSize: 12, color: kAppTextMuted),
-                ),
-                const SizedBox(height: kSpaceXl),
                 const _GroupLabel('传感器'),
                 const SizedBox(height: kSpaceS),
                 // 传感器连不上不阻断开始记录。见设计文档 6.1。
                 // 三个并排而不是两个：多出的功率计挤在同一行，所以按钮里的
                 // 文字收短（「已连接」＋传感器图标），否则窄屏上会被裁掉。
+                // 骑行界面里也能补连（顶部三个灯 + 未连接的指标格），所以这里
+                // 不再是唯一入口。
                 Row(
                   children: <Widget>[
                     Expanded(
@@ -266,7 +235,8 @@ class _IdleView extends StatelessWidget {
                 ),
                 const SizedBox(height: kSpaceS),
                 const Text(
-                  '不连也能记录。没接心率与踏频就没有对应数据，功率按速度与坡度估算。',
+                  '不连也能记录。没接心率与踏频就没有对应数据，功率按速度与坡度估算。\n'
+                  '骑行中屏幕常亮；按电源键熄屏后采集照常进行，亮屏即回到读数界面。',
                   style: TextStyle(fontSize: 12, color: kAppTextMuted),
                 ),
                 if (state.errorMessage != null) ...<Widget>[

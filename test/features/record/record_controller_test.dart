@@ -649,7 +649,7 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('切换模式不影响记录状态', (WidgetTester tester) async {
+  testWidgets('退到后台不重建界面状态，回到前台补一次 publish', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller =
         container.read(recordControllerProvider.notifier);
@@ -657,12 +657,58 @@ void main() {
     await rideOneSecond(tester, lat: 31.0);
     await rideOneSecond(tester, lat: 31.0001);
 
-    controller.setMode(RecordViewMode.pocket);
+    controller.handleLifecycle(AppLifecycleState.paused);
+    final int backgroundElapsedMs =
+        container.read(recordControllerProvider).elapsedMs;
+    expect(container.read(recordControllerProvider).foreground, isFalse);
 
+    // 后台期间 1Hz 节拍照常走（时长、超速衰减都挂在它上面），但界面状态原地
+    // 不动：界面看不见，重建纯属白烧 CPU，缩略图也跟着白重绘。
+    clockMs += 1000;
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      container.read(recordControllerProvider).elapsedMs,
+      backgroundElapsedMs,
+      reason: '后台不该每秒重建界面状态',
+    );
+
+    // 亮屏回来补一次：读数不会停在熄屏那一刻。
+    controller.handleLifecycle(AppLifecycleState.resumed);
     final RecordState state = container.read(recordControllerProvider);
-    expect(state.mode, RecordViewMode.pocket);
+    expect(state.foreground, isTrue);
+    expect(state.elapsedMs, greaterThan(backgroundElapsedMs));
     expect(state.phase, RecordingPhase.recording);
-    expect(state.distanceM, greaterThan(0));
+    container.dispose();
+  });
+
+  testWidgets('实时轨迹按距离抽稀，且没追加时不换列表对象', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    // 第一个定位点无条件留下。
+    await rideOneSecond(tester, lat: 31.0);
+    final List<TrackPoint> first =
+        container.read(recordControllerProvider).liveTrack;
+    expect(first.length, 1);
+
+    // 11.13 米：够落盘（kMinWriteDistanceM = 5），但不够进缩略图
+    // （kLiveTrackMinDistanceM = 25）——缩略图只要形状，不需要一个点一像素。
+    await rideOneSecond(tester, lat: 31.0001);
+    expect(
+      identical(container.read(recordControllerProvider).liveTrack, first),
+      isTrue,
+      reason: '没追加点就该复用同一个列表对象，界面才敢跳过硬折线',
+    );
+
+    // 累计 22 米，仍不够。
+    await rideOneSecond(tester, lat: 31.0002);
+    expect(container.read(recordControllerProvider).liveTrack.length, 1);
+
+    // 累计 33 米，超过阈值，留下第二个点。
+    await rideOneSecond(tester, lat: 31.0003);
+    expect(container.read(recordControllerProvider).liveTrack.length, 2);
     container.dispose();
   });
 

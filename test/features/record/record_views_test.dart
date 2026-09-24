@@ -14,10 +14,10 @@ import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
-import 'package:cycling_app/features/record/pocket_view.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/record/record_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Override 在 riverpod 3 里只从 misc 入口导出。
 import 'package:flutter_riverpod/misc.dart';
@@ -151,15 +151,34 @@ void main() {
       HandlebarView(
         state: state,
         unit: DistanceUnit.kilometer,
+        tileUrlTemplate: kDefaultMapTileUrlTemplate,
         onPause: () {},
         onResume: () {},
         onFinish: () {},
-        onSwitchMode: () {},
         onPickDevice: onPickDevice ?? (_) {},
       );
 
-  group('车把模式与口袋模式', () {
-    testWidgets('车把模式主指标字号不小于 72 且各项指标齐全', (WidgetTester tester) async {
+  group('骑行界面', () {
+    testWidgets('并入缩略图后，360×640 的机器上不溢出', (WidgetTester tester) async {
+      // 真机是 1080×1920 / 密度 480，即 360×640dp。加缩略图要占 121dp，
+      // 靠让渡别处的间距才装得下——所以这条用例量的是余量，不是能不能跑。
+      // 溢出在测试里会直接抛 FlutterError，pumpWidget 就会失败。
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(wrap(handlebar(active)));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      // 主指标被 FittedBox 兜底，但那是给极端窄高比留的：正常尺寸下不该触发，
+      // 字号必须还是 120。真缩了说明这一页已经挤到没法扫读了。
+      final Text speed =
+          tester.widget<Text>(find.byKey(const Key('handlebar-speed')));
+      expect(speed.style!.fontSize, HandlebarView.primaryFontSize);
+    });
+
+    testWidgets('主指标字号不小于 72 且各项指标齐全', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(handlebar(active)));
 
       final Text speed =
@@ -175,7 +194,7 @@ void main() {
       expect(find.text('210'), findsOneWidget);
     });
 
-    testWidgets('没连功率计时车把上显示占位，标签写明是估算值', (WidgetTester tester) async {
+    testWidgets('没连功率计时显示占位，标签写明是估算值', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(handlebar(const RecordState(
         rideId: 1,
         phase: RecordingPhase.recording,
@@ -218,85 +237,64 @@ void main() {
       expect(find.byTooltip('点击连接功率计'), findsOneWidget);
     });
 
-    testWidgets('口袋模式保留距离、时长与功率，不显示心率与踏频', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(PocketView(
-        state: active,
-        unit: DistanceUnit.kilometer,
-        onPause: () {},
-        onResume: () {},
-        onFinish: () {},
-        onSwitchMode: () {},
-      )));
+    testWidgets('未连接时点指标格就是配对入口', (WidgetTester tester) async {
+      final List<SensorKind> picked = <SensorKind>[];
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+      ), onPickDevice: picked.add)));
 
-      expect(find.text('记录中'), findsOneWidget);
-      expect(find.text('1.23 km'), findsOneWidget);
-      expect(find.text('01:30'), findsOneWidget);
-      expect(find.text('功率'), findsOneWidget);
-      expect(find.text('210'), findsOneWidget);
-      // 口袋模式不渲染大字号主指标
-      expect(find.byKey(const Key('handlebar-speed')), findsNothing);
-      // 也不渲染心率 / 踏频这类车把模式才看得清的指标
-      expect(find.text('132'), findsNothing);
-      expect(find.text('85'), findsNothing);
-      expect(find.text('心率'), findsNothing);
-      expect(find.text('踏频'), findsNothing);
+      // 骑行中看到「--」最直接的动作就是点那一格；文案与顶部传感器灯区分开，
+      // 否则两边都会命中同一个 tooltip。
+      await tester.tap(find.byTooltip('心率未连接，点击连接'));
+      await tester.tap(find.byTooltip('踏频未连接，点击连接'));
+      await tester.tap(find.byTooltip('功率计未连接，点击连接'));
+
+      expect(picked, <SensorKind>[
+        SensorKind.heartRate,
+        SensorKind.cadence,
+        SensorKind.power,
+      ]);
     });
 
-    testWidgets('口袋模式里没连功率计时，标签同样写明是估算值', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(PocketView(
-        state: const RecordState(
-          rideId: 1,
-          phase: RecordingPhase.recording,
-          elapsedMs: 1000,
-        ),
-        unit: DistanceUnit.kilometer,
-        onPause: () {},
-        onResume: () {},
-        onFinish: () {},
-        onSwitchMode: () {},
-      )));
+    testWidgets('已连接的指标格不给点击入口，避免误触弹选设备面板', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
 
-      // 与车把模式同一口径：估出来的读数不能冒充实测。
-      expect(find.text('功率（估算）'), findsOneWidget);
-      expect(find.text('功率'), findsNothing);
+      // 三格都是有效读数：不该再挂「+」，也不该有「点击连接」的提示。
+      // 入口只由 onTap 决定（_MetricCell 里 Tooltip 与 InkWell 同时挂）
+      // ，所以这两样不在就等于不可点——直接 tap 反而证不了：没有 InkWell
+      // 的格子点下去什么也不会发生，两种实现都会「通过」。
+      expect(find.byIcon(Icons.add_circle_outline), findsNothing);
+      expect(find.byTooltip('心率未连接，点击连接'), findsNothing);
+      expect(find.byTooltip('踏频未连接，点击连接'), findsNothing);
+      expect(find.byTooltip('功率计未连接，点击连接'), findsNothing);
     });
 
-    testWidgets('口袋模式里没有任何 ≥72pt 的文字', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(PocketView(
-        state: active,
-        unit: DistanceUnit.kilometer,
-        onPause: () {},
-        onResume: () {},
-        onFinish: () {},
-        onSwitchMode: () {},
-      )));
+    testWidgets('没有定位点时缩略图占位，不渲染地图', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
 
-      final Iterable<Text> texts = tester.widgetList<Text>(find.byType(Text));
-      expect(texts, isNotEmpty);
-      for (final Text t in texts) {
-        expect(
-          t.style?.fontSize ?? 0,
-          lessThan(72),
-          reason: '口袋模式不该出现车把模式级别的大字',
-        );
-      }
+      expect(find.byKey(const Key('live-route-map')), findsOneWidget);
+      expect(find.text('等待定位…'), findsOneWidget);
+      expect(find.byType(FlutterMap), findsNothing);
     });
 
-    testWidgets('口袋模式暂停时显示已暂停', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(PocketView(
-        state: const RecordState(
-          rideId: 1,
-          phase: RecordingPhase.paused,
-          elapsedMs: 1000,
-        ),
-        unit: DistanceUnit.kilometer,
-        onPause: () {},
-        onResume: () {},
-        onFinish: () {},
-        onSwitchMode: () {},
-      )));
+    testWidgets('有定位点时缩略图真的把轨迹画出来', (WidgetTester tester) async {
+      // 两点之间要够远，才不会被抽稀规则丢掉（见 kLiveTrackMinDistanceM）。
+      final List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+        const TrackPoint(rideId: 1, tMs: 3000, lat: 30.002, lon: 120.002),
+      ];
+      await tester.pumpWidget(wrap(handlebar(RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 3000,
+        liveTrack: track,
+      ))));
 
-      expect(find.text('已暂停'), findsOneWidget);
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.text('等待定位…'), findsNothing);
     });
   });
 
@@ -376,38 +374,21 @@ void main() {
       expect(find.text('开始骑行'), findsOneWidget, reason: '仍停在未开始状态');
     });
 
-    testWidgets('开始后点「口袋模式」，界面真的从车把切成口袋', (WidgetTester tester) async {
+    testWidgets('准备页不再有「骑行方式」二选一，开始后直接是骑行界面', (WidgetTester tester) async {
       await pumpRecordPage(tester);
+
+      // 口袋模式已并进骑行界面（设计文档 10.1），准备页不该再出现这一组设置。
+      expect(find.text('骑行方式'), findsNothing);
+      expect(find.text('车把'), findsNothing);
+      expect(find.text('口袋'), findsNothing);
 
       await tester.tap(find.text('开始骑行'));
       await tester.pump();
       await tester.pump();
 
-      // 默认车把模式：大字号主指标在，状态条不在。
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
-      expect(find.text('记录中'), findsNothing);
-
-      await tester.tap(find.text('口袋模式'));
-      await tester.pump();
-
-      // 切成口袋模式：大字号主指标消失，状态条出现。
-      expect(find.byKey(const Key('handlebar-speed')), findsNothing);
-      expect(find.text('记录中'), findsOneWidget);
-      expect(find.text('车把模式'), findsOneWidget);
-    });
-
-    testWidgets('点「口袋模式」后大字号主指标不再存在于渲染树里', (WidgetTester tester) async {
-      await pumpRecordPage(tester);
-      await tester.tap(find.text('开始骑行'));
-      await tester.pump();
-      await tester.pump();
-
-      await tester.tap(find.text('口袋模式'));
-      await tester.pump();
-
-      for (final Text t in tester.widgetList<Text>(find.byType(Text))) {
-        expect(t.style?.fontSize ?? 0, lessThan(72));
-      }
+      expect(find.text('进行中'), findsOneWidget);
+      expect(find.byKey(const Key('live-route-map')), findsOneWidget);
     });
   });
 }

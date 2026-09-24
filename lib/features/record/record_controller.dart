@@ -18,15 +18,12 @@ import '../../domain/models/ride_status.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/recording/recording_session.dart';
 
-/// 记录页的界面模式。见设计文档 10.1。
-enum RecordViewMode { handlebar, pocket }
-
 /// 记录页的界面状态。
 class RecordState {
   const RecordState({
     this.rideId,
     this.phase,
-    this.mode = RecordViewMode.handlebar,
+    this.foreground = true,
     this.elapsedMs = 0,
     this.distanceM = 0,
     this.currentSpeedMps = 0,
@@ -38,6 +35,7 @@ class RecordState {
     this.powerConnected = false,
     this.gpsWeak = false,
     this.errorMessage,
+    this.liveTrack = const <TrackPoint>[],
   });
 
   final int? rideId;
@@ -45,7 +43,10 @@ class RecordState {
   /// null 表示尚未开始记录。
   final RecordingPhase? phase;
 
-  final RecordViewMode mode;
+  /// App 是否在前台。熄屏与切到别的 App 在系统层是同一个事件，都算离开前台
+  /// （见设计文档 10.1）：常亮与界面刷新都跟着它走，亮屏即回到读数界面。
+  final bool foreground;
+
   final int elapsedMs;
   final double distanceM;
   final double currentSpeedMps;
@@ -61,6 +62,13 @@ class RecordState {
 
   /// 阻断类错误（定位权限 / 定位服务）或写入连续失败提示，非空时界面需展示。
   final String? errorMessage;
+
+  /// 本次骑行已抽稀的轨迹，供缩略图绘制。见设计文档 9.4。
+  ///
+  /// 这里传的是 [RecordingSession] 内部那个列表的**引用**（每秒重建状态时不做
+  /// 拷贝），而那个列表只在真正追加或压缩时换新对象——所以界面可以靠
+  /// `identical` 判断轨迹有没有变，不必每秒重算折线。
+  final List<TrackPoint> liveTrack;
 
   bool get isActive =>
       phase == RecordingPhase.recording || phase == RecordingPhase.paused;
@@ -102,24 +110,24 @@ class RecordController extends Notifier<RecordState> {
   BlePlatform get _blePlatform => ref.read(blePlatformProvider);
 
   int? _rideId;
-  RecordViewMode _mode = RecordViewMode.handlebar;
   bool _finished = false;
   int _lastFixMs = 0;
   int _writeFailures = 0;
   String? _error;
   Future<void>? _pendingWrite;
 
+  /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
+  bool _foreground = true;
+
+  /// 后台期间上次强制落盘的时刻，用于把崩溃丢数据的窗口压到 3 秒内。
+  int _lastBackgroundFlushMs = 0;
+
+  static const int _kBackgroundFlushIntervalMs = 3000;
+
   @override
   RecordState build() {
     ref.onDispose(_teardown);
     return const RecordState();
-  }
-
-  /// 切换界面模式。只影响渲染，不触碰记录逻辑。见设计文档 10.1。
-  void setMode(RecordViewMode mode) {
-    if (_mode == mode) return;
-    _mode = mode;
-    _publish();
   }
 
   /// 开始一次新记录。定位权限或定位服务不满足时直接返回并给出提示。
@@ -195,6 +203,7 @@ class RecordController extends Notifier<RecordState> {
       initialElapsedMs: elapsedMs,
       initialDistanceM: distanceM,
       lastWritten: points.isEmpty ? null : points.last,
+      recentTrack: points,
       // 计时从「恢复这一刻」继续：startedAtMs 可能在几小时前，而崩溃到重启
       // 之间的空档不是骑行时间，不能计入时长。
       resumedAtMs: _now(),
@@ -256,7 +265,8 @@ class RecordController extends Notifier<RecordState> {
     _error = null;
     _writeFailures = 0;
     _lastFixMs = 0;
-    state = const RecordState();
+    _lastBackgroundFlushMs = 0;
+    state = RecordState(foreground: _foreground);
   }
 
   /// 连接一个传感器。失败不阻断骑行，[SensorMonitor] 会自动退避重连。
@@ -283,11 +293,22 @@ class RecordController extends Notifier<RecordState> {
     _connected.clear();
   }
 
-  /// App 退到后台时强制落盘一次，缩小崩溃丢数据的窗口。见设计文档 6.3。
+  /// App 进后台（熄屏、切走）或回到前台时调用。见设计文档 10.1 的「熄屏与后台」。
+  ///
+  /// 熄屏与切到别的 App 在系统层是同一个事件，这里不区分：都按「离开前台」
+  /// 处理，亮屏回来就是同一个读数界面。后台做三件事：
+  ///   - 立刻强制落盘一次，缩小崩溃丢数据的窗口；
+  ///   - 之后每 [_kBackgroundFlushIntervalMs] 再强制落盘一次（此时界面看不见，
+  ///     拿 CPU 换可靠性是划算的）；
+  ///   - 停止每秒重建界面状态（`_onTick` 里判断），缩略图因此完全不重绘。
+  ///
+  /// **1Hz 节拍不停**：时长推进、超速衰减、纯传感器点补写、GPS 弱信号判定
+  /// 都挂在它上面，停了这些就全错。
   void handleLifecycle(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      unawaited(_flush(force: true));
-    }
+    final bool foreground = state == AppLifecycleState.resumed;
+    if (foreground != _foreground) _foreground = foreground;
+    if (!foreground) unawaited(_flush(force: true));
+    _publish();
   }
 
   void _startStreams() {
@@ -309,8 +330,20 @@ class RecordController extends Notifier<RecordState> {
     final RecordingSession? session = _session;
     if (session == null || _finished) return;
     session.tick(_now());
-    _publish();
-    unawaited(_flush());
+
+    if (_foreground) {
+      _publish();
+      unawaited(_flush());
+      return;
+    }
+
+    // 后台不重建界面状态：界面看不见，重建纯属白烧 CPU（缩略图也跟着重绘）。
+    // 回到前台时 handleLifecycle 会补一次 publish，读数不会停在旧值上。
+    // 改成按固定节拍强制落盘，把崩溃丢数据的窗口从「攒满一批」压到 3 秒。
+    if (_now() - _lastBackgroundFlushMs >= _kBackgroundFlushIntervalMs) {
+      _lastBackgroundFlushMs = _now();
+      unawaited(_flush(force: true));
+    }
   }
 
   void _onSensorReading(SensorKind kind, num value) {
@@ -405,11 +438,12 @@ class RecordController extends Notifier<RecordState> {
   }
 
   void _publish() {
-    final RecordingSnapshot? snap = _session?.snapshot;
+    final RecordingSession? session = _session;
+    final RecordingSnapshot? snap = session?.snapshot;
     state = RecordState(
       rideId: _rideId,
       phase: snap?.phase,
-      mode: _mode,
+      foreground: _foreground,
       elapsedMs: snap?.elapsedMs ?? 0,
       distanceM: snap?.distanceM ?? 0,
       currentSpeedMps: snap?.currentSpeedMps ?? 0,
@@ -421,6 +455,8 @@ class RecordController extends Notifier<RecordState> {
       powerConnected: _connected.contains(SensorKind.power),
       gpsWeak: _isGpsWeak(),
       errorMessage: _error,
+      // 直接透传引用，不拷贝：见 RecordState.liveTrack 的说明。
+      liveTrack: session?.liveTrack ?? const <TrackPoint>[],
     );
   }
 
