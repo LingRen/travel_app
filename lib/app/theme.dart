@@ -215,9 +215,10 @@ ThemeData buildAppTheme() {
       ),
       shape: Border(bottom: kHairline),
     ),
-    // 底栏不上强调色：琥珀色是「实时数据」的信号，导航是常驻装饰，
-    // 让它一直亮着会把该留给数据的注意力花掉。选中态靠一块抬高的面板
-    // 加上更亮的图标与文字来区分。
+    // 选中态用琥珀，与主题色一致。琥珀在令牌层写的语义就是「正在发生 /
+    // 可交互 / 已选中」（见文首），底栏选中态本来就是它该占的位置；此前
+    // 为了把颜色全留给数据而让底栏走中性色，收敛过头了。未选中仍是次级灰，
+    // 抬高面板继续承担形状上的区分，颜色只负责「哪个被选中」。
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: kAppSurface,
       surfaceTintColor: Colors.transparent,
@@ -232,7 +233,7 @@ ThemeData buildAppTheme() {
         (Set<WidgetState> states) => IconThemeData(
           size: 22,
           color: states.contains(WidgetState.selected)
-              ? kAppTextPrimary
+              ? kAppAccent
               : kAppTextMuted,
         ),
       ),
@@ -242,7 +243,7 @@ ThemeData buildAppTheme() {
           fontWeight: FontWeight.w500,
           letterSpacing: 0.4,
           color: states.contains(WidgetState.selected)
-              ? kAppTextPrimary
+              ? kAppAccent
               : kAppTextMuted,
         ),
       ),
