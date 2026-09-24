@@ -14,6 +14,7 @@ import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
+import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/record/record_page.dart';
@@ -131,7 +132,8 @@ const AppSettings _testSettings = AppSettings(
 );
 
 void main() {
-  // 一次进行中的记录：6 m/s = 21.6 km/h，1.234 km，90 秒，心率 132，踏频 85，功率 210。
+  // 一次进行中的记录：6 m/s = 21.6 km/h，1.234 km，90 秒，心率 132，踏频 85，
+  // 功率 210，海拔 128 米，累计爬升 342 米。
   const RecordState active = RecordState(
     rideId: 1,
     phase: RecordingPhase.recording,
@@ -144,6 +146,8 @@ void main() {
     hrConnected: true,
     cadenceConnected: true,
     powerConnected: true,
+    currentAltitudeM: 128.0,
+    elevationGainM: 342.0,
   );
 
   Widget wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -264,10 +268,10 @@ void main() {
       expect(resumes, 1);
     });
 
-    testWidgets('并入缩略图后，360×640 的机器上不溢出', (WidgetTester tester) async {
-      // 真机是 1080×1920 / 密度 480，即 360×640dp。加缩略图要占 121dp，
-      // 靠让渡别处的间距才装得下——所以这条用例量的是余量，不是能不能跑。
-      // 溢出在测试里会直接抛 FlutterError，pumpWidget 就会失败。
+    testWidgets('整页铺满地图后，360×640 的机器上不溢出', (WidgetTester tester) async {
+      // 真机是 1080×1920 / 密度 480，即 360×640dp。地图从一条 120dp 的缩略图
+      // 变成整页底，读数与按钮改成浮层叠在上面，上下两块加起来约 432dp，
+      // 中间仍留出看路窗口。溢出在测试里会直接抛 FlutterError，pumpWidget 就会失败。
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -283,11 +287,130 @@ void main() {
       expect(speed.style!.fontSize, HandlebarView.primaryFontSize);
     });
 
+    testWidgets('地图铺满整页，读数面板浮在它上面', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(wrap(handlebar(active)));
+      await tester.pump();
+
+      // 「全屏」是可断言的：地图容器与整页同尺寸，而不是某一条高度。
+      final Size page = tester.getSize(find.byType(HandlebarView));
+      final Size map = tester.getSize(find.byKey(const Key('live-route-map')));
+      expect(map, page);
+
+      // 浮层在竖直方向上落在地图范围内：上块贴顶、下块贴底，中间那块空出来。
+      final Rect top = tester.getRect(find.text('距离'));
+      final Rect bottom = tester.getRect(find.widgetWithText(FilledButton, '暂停'));
+      expect(top.top, lessThan(page.height * 0.35));
+      expect(bottom.bottom, greaterThan(page.height * 0.8));
+    });
+
+    testWidgets('每一项读数都在：距离 / 时长 / 海拔 / 爬升 / 心率 / 踏频 / 功率',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
+
+      expect(find.text('距离'), findsOneWidget);
+      expect(find.text('1.23 km'), findsOneWidget);
+      expect(find.text('时长'), findsOneWidget);
+      expect(find.text('01:30'), findsOneWidget);
+      expect(find.text('海拔'), findsOneWidget);
+      expect(find.text('128 m'), findsOneWidget);
+      expect(find.text('爬升'), findsOneWidget);
+      expect(find.text('342 m'), findsOneWidget);
+    });
+
+    testWidgets('设备不给高程时海拔是「--」，爬升仍是具体读数',
+        (WidgetTester tester) async {
+      // 0 米海拔是一个具体读数，会和「没有数据」混起来；爬升则永远有值
+      // （平路就是 0 米），所以两者不用同一种占位策略。
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+        distanceM: 1234.0,
+        hrConnected: true,
+        cadenceConnected: true,
+        powerConnected: true,
+      ))));
+
+      expect(find.text('1.23 km'), findsOneWidget);
+      expect(find.text('0 m'), findsOneWidget, reason: '爬升平路就是 0 米');
+      // 海拔加上三格传感器（有连接但还没读数）一共四个「--」。
+      expect(find.text('--'), findsNWidgets(4));
+    });
+
+    testWidgets('来提示时横幅浮在地图可见带里，不挤压上下两块', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
+      final Rect before = tester.getRect(find.text('距离'));
+
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 90000,
+        distanceM: 1234.0,
+        currentSpeedMps: 6.0,
+        lastCue: LapCue(lapKm: 3, durationS: 167, avgSpeedMps: 5.98),
+        cueSeq: 1,
+      ))));
+      await tester.pump();
+
+      // 第 3 公里：均速 21.5 km/h（5.98 m/s 换算），耗时 02:47。
+      expect(find.text('第 3 公里 · 均速 21.5 km/h · 耗时 02:47'), findsOneWidget);
+      // 横幅是浮层：它的出现不能让上半块挪位置，否则每闪一次整页都在跳。
+      expect(tester.getRect(find.text('距离')), before);
+
+      // 到点自己收回，不需要用户操作（它是事件通知，不是常驻读数）。
+      await tester.pump(const Duration(seconds: 6));
+      expect(find.text('第 3 公里 · 均速 21.5 km/h · 耗时 02:47'), findsNothing);
+    });
+
+    testWidgets('每秒的界面刷新不会把横幅的倒计时清零', (WidgetTester tester) async {
+      RecordState withCue(int seq) => RecordState(
+            rideId: 1,
+            phase: RecordingPhase.recording,
+            elapsedMs: 90000,
+            distanceM: 1234.0,
+            currentSpeedMps: 6.0,
+            lastCue: const DistanceCue(10),
+            cueSeq: seq,
+          );
+
+      await tester.pumpWidget(wrap(handlebar(withCue(1))));
+      await tester.pump(const Duration(seconds: 3));
+      // 同一条提示（seq 不变）继续重建：还剩 2 秒，不能重新计时。
+      await tester.pumpWidget(wrap(handlebar(withCue(1))));
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(find.text('已骑行 10 公里'), findsNothing, reason: '总时长 6 秒已超过 5 秒');
+    });
+
+    testWidgets('新提示重置计时，同一句也会重新展示', (WidgetTester tester) async {
+      RecordState withCue(int seq) => RecordState(
+            rideId: 1,
+            phase: RecordingPhase.recording,
+            elapsedMs: 90000,
+            distanceM: 1234.0,
+            currentSpeedMps: 6.0,
+            lastCue: const DistanceCue(10),
+            cueSeq: seq,
+          );
+
+      await tester.pumpWidget(wrap(handlebar(withCue(1))));
+      await tester.pump(const Duration(seconds: 3));
+      // seq 变了＝来了一条新提示。两次「已骑行 10 公里」对象相等，只看 cue
+      // 是分不出新旧来的。
+      await tester.pumpWidget(wrap(handlebar(withCue(2))));
+
+      expect(find.text('已骑行 10 公里'), findsOneWidget);
+    });
+
     testWidgets('未开始态再挤进一条阻断类错误，360×640 上仍不溢出',
         (WidgetTester tester) async {
-      // 畸形的最紧一屏：未开始（主按钮 + 状态条）+ 缩略图 + 三传感器指标格，
-      // 外加一条定位于「开始」失败的提示。这一条量的是主数字外面那层
-      // Flexible + FittedBox：多余的高度从它身上扣，而不是让整页溢出。
+      // 畸形的最紧一屏：未开始（主按钮 + 状态条）+ 上下两块浮层 + 三传感器
+      // 指标格，外加一条定位于「开始」失败的提示。这一条量的是上下两块浮层
+      // 之外的余量：多出来的高度从中间那条看路窗口里扣，而不是让整页溢出。
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -329,8 +452,8 @@ void main() {
       // 否则会被当成功率计的读数。
       expect(find.text('功率（估算）'), findsOneWidget);
       expect(find.text('功率'), findsNothing);
-      // 距离、时长、心率、踏频、功率五项都没数据，全是占位符。
-      expect(find.text('--'), findsNWidgets(3));
+      // 心率、踏频、功率三格没数据，加上没高程数据的海拔，一共四个占位符。
+      expect(find.text('--'), findsNWidgets(4));
       expect(find.text('0'), findsNothing);
     });
 
@@ -395,7 +518,7 @@ void main() {
       expect(find.byTooltip('功率计未连接，点击连接'), findsNothing);
     });
 
-    testWidgets('没有定位点时缩略图占位，不渲染地图', (WidgetTester tester) async {
+    testWidgets('没有定位点时地图整页占位，不渲染地图', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(handlebar(active)));
 
       expect(find.byKey(const Key('live-route-map')), findsOneWidget);
@@ -403,7 +526,7 @@ void main() {
       expect(find.byType(FlutterMap), findsNothing);
     });
 
-    testWidgets('有定位点时缩略图真的把轨迹画出来', (WidgetTester tester) async {
+    testWidgets('有定位点时地图真的把轨迹画出来', (WidgetTester tester) async {
       // 两点之间要够远，才不会被抽稀规则丢掉（见 kLiveTrackMinDistanceM）。
       final List<TrackPoint> track = <TrackPoint>[
         const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),

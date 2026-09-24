@@ -3,6 +3,8 @@ import '../analysis/geo.dart';
 import '../analysis/power.dart';
 import '../models/location_fix.dart';
 import '../models/track_point.dart';
+import 'cue_detector.dart';
+import 'ride_cue.dart';
 import 'track_point_filter.dart';
 import 'write_buffer.dart';
 
@@ -23,6 +25,8 @@ class RecordingSnapshot {
     required this.cadence,
     required this.power,
     required this.pointCount,
+    this.currentAltitudeM,
+    this.elevationGainM = 0,
   });
 
   final RecordingPhase phase;
@@ -42,6 +46,13 @@ class RecordingSnapshot {
   /// 已写入的点数（含仍在缓冲中、尚未提交事务的点）。
   final int pointCount;
 
+  /// 最近一次可信定位的海拔（米）。设备不给高程、或还没有定位时为 null。
+  final double? currentAltitudeM;
+
+  /// 本次骑行到此刻为止的累计爬升（米）。口径与结算时的 `elevationGainOf` 一致
+  /// （同样剔除跳变点、同样只累加超过阈值的上升），见设计文档 8.1。
+  final double elevationGainM;
+
   int get elapsedSeconds => elapsedMs ~/ 1000;
 }
 
@@ -60,12 +71,18 @@ class RecordingSession {
     required this.startedAtMs,
     int initialElapsedMs = 0,
     double initialDistanceM = 0,
+    double initialElevationGainM = 0,
     TrackPoint? lastWritten,
     int? resumedAtMs,
     this.weightKg = kDefaultRiderWeightKg,
     List<TrackPoint> recentTrack = const <TrackPoint>[],
   })  : _elapsedMs = initialElapsedMs,
         _distanceM = initialDistanceM,
+        _elevationGainM = initialElevationGainM,
+        _cueDetector = CueDetector(
+          initialDistanceM: initialDistanceM,
+          initialElapsedMs: initialElapsedMs,
+        ),
         _lastWritten = lastWritten,
         _lastTickMs = resumedAtMs ?? startedAtMs,
         _lastWrittenMs = lastWritten?.tMs ?? startedAtMs {
@@ -98,15 +115,29 @@ class RecordingSession {
   TrackPoint? _lastWritten;
   int _pointCount = 0;
 
-  /// 实时轨迹，供骑行界面的缩略图使用。见设计文档 9.4。
+  /// 累计爬升（米）。口径与 `analysis/elevation.dart` 的 `elevationGainOf` 一致：
+  /// 只累加超过 [kElevationGainThresholdM] 的上升，只认可信的高程点。
+  double _elevationGainM = 0;
+
+  /// 爬升累加的基准高程（米）。见 [_trackElevation]：小幅波动不推进它，因此
+  /// 缓慢但持续的爬坡能累积，上下抖动不会。
+  double? _elevationBaselineM;
+
+  /// 最近一次可信定位的海拔（米），实时海拔读数取它。
+  double? _currentAltitudeM;
+
+  /// 上一个可信高程点，作为爬升累加的基准。跳变点**不**更新它——否则一个飞掉的
+  /// 高程值会被当成新基准，后面再也判不出异常。
+  double? _lastPlausibleAltM;
+
+  /// 提示判据。见设计文档 10.1，逻辑在 `cue_detector.dart`。
   ///
-  /// 与落盘那批点是两回事：落盘按 5m / 2s 记，一张 120pt 高的缩略图铺不下几千
-  /// 个点，也不需要那么密。这里按 [kLiveTrackMinDistanceM] /
-  /// [kLiveTrackMaxIntervalMs] 抽稀，超过 [kLiveTrackMaxPoints] 时折半压缩。
-  ///
-  /// **永不原地改动已经交出去的列表**：压缩时换一个新的列表对象，界面才能用
-  /// `identical` 判断「轨迹到底变没变」，不必每秒重算折线（见 `LiveRouteMap`）。
-  List<TrackPoint> _liveTrack = const <TrackPoint>[];
+  /// 崩溃恢复时按已落盘的基线播种（[initialDistanceM] / [initialElapsedMs]），
+  /// 否则续写一个骑了 12 公里的会话，第一拍会把 1~12 公里逐条补报一遍。
+  final CueDetector _cueDetector;
+
+  /// 已判定但还没被取走的提示。
+  final List<RideCue> _pendingCues = <RideCue>[];
 
   /// 拟合坡度用的近期样点：(定位时间, 累计距离, 高程)。只保留窗口内的。
   final List<({int tMs, double distanceM, double altitudeM})> _gradeSamples =
@@ -116,6 +147,24 @@ class RecordingSession {
 
   /// 本次骑行到此刻为止的轨迹（已抽稀）。见设计文档 9.4。
   List<TrackPoint> get liveTrack => _liveTrack;
+
+  /// 取出并清空这一拍新产生的提示。调用方负责播报与展示。
+  List<RideCue> takeCues() {
+    if (_pendingCues.isEmpty) return const <RideCue>[];
+    final List<RideCue> out = List<RideCue>.of(_pendingCues);
+    _pendingCues.clear();
+    return out;
+  }
+
+  /// 实时轨迹，供骑行界面的缩略图使用。见设计文档 9.4。
+  ///
+  /// 与落盘那批点是两回事：落盘按 5m / 2s 记，一张 120pt 高的缩略图铺不下几千
+  /// 个点，也不需要那么密。这里按 [kLiveTrackMinDistanceM] /
+  /// [kLiveTrackMaxIntervalMs] 抽稀，超过 [kLiveTrackMaxPoints] 时折半压缩。
+  ///
+  /// **永不原地改动已经交出去的列表**：压缩时换一个新的列表对象，界面才能用
+  /// `identical` 判断「轨迹到底变没变」，不必每秒重算折线（见 `LiveRouteMap`）。
+  List<TrackPoint> _liveTrack = const <TrackPoint>[];
 
   /// 落盘与读数共用的功率：接了功率计用实测值，否则用估算值。
   int? get _effectivePower => _power ?? _estimatedPower;
@@ -132,6 +181,8 @@ class RecordingSession {
         cadence: _cadence?.round(),
         power: _effectivePower,
         pointCount: _pointCount,
+        currentAltitudeM: _currentAltitudeM,
+        elevationGainM: _elevationGainM,
       );
 
   /// 取出并清空待落盘的点。返回非空列表时调用方应写库。
@@ -159,6 +210,7 @@ class RecordingSession {
 
     _lastFix = fix;
     _trackGradeSample(fix);
+    _trackElevation(fix, segmentM);
     _estimatedPower = _estimatePower();
 
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
@@ -201,6 +253,46 @@ class RecordingSession {
     ).round();
   }
 
+  /// 更新实时海拔与累计爬升。
+  ///
+  /// 口径刻意与结算时的 `elevationGainOf` 对齐（见设计文档 8.1）：都是
+  /// 「剔除不可信的高程点 → 滞回累加超过 [kElevationGainThresholdM] 的上升」。
+  /// 差别只有一个——结算先用 5 点中值滤波，实时读数不做滤波（滤波窗口要有未来
+  /// 样点，实时给不出），因此骑行中的爬升读数会比结算值略毛一点，量级一致。
+  ///
+  /// 滞回是拿当前值与**基准**比，而不是与上一个点比：缓坡每步只升 0.6 米，
+  /// 逐步比较永远够不到 1 米的阈值，几十公里的爬坡会被整段丢掉。
+  ///
+  /// [segmentM] 是与上一个定位点之间的水平位移，用来判跳变是否物理上成立。
+  void _trackElevation(LocationFix fix, double segmentM) {
+    final double? altitude = fix.altitudeM;
+    if (altitude == null) return;
+
+    final double? prev = _lastPlausibleAltM;
+    if (prev != null) {
+      final double change = altitude - prev;
+      final bool implausible = change.abs() >= kSuspectElevationJumpM &&
+          (segmentM <= 0 || change.abs() / segmentM > kMaxPlausibleGrade);
+      if (implausible) return;
+    }
+
+    _lastPlausibleAltM = altitude;
+    _currentAltitudeM = altitude;
+
+    final double? baseline = _elevationBaselineM;
+    if (baseline == null) {
+      _elevationBaselineM = altitude;
+      return;
+    }
+    final double delta = altitude - baseline;
+    if (delta >= kElevationGainThresholdM) {
+      _elevationGainM += delta;
+      _elevationBaselineM = altitude;
+    } else if (delta <= -kElevationGainThresholdM) {
+      _elevationBaselineM = altitude;
+    }
+  }
+
   /// 接收一次心率采样（bpm）。
   void ingestHeartRate(int bpm) => _hr = bpm;
 
@@ -216,6 +308,20 @@ class RecordingSession {
     _advanceElapsed(nowMs);
     _decaySpeed(nowMs);
     _writeSensorOnlyPointIfNeeded(nowMs);
+    _collectCues();
+  }
+
+  /// 按当前距离 / 时长 / 速度判定该不该提示。见设计文档 10.1。
+  ///
+  /// 挂在 1Hz 的 [tick] 上而不是每次定位上：提示是「到点了」的事件，不是逐点
+  /// 计算，一秒一次的粒度足够，也让判据与界面刷新同一节拍、测试可确定。
+  void _collectCues() {
+    if (_phase != RecordingPhase.recording) return;
+    _pendingCues.addAll(_cueDetector.update(
+      distanceM: _distanceM,
+      elapsedMs: _elapsedMs,
+      speedMps: _currentSpeedMps,
+    ));
   }
 
   /// 暂停采样。暂停期间不产生轨迹点，时长也不增长。

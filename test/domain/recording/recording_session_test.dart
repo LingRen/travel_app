@@ -1,6 +1,8 @@
+import 'package:cycling_app/domain/analysis/elevation.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
+import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -357,6 +359,134 @@ void main() {
       expect(s.finish(0).length, 1);
       expect(s.finish(1000), isEmpty);
       expect(s.snapshot.elapsedMs, 0);
+    });
+  });
+
+  group('RecordingSession 实时海拔与爬升', () {
+    test('实时海拔取最近一次可信定位的高程', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      expect(s.snapshot.currentAltitudeM, isNull, reason: '还没有定位点');
+
+      s.ingestFix(fixAt(0, altitudeM: 100));
+      expect(s.snapshot.currentAltitudeM, 100);
+
+      // 约 11 米水平位移配 3 米上升，坡度 0.27，是缓坡。
+      s.ingestFix(fixAt(1000, lat: 31.0001, altitudeM: 103));
+      expect(s.snapshot.currentAltitudeM, 103);
+    });
+
+    test('设备不给高程时不把读数抹成 null', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, altitudeM: 100));
+      s.ingestFix(fixAt(1000, lat: 31.0001));
+
+      expect(s.snapshot.currentAltitudeM, 100);
+      expect(s.snapshot.elevationGainM, 0);
+    });
+
+    test('累计爬升只加超过阈值的上升', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, altitudeM: 100));
+      // 升 0.5 米在阈值内，属于高程噪声抖动，不推进基准也不计入。
+      s.ingestFix(fixAt(1000, lat: 31.0001, altitudeM: 100.5));
+      expect(s.snapshot.elevationGainM, 0);
+
+      // 再升 0.6 米，距基准累计 1.1 米跨过阈值：整段计入，而不是只计入溢出的
+      // 0.1 米——滞回的目的是让缓坡能累积，不是把缓坡切碎。
+      s.ingestFix(fixAt(2000, lat: 31.0002, altitudeM: 101.1));
+      expect(s.snapshot.elevationGainM, closeTo(1.1, 1e-9));
+    });
+
+    test('下降不增加爬升，下降超过阈值后基准随之下移', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 每步约 44 米水平位移，让 10 米的变化落在合理坡度内（10 / 44 ≈ 0.23）；
+      // 换成 11 米一步的话坡度接近 1，会被判成高程跳变而剔掉。步长 5 秒是必须的：
+      // 44 米走 1 秒等于 44 m/s，超过合理速度上限，位移本身会被当成跳变丢掉。
+      s.ingestFix(fixAt(0, altitudeM: 100));
+      s.ingestFix(fixAt(5000, lat: 31.0004, altitudeM: 90));
+      expect(s.snapshot.elevationGainM, 0, reason: '下降不计入爬升');
+
+      // 基准已经下移到 90：从 90 爬回 100 是真实的 10 米爬升，不是「回到原点」。
+      s.ingestFix(fixAt(10000, lat: 31.0008, altitudeM: 100));
+      expect(s.snapshot.elevationGainM, closeTo(10, 1e-9));
+    });
+
+    test('高程跳变不计入爬升，也不污染基准', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, altitudeM: 100));
+      // 只挪了约 11 米却「升高」60 米，坡度 5.4 物理上不成立。
+      s.ingestFix(fixAt(1000, lat: 31.0001, altitudeM: 160));
+
+      expect(s.snapshot.currentAltitudeM, 100, reason: '不可信的高程不进读数');
+      expect(s.snapshot.elevationGainM, 0);
+
+      // 关键：跳变点没有推进基准。若推进了，下一个真实高程会被当成大幅下降。
+      s.ingestFix(fixAt(2000, lat: 31.0002, altitudeM: 102));
+      expect(s.snapshot.currentAltitudeM, 102);
+      expect(s.snapshot.elevationGainM, closeTo(2, 1e-9));
+    });
+
+    test('与结算口径一致：一条缓坡在实时读数与结算值上给出同一个爬升', () {
+      // 结算走「剔除跳变 → 中值滤波 → 滞回累加」，实时不做中值滤波。对一条单调
+      // 缓坡来说中值滤波不改变数值，因此两者必须一致——这一条守的是「同一趟骑行
+      // 在结算前后不能出现两个爬升数」。取 4.8 而不是全程 5.4 米，是因为滞回基准
+      // 只在跨过阈值时推进：最后那 0.6 米还没够到一个新基准，两侧都不计。
+      const int steps = 10;
+      final List<TrackPoint> points = <TrackPoint>[];
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+
+      for (int i = 0; i < steps; i++) {
+        final double alt = 100 + i * 0.6;
+        // 44 米一步、5 秒一步 ≈ 8.9 m/s，落在合理速度内。
+        s.ingestFix(fixAt(i * 5000, lat: 31.0 + i * 0.0004, altitudeM: alt));
+        points.add(TrackPoint(
+          rideId: 1,
+          tMs: i * 5000,
+          lat: 31.0 + i * 0.0004,
+          lon: 121.0,
+          altitudeM: alt,
+        ));
+      }
+
+      expect(s.snapshot.elevationGainM, closeTo(4.8, 1e-9));
+      expect(s.snapshot.elevationGainM, closeTo(elevationGainOf(points), 1e-9));
+    });
+  });
+
+  group('RecordingSession 骑行中的提示', () {
+    test('tick 产出提示，takeCues 取走后不再重复', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 12 m/s = 43.2 km/h，跨进 40 档。报的是实际速度。
+      s.ingestFix(fixAt(0, speedMps: 12.0));
+
+      s.tick(1000);
+      final List<RideCue> cues = s.takeCues();
+      expect(cues.whereType<SpeedCue>().single.kmh, closeTo(43.2, 1e-9));
+
+      s.tick(2000);
+      expect(s.takeCues(), isEmpty, reason: '取走后不能重放，同一档也只报一次');
+    });
+
+    test('暂停期间不产生提示', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 12.0));
+      s.pause(1000);
+      s.tick(2000);
+
+      expect(s.takeCues(), isEmpty);
+    });
+
+    test('崩溃恢复后不补报已经骑过的整公里', () {
+      final RecordingSession s = RecordingSession(
+        rideId: 1,
+        startedAtMs: 0,
+        resumedAtMs: 0,
+        initialDistanceM: 12500,
+        initialElapsedMs: 3600000,
+      );
+      s.tick(1000);
+
+      expect(s.takeCues(), isEmpty);
     });
   });
 }

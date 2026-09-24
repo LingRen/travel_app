@@ -6,13 +6,16 @@ import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/ride_repository.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
+import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
+import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
+import 'package:cycling_app/features/record/ride_cue_player.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Override 在 riverpod 3 里只从 misc 入口导出。
@@ -246,6 +249,27 @@ _FakeCharacteristic _hrCharacteristic() => _FakeCharacteristic(
 _FakeCharacteristic _cpsCharacteristic() =>
     _FakeCharacteristic(serviceUuid: '1818', uuid: '2a63');
 
+/// 假提示播报器：不碰 TTS，只记录收到的批次与单位。
+///
+/// 播报真的会出声，widget 测试里必须换成假的。这里同时收着 [RideCue] 的原文，
+/// 方便断言控制器把 session 判定出来的提示原样交到播报出口。
+class _FakeRideCuePlayer implements RideCuePlayer {
+  final List<List<RideCue>> spokenBatches = <List<RideCue>>[];
+  final List<DistanceUnit> spokenUnits = <DistanceUnit>[];
+  int disposeCalls = 0;
+
+  @override
+  Future<void> speak(List<RideCue> cues, DistanceUnit unit) async {
+    spokenBatches.add(cues);
+    spokenUnits.add(unit);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+  }
+}
+
 /// 组装一帧骑行功率数据：flags=0x0000 + sint16 小端瞬时功率。
 List<int> _cpsFrame(int watts) => <int>[
       0x00,
@@ -257,19 +281,24 @@ List<int> _cpsFrame(int watts) => <int>[
 void main() {
   late _FakeRideRepository repo;
   late _FakeLocationService location;
+  late _FakeRideCuePlayer cuePlayer;
   late int clockMs;
 
   setUp(() {
     repo = _FakeRideRepository();
     location = _FakeLocationService();
+    cuePlayer = _FakeRideCuePlayer();
     clockMs = 1000;
   });
 
-  /// 只替换 IO 边界的容器：假仓储、假定位、假时钟、假配对、假 BLE 平台。
+  /// 只替换 IO 边界的容器：假仓储、假定位、假时钟、假配对、假 BLE 平台、假播报器。
   ///
   /// BLE 平台默认也给假的：真实实现会走平台通道，`testWidgets` 的 FakeAsync 下
   /// 那个 await 永远不返回（`.timeout` 的定时器也是假的，不 pump 就不触发），
   /// 会把用例挂死。默认假平台找不到任何设备，即「没有配对」。
+  ///
+  /// 播报器一律换假的：真实实现走 flutter_tts 的平台通道，测试里既不该出声，
+  /// 也不该依赖设备上装没装中文语音包。
   ProviderContainer makeContainer({
     _FakeSensorPairing? pairing,
     BlePlatform? platform,
@@ -281,6 +310,7 @@ void main() {
         locationServiceProvider.overrideWithValue(location),
         nowProvider.overrideWithValue(() => clockMs),
         sensorPairingProvider.overrideWithValue(sensorPairing),
+        rideCuePlayerProvider.overrideWithValue(cuePlayer),
         blePlatformProvider.overrideWithValue(
           platform ?? _FakeBlePlatform(const <String, BleDeviceHandle>{}),
         ),
@@ -291,9 +321,18 @@ void main() {
   /// 推入一个定位点，并把假时钟与 1Hz 节拍一起推进 1 秒。
   ///
   /// 纬度每 0.0001 度约 11.13 米，足以触发「距离 ≥5m」的写入条件。
-  Future<void> rideOneSecond(WidgetTester tester, {required double lat}) async {
+  Future<void> rideOneSecond(
+    WidgetTester tester, {
+    required double lat,
+    double? speedMps,
+  }) async {
     clockMs += 1000;
-    location.emit(LocationFix(tMs: clockMs, lat: lat, lon: 121.0));
+    location.emit(LocationFix(
+      tMs: clockMs,
+      lat: lat,
+      lon: 121.0,
+      speedMps: speedMps,
+    ));
     await tester.pump(const Duration(seconds: 1));
   }
 
@@ -787,6 +826,77 @@ void main() {
 
     expect(pairing.stored[SensorKind.heartRate]!.id, 'AA:01');
     expect(pairing.stored[SensorKind.heartRate]!.name, 'FIT 3');
+    container.dispose();
+  });
+
+  testWidgets('骑行提示写入状态并交给播报器念出来', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    // 12 m/s = 43.2 km/h，向上跨过 40 档。报的是实际速度 43.2，不是档位下沿。
+    await rideOneSecond(tester, lat: 31.0, speedMps: 12.0);
+
+    final RecordState state = container.read(recordControllerProvider);
+    expect(state.cueSeq, 1);
+    final RideCue? cue = state.lastCue;
+    expect(cue, isA<SpeedCue>());
+    expect((cue! as SpeedCue).kmh, closeTo(43.2, 1e-9));
+
+    expect(cuePlayer.spokenBatches.length, 1);
+    expect(cuePlayer.spokenBatches.single.single, cue);
+    expect(cuePlayer.spokenUnits.single, DistanceUnit.kilometer);
+    container.dispose();
+  });
+
+  testWidgets('同一速档的后续节拍不重复播报', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    await rideOneSecond(tester, lat: 31.0, speedMps: 12.0);
+    await rideOneSecond(tester, lat: 31.0001, speedMps: 12.2);
+    await rideOneSecond(tester, lat: 31.0002, speedMps: 12.4);
+
+    expect(
+      container.read(recordControllerProvider).cueSeq,
+      1,
+      reason: '还在 40 档里，插话只会变成噪音',
+    );
+    expect(cuePlayer.spokenBatches.length, 1);
+    container.dispose();
+  });
+
+  testWidgets('熄屏进后台时照常播报，但不重建界面状态', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    // 7.2 km/h，落在 0 档，先不产生提示。
+    await rideOneSecond(tester, lat: 31.0, speedMps: 2.0);
+    expect(cuePlayer.spokenBatches, isEmpty);
+
+    controller.handleLifecycle(AppLifecycleState.paused);
+    final int backgroundElapsedMs =
+        container.read(recordControllerProvider).elapsedMs;
+
+    // 熄屏放口袋里跨过一次速档：屏内横幅看不见，语音必须照念。
+    await rideOneSecond(tester, lat: 31.0001, speedMps: 12.0);
+
+    expect(
+      cuePlayer.spokenBatches.length,
+      1,
+      reason: '选语音播报的全部理由就是熄屏场景，后台不播等于没做',
+    );
+    expect(cuePlayer.spokenBatches.single.single, isA<SpeedCue>());
+    expect(
+      container.read(recordControllerProvider).elapsedMs,
+      backgroundElapsedMs,
+      reason: '后台仍不重建界面状态，读数回到前台时再补',
+    );
     container.dispose();
   });
 }

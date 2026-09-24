@@ -97,3 +97,16 @@ double elevationGainMeters(List<double?> filtered, double thresholdM) {
   }
   return gain;
 }
+
+/// 从整条轨迹算总爬升（米）。
+///
+/// 「剔除不可信点 → 中值滤波 → 滞回累加」这三步是一条固定口径，汇总（`summary.dart`）
+/// 与崩溃恢复（`RecordController.resumeExisting`）都必须走同一条，否则同一趟骑行
+/// 在结算前后会给出两个爬升数。见设计文档 8.1。
+double elevationGainOf(List<TrackPoint> points) => elevationGainMeters(
+      medianFilterElevation(
+        plausibleElevationSeries(points),
+        kElevationFilterWindow,
+      ),
+      kElevationGainThresholdM,
+    );

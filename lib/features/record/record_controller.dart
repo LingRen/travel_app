@@ -11,12 +11,15 @@ import '../../data/ride_repository.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/constants.dart';
+import '../../domain/analysis/elevation.dart';
 import '../../domain/analysis/geo.dart';
 import '../../domain/models/location_fix.dart';
 import '../../domain/models/ride.dart';
 import '../../domain/models/ride_status.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/recording/recording_session.dart';
+import '../../domain/recording/ride_cue.dart';
+import 'ride_cue_player.dart';
 
 /// 记录页的界面状态。
 class RecordState {
@@ -36,6 +39,10 @@ class RecordState {
     this.gpsWeak = false,
     this.errorMessage,
     this.liveTrack = const <TrackPoint>[],
+    this.currentAltitudeM,
+    this.elevationGainM = 0,
+    this.lastCue,
+    this.cueSeq = 0,
   });
 
   final int? rideId;
@@ -69,6 +76,21 @@ class RecordState {
   /// 拷贝），而那个列表只在真正追加或压缩时换新对象——所以界面可以靠
   /// `identical` 判断轨迹有没有变，不必每秒重算折线。
   final List<TrackPoint> liveTrack;
+
+  /// 最近一次可信定位的海拔（米）。没有高程数据时为 null，界面显示 `--`。
+  final double? currentAltitudeM;
+
+  /// 本次骑行到此刻为止的累计爬升（米）。见设计文档 8.1 与 10.1。
+  final double elevationGainM;
+
+  /// 最近一条提示（每 1 公里 / 每 10 公里 / 速度跨档），供浮层横幅展示。
+  ///
+  /// 取走后不置空：横幅自己按 [cueSeq] 判断「来没来新的一条」。置空反而会让
+  /// 横幅在消失时把已经建好的子树拆掉，闪一下。
+  final RideCue? lastCue;
+
+  /// 提示序号，每产生一条新提示 +1。同一句提示重复出现时靠它重新计时。
+  final int cueSeq;
 
   bool get isActive =>
       phase == RecordingPhase.recording || phase == RecordingPhase.paused;
@@ -109,12 +131,19 @@ class RecordController extends Notifier<RecordState> {
 
   BlePlatform get _blePlatform => ref.read(blePlatformProvider);
 
+  /// 提示播报出口。每次现取，测试里覆盖 provider 就能换成假实现。
+  RideCuePlayer get _cuePlayer => ref.read(rideCuePlayerProvider);
+
   int? _rideId;
   bool _finished = false;
   int _lastFixMs = 0;
   int _writeFailures = 0;
   String? _error;
   Future<void>? _pendingWrite;
+
+  /// 最近一条提示与它的序号，见 [RecordState.lastCue] / [RecordState.cueSeq]。
+  RideCue? _lastCue;
+  int _cueSeq = 0;
 
   /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
   bool _foreground = true;
@@ -202,6 +231,9 @@ class RecordController extends Notifier<RecordState> {
           ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg,
       initialElapsedMs: elapsedMs,
       initialDistanceM: distanceM,
+      // 爬升也按已落盘的点补算，与结算走同一条口径。不补的话续写期间「爬升」
+      // 会从 0 重新长起来，屏幕上直接掉一截。
+      initialElevationGainM: elevationGainOf(points),
       lastWritten: points.isEmpty ? null : points.last,
       recentTrack: points,
       // 计时从「恢复这一刻」继续：startedAtMs 可能在几小时前，而崩溃到重启
@@ -266,6 +298,8 @@ class RecordController extends Notifier<RecordState> {
     _writeFailures = 0;
     _lastFixMs = 0;
     _lastBackgroundFlushMs = 0;
+    _lastCue = null;
+    _cueSeq = 0;
     state = RecordState(foreground: _foreground);
   }
 
@@ -331,6 +365,8 @@ class RecordController extends Notifier<RecordState> {
     if (session == null || _finished) return;
     session.tick(_now());
 
+    _drainCues(session);
+
     if (_foreground) {
       _publish();
       unawaited(_flush());
@@ -345,6 +381,23 @@ class RecordController extends Notifier<RecordState> {
       unawaited(_flush(force: true));
     }
   }
+
+  /// 取走这一拍判定出来的提示并播报。
+  ///
+  /// **刻意与前台判断解耦**：熄屏放口袋时界面不重建，但语音必须照常念出来——
+  /// 选语音播报的全部理由就是这种场景。只在亮屏时播报等于这个功能没做。
+  void _drainCues(RecordingSession session) {
+    final List<RideCue> cues = session.takeCues();
+    if (cues.isEmpty) return;
+    _cueSeq++;
+    _lastCue = cues.last;
+    unawaited(_cuePlayer.speak(cues, _distanceUnit));
+  }
+
+  /// 提示播报用的单位。设置读不出来时按公里（与界面同一套兜底）。
+  DistanceUnit get _distanceUnit =>
+      ref.read(appSettingsProvider).value?.distanceUnit ??
+      DistanceUnit.kilometer;
 
   void _onSensorReading(SensorKind kind, num value) {
     final RecordingSession? session = _session;
@@ -457,6 +510,10 @@ class RecordController extends Notifier<RecordState> {
       errorMessage: _error,
       // 直接透传引用，不拷贝：见 RecordState.liveTrack 的说明。
       liveTrack: session?.liveTrack ?? const <TrackPoint>[],
+      currentAltitudeM: snap?.currentAltitudeM,
+      elevationGainM: snap?.elevationGainM ?? 0,
+      lastCue: _lastCue,
+      cueSeq: _cueSeq,
     );
   }
 

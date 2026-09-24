@@ -7,23 +7,25 @@ import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/track_point.dart';
 
-/// 骑行界面里的实时轨迹缩略图。见设计文档 9.4。
+/// 骑行界面里的实时轨迹地图。见设计文档 9.4。
 ///
 /// 与详情页的 [RouteMap] 是两回事，所以没有复用它：
 ///   - 详情页的地图是一次性画完的，用 `initialCameraFit` 定死取景就够；
 ///   - 这里轨迹在骑行中一直长，必须自己拿 [MapController] 决定「什么时候重新
-///     取景」。120pt 高的条上每秒重新缩放一次，看起来就是整张图在抖。
+///     取景」。每秒重新缩放一次，看起来就是整张图在抖。
 ///
 /// 复用它的**纯部分**：`buildRouteSegments` 的分段着色与断点规则、`TileLayer` /
 /// `PolylineLayer` 的画法、坐标转换口径（跟随瓦片源决定是否转 GCJ-02）。
 ///
-/// 不可交互：骑行中这根条不该吃掉手指，页面上的两个大按钮才是手势目标。
+/// 不可交互：骑行中它不该吃掉手指，页面上的按钮才是手势目标。地图现在铺满整页
+/// （[height] 为 null），读数与按钮浮在它上方（见 10.1）。
 class LiveRouteMap extends StatefulWidget {
   const LiveRouteMap({
     required this.points,
     required this.tileUrlTemplate,
     this.subdomains = const <String>[],
-    this.height = 120,
+    this.height,
+    this.placeholderAlignment = Alignment.center,
     super.key,
   });
 
@@ -35,7 +37,13 @@ class LiveRouteMap extends StatefulWidget {
   final String tileUrlTemplate;
 
   final List<String> subdomains;
-  final double height;
+
+  /// 地图高度。null 表示铺满父级给的约束（骑行界面把它当整页背景）。
+  final double? height;
+
+  ///「等待定位…」占位文案的位置。铺满整页时浮层会盖住正中，占位要挪到露出的
+  /// 那一条带上，否则用户看不到任何提示。
+  final AlignmentGeometry placeholderAlignment;
 
   @override
   State<LiveRouteMap> createState() => _LiveRouteMapState();
@@ -145,8 +153,9 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
         child: _polylines.isEmpty ? _placeholder() : _map(),
       );
 
-  Widget _placeholder() => const Center(
-        child: Text('等待定位…', style: kLabelTextStyle),
+  Widget _placeholder() => Align(
+        alignment: widget.placeholderAlignment,
+        child: const Text('等待定位…', style: kLabelTextStyle),
       );
 
   Widget _map() => FlutterMap(

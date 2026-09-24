@@ -24,10 +24,7 @@ RideSummary computeSummary({
 
   final MovingStats moving = splitMovingStationary(points, kStationarySpeedMps);
 
-  final double elevationGainM = elevationGainMeters(
-    medianFilterElevation(plausibleElevationSeries(points), kElevationFilterWindow),
-    kElevationGainThresholdM,
-  );
+  final double elevationGainM = elevationGainOf(points);
 
   final double? maxSpeedMps = maxSmoothedSpeed(
     <double?>[for (final TrackPoint p in points) p.speedMps],
