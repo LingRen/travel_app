@@ -25,7 +25,7 @@ class CurveSample {
 
 /// 把轨迹点整理成图表可用的曲线序列。
 ///
-/// - 速度曲线先做 [kSpeedFilterWindow] 点滑动平均：GPS 瞬时速度毛刺严重，
+/// - 速度曲线先做 [kSpeedCurveFilterWindow] 点滑动平均：GPS 瞬时速度毛刺严重，
 ///   直接画出来是一团噪声（设计文档 8.1）。
 /// - 心率 / 踏频 / 功率做 [kSensorCurveFilterWindow] 点滑动平均：同样是毛刺
 ///   问题，只是来源从 GPS 换成了传感器。平滑**只影响画线**，页面上的平均与
@@ -40,7 +40,7 @@ List<CurveSample> buildCurve(
 }) {
   final List<double?> raw = _rawValues(points, metric);
   final List<double?> values = switch (metric) {
-    CurveMetric.speed => movingAverage(raw, kSpeedFilterWindow),
+    CurveMetric.speed => movingAverage(raw, kSpeedCurveFilterWindow),
     CurveMetric.heartRate ||
     CurveMetric.cadence ||
     CurveMetric.power =>

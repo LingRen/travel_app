@@ -161,6 +161,24 @@ void main() {
     expect(data.lineBarsData.single.spots[1].y, 10.0);
   });
 
+  testWidgets('触摸读数保留两位小数，并标出日期与单位', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 12500)]);
+
+    final LineChartData data =
+        tester.widget<LineChart>(find.byType(LineChart)).data;
+    final LineChartBarData bar = data.lineBarsData.single;
+    // fl_chart 默认的 tooltip 直接印 `touchedSpot.y.toString()`：距离不是整数时
+    // 就甩出一长串小数（真机验证看到的就是这个）。直接调构建函数，钉住两位
+    // 小数、日期与单位。
+    final List<LineTooltipItem?> items = data.lineTouchData.touchTooltipData
+        .getTooltipItems(<LineBarSpot>[LineBarSpot(bar, 0, bar.spots[1])]);
+
+    final LineTooltipItem item = items.single!;
+    expect(item.text, '09-22', reason: '先标出是哪个日期桶');
+    // 12500 米 → 12.5 km，两位小数要补成 12.50；用 toString() 时是 12.5。
+    expect(item.children!.single.text!.trim(), '12.50 km');
+  });
+
   testWidgets('切到英里后累计、爬升与趋势图纵轴都换算', (WidgetTester tester) async {
     await pumpStats(
       tester,

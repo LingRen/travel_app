@@ -67,7 +67,8 @@ void main() {
     });
 
     test('速度曲线对尖峰做滑动平均，毛刺被削弱', () {
-      // 静止中夹一个 10 m/s 的 GPS 毛刺：5 点滑动平均后中点应为 2.0。
+      // 静止中夹一个 10 m/s 的 GPS 毛刺。绘制窗口（kSpeedCurveFilterWindow）
+      // 比这 7 个点还宽，窗口覆盖全部点，中点应取全体均值 10/7。
       // 若实现漏掉 movingAverage，中点仍是原始的 10.0。
       final List<TrackPoint> points = <TrackPoint>[
         for (int i = 0; i < 7; i++)
@@ -76,7 +77,26 @@ void main() {
       final List<CurveSample> curve =
           buildCurve(points, metric: CurveMetric.speed);
       expect(curve.length, 7);
-      expect(curve[3].y, closeTo(2.0, 1e-6));
+      expect(curve[3].y, closeTo(10 / 7, 1e-6));
+    });
+
+    test('速度曲线的平滑窗口远大于读数窗口，逐点抖动被抹平', () {
+      // 40 个点在 4 与 6 之间逐点跳。真实速度不可能这样抖，这是 GPS 噪声的
+      // 形状：读数窗口（kSpeedFilterWindow = 5）只能把它削弱到 ±0.2，
+      // 画出来仍是一条两三个像素的细齿。绘制窗口要大到把它压成平线——
+      // 详情页「有锯齿」抱怨的就是这个抖动。
+      final List<TrackPoint> points = <TrackPoint>[
+        for (int i = 0; i < 40; i++)
+          TrackPoint(rideId: 1, tMs: i * 1000, speedMps: i.isEven ? 4.0 : 6.0),
+      ];
+      final List<CurveSample> curve =
+          buildCurve(points, metric: CurveMetric.speed);
+
+      // 窗口内 4 与 6 各占一半，中点落回真实的 5 m/s。
+      expect(curve[20].y, closeTo(5.0, 0.3));
+      // 相邻两点之间不再一上一下：差值远小于原始的 2.0。
+      // 换成 kSpeedFilterWindow 时这里是 0.4，会红。
+      expect((curve[20].y - curve[19].y).abs(), lessThan(0.2));
     });
 
     test('缺该指标的轨迹点被跳过，且平滑不填补空缺', () {

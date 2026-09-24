@@ -88,6 +88,30 @@ class TrendChart extends StatelessWidget {
             ),
           ),
           borderData: FlBorderData(show: false),
+          // 触摸读数：默认 tooltip 直接把 `touchedSpot.y.toString()` 印出来，是
+          // `13.945678901234567` 这样一整串小数（真机验证看到的就是这个）。这里
+          // 换成界面统一口径的两位小数，前面标出是哪个日期桶，后面带上单位。
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (LineBarSpot _) => kAppSurfaceRaised,
+              // 年视图是 `2026-01` 加读数，比默认的 120 宽一些，免得换行。
+              maxContentWidth: 220,
+              getTooltipItems: (List<LineBarSpot> touchedSpots) =>
+                  <LineTooltipItem>[
+                for (final LineBarSpot spot in touchedSpots)
+                  LineTooltipItem(
+                    trend.buckets[spot.x.round()].label,
+                    _tooltipLabelStyle,
+                    children: <TextSpan>[
+                      TextSpan(
+                        text: '  ${spot.y.toStringAsFixed(2)} ${distanceUnitLabel(unit)}',
+                        style: _tooltipValueStyle,
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
           titlesData: FlTitlesData(
             topTitles: const AxisTitles(),
             rightTitles: const AxisTitles(),
@@ -169,5 +193,21 @@ const TextStyle _axisLabelStyle = TextStyle(
   fontFamily: kMonoFamily,
   fontSize: 10,
   color: kAppTextMuted,
+  fontFeatures: kTabularFigures,
+);
+
+/// 触摸提示框里的日期：小一档、用弱色，让读数当主角。
+const TextStyle _tooltipLabelStyle = TextStyle(
+  fontFamily: kMonoFamily,
+  fontSize: 10,
+  color: kAppTextMuted,
+  fontFeatures: kTabularFigures,
+);
+
+/// 触摸提示框里的读数：两位小数，等宽 tabular，手指拖动时数字宽度不跳。
+const TextStyle _tooltipValueStyle = TextStyle(
+  fontFamily: kMonoFamily,
+  fontSize: 12,
+  color: kAppTextPrimary,
   fontFeatures: kTabularFigures,
 );
