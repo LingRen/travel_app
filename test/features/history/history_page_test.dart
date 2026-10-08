@@ -169,8 +169,66 @@ void main() {
       ridePoints: points(),
     );
 
-    // 平均功率保留到瓦，135.4 → 135 W。
-    expect(find.text('功率 135 W'), findsOneWidget);
+    // 平均功率保留到瓦，135.4 → 135 W。单位 `W` 自明，不再加「功率」二字。
+    expect(find.text('135 W'), findsOneWidget);
+  });
+
+  // 四条读数排成固定四列这件事，只钉文案是钉不住的：换成 `Wrap` 文案照样在，
+  // 但列宽会随内容浮动、跨条目对不齐。这里直接量各列左边缘的距离。
+  //
+  // 第二条记录刻意没有功率：空格子若被抽掉，前三列会跟着变宽，第一条记录的
+  // 均速与爬升就会和它对不上。
+  testWidgets('四项读数等距成四列，且跨条目对齐', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Ride>[
+        ride(
+          1,
+          summary: const RideSummary(
+            distanceM: 25300,
+            durationS: 3600,
+            movingS: 3400,
+            avgSpeedMps: 7.03,
+            movingAvgSpeedMps: 7.44,
+            maxSpeedMps: 12.5,
+            elevationGainM: 180,
+            pointCount: 4,
+            avgPowerW: 135.4,
+          ),
+        ),
+        ride(
+          2,
+          summary: const RideSummary(
+            distanceM: 10000,
+            durationS: 1800,
+            movingS: 1700,
+            avgSpeedMps: 6.1,
+            movingAvgSpeedMps: 6.0,
+            maxSpeedMps: 11.0,
+            elevationGainM: 60,
+            pointCount: 4,
+          ),
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    double left(String text) => tester.getTopLeft(find.text(text)).dx;
+
+    final double duration = left('1:00:00');
+    final double speed = left('26.8 km/h');
+    final double climb = left('爬升 180 m');
+    final double power = left('135 W');
+
+    // 四列等距。
+    expect(speed - duration, closeTo(climb - speed, 0.01));
+    expect(climb - speed, closeTo(power - climb, 0.01));
+
+    // 第二条没有功率读数，但前三列必须落在与第一条完全相同的位置上。
+    // 半小时的时长文本是 `30:00`：不足一小时不补小时位，见 `formatDuration`。
+    expect(left('30:00'), closeTo(duration, 0.01));
+    expect(left('21.6 km/h'), closeTo(speed, 0.01));
+    expect(left('爬升 60 m'), closeTo(climb, 0.01));
   });
 
   testWidgets('卡片里渲染迷你速度曲线', (WidgetTester tester) async {

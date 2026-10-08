@@ -30,8 +30,8 @@ class HistoryPage extends ConsumerWidget {
           if (list.isEmpty) {
             return const Center(child: Text('还没有骑行记录'));
           }
-          // 条目之间用细线分隔：线从内容左边缘起、右侧留白，和条目内部
-          // 分隔读数与缩略曲线的那条线同宽，纵向看是一排整齐的刻度。
+          // 条目之间用细线分隔：线从内容左边缘起、右侧留白，与条目左右的内边距
+          // 同宽。条目内部不再画线，所以每一行只有这一道。
           return ListView.separated(
             itemCount: list.length,
             separatorBuilder: (BuildContext context, int index) => const Divider(

@@ -70,6 +70,15 @@ const double kInstrumentNumeralSize = 120;
 
 /// 字号刻度。所有文本走这里，不再往 widget 里塞 13 / 15 / 26 这类魔数。
 const double kFontLabel = 11;
+
+/// 次级读数：卡片上那几项轻量读数（时长 / 均速 / 爬升 / 功率）。
+///
+/// 比正文小一档，但不取 [kFontLabel]：11 号在列表里扫一列容易串行。也不能升到
+/// 14——历史条目把四项读数排成固定四列，360dp 宽度下每列只有 76dp，`22.7 km/h`
+/// 在 14 号下已经贴着列宽，字号稍一缩放就换行。
+const double kFontMeta = 13;
+
+/// 正文。
 const double kFontBody = 14;
 const double kFontSubtitle = 15;
 const double kFontTitle = 20;
