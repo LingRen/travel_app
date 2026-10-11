@@ -103,22 +103,32 @@ class RideCard extends ConsumerWidget {
               //
               // 四项里只有爬升带中文标签：它的单位 `m` 与距离的 `m` 会混，其余
               // 三项（时长、`km/h`、`W`）的单位自明，再加标签只是重复。
+              //
+              // 四列不等宽（4:4:5:3）。等宽在 360dp 上会把爬升列挤破：一列只有
+              // 76dp，而「爬升 1240 m」是两个汉字加四个数字，比 `23.9 km/h` 还宽，
+              // 末位的 `m` 会被挤到第二行去。爬升列多分一档、从最宽的功率列匀出
+              // 一档就够。宽度对每一条记录都是同一个定值，左边缘照旧跨条目对齐。
               Row(
                 children: <Widget>[
-                  _MetaCell(formatDuration(s.durationS)),
+                  _MetaCell(formatDuration(s.durationS), flex: 4),
                   const SizedBox(width: kSpaceS),
                   _MetaCell(
                     '${formatSpeedValue(s.movingAvgSpeedMps, unit)} '
                     '${speedUnitLabel(unit)}',
+                    flex: 4,
                   ),
                   const SizedBox(width: kSpaceS),
-                  _MetaCell('爬升 ${formatElevation(s.elevationGainM, unit)}'),
+                  _MetaCell(
+                    '爬升 ${formatElevation(s.elevationGainM, unit)}',
+                    flex: 5,
+                  ),
                   const SizedBox(width: kSpaceS),
                   // 没配功率计的那次骑行没有功率，整项不显示：写个 `0 W` 会被
                   // 当成「踏空了」。但格子要留着——抽掉它，前三列会跟着变宽，
                   // 和配了功率计的条目就对不起齐了。
                   _MetaCell(
                     s.avgPowerW == null ? null : formatPower(s.avgPowerW),
+                    flex: 3,
                   ),
                 ],
               ),
@@ -135,13 +145,19 @@ class RideCard extends ConsumerWidget {
 }
 
 /// 四列读数里的一格。内容为 null 时留空占位，保住其余各列的位置。
+///
+/// [flex] 是本列在四列里分到的宽度权重。四列按需要不等宽，但每一条记录用的都是
+/// 同一组权重，所以左边缘照样跨条目对齐。
 class _MetaCell extends StatelessWidget {
-  const _MetaCell(this.text);
+  const _MetaCell(this.text, {required this.flex});
 
   final String? text;
 
+  final int flex;
+
   @override
   Widget build(BuildContext context) => Expanded(
+    flex: flex,
     child: text == null
         ? const SizedBox.shrink()
         : Text(text!, style: _metaStyle),

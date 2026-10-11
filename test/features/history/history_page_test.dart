@@ -1,4 +1,5 @@
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
 import 'package:cycling_app/domain/models/ride.dart';
@@ -178,7 +179,7 @@ void main() {
   //
   // 第二条记录刻意没有功率：空格子若被抽掉，前三列会跟着变宽，第一条记录的
   // 均速与爬升就会和它对不上。
-  testWidgets('四项读数等距成四列，且跨条目对齐', (WidgetTester tester) async {
+  testWidgets('四项读数按 4:4:5:3 分成四列，且跨条目对齐', (WidgetTester tester) async {
     await pumpHistory(
       tester,
       rides: <Ride>[
@@ -220,9 +221,20 @@ void main() {
     final double climb = left('爬升 180 m');
     final double power = left('135 W');
 
-    // 四列等距。
-    expect(speed - duration, closeTo(climb - speed, 0.01));
-    expect(climb - speed, closeTo(power - climb, 0.01));
+    // 列宽按 4:4:5:3 分配：爬升列比另外两列各宽一档。它带的是两个汉字加四个
+    // 数字（`爬升 1240 m`），四列等分时在 360dp 的机器上末尾的 `m` 会被挤到
+    // 第二行——这条是 360dp 真机上实测到的，等分改成加权就是为了它。
+    //
+    // 只比比例、不钉绝对像素：视口宽度是这条用例自己设的，钉死像素等于把视口
+    // 尺寸也一起钉住了。测试字体每个字符都是一个方块，和真机字体的字宽对不上，
+    // 所以这里量不出「会不会换行」，只钉得住列宽的比例关系。
+    //
+    // 相邻两列的左边缘之差 = 前一列的宽 + 列间距，所以要先减掉 `kSpaceS`。
+    final double durationW = (speed - duration) - kSpaceS;
+    final double speedW = (climb - speed) - kSpaceS;
+    final double climbW = (power - climb) - kSpaceS;
+    expect(speedW, closeTo(durationW, 0.01));
+    expect(climbW, closeTo(durationW * 5 / 4, 0.01));
 
     // 第二条没有功率读数，但前三列必须落在与第一条完全相同的位置上。
     // 半小时的时长文本是 `30:00`：不足一小时不补小时位，见 `formatDuration`。
