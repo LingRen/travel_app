@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +20,16 @@ import 'gpx_export.dart';
 import 'hr_zone_bar.dart';
 import 'route_map.dart';
 import 'summary_grid.dart';
+
+/// 竖屏下详情页地图的高度。
+const double _kMapHeight = 260;
+
+/// 矮视口（横屏）下地图最多占视口高度的比例。
+///
+/// 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还
+/// 高：首屏被地图占满，而地图开了拖动会吃掉滑动手势，页面滚不动，下方的汇总与
+/// 曲线就够不到了（真机横屏实测）。收窄到视口高度的一小段，让下面能露出来。
+const double _kMapHeightShrink = 0.45;
 
 /// 单次骑行详情页。见设计文档 10.3。
 ///
@@ -83,12 +95,19 @@ class _DetailBody extends ConsumerWidget {
       toGcj02: isGcj02TileSource(tileUrl),
     );
 
+    // 竖屏维持 260dp；横屏等矮视口按高度收窄，见 [_kMapHeightShrink]。
+    final double mapHeight = math.min(
+      _kMapHeight,
+      MediaQuery.sizeOf(context).height * _kMapHeightShrink,
+    );
+
     return ListView(
       children: <Widget>[
         RouteMap(
           segments: route,
           tileUrlTemplate: tileUrl,
           subdomains: kDefaultMapTileSubdomains,
+          height: mapHeight,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),

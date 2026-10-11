@@ -364,6 +364,38 @@ void main() {
     expect(find.byType(PolylineLayer), findsOneWidget);
   });
 
+  // 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还
+  // 高：首屏被地图占满，而地图开了拖动会吃掉滑动手势，页面滚不动，下方的汇总与
+  // 曲线就够不到了（真机横屏实测）。这两条把「竖屏维持 260dp、矮视口按高度收窄」
+  // 钉住。
+  testWidgets('矮视口（横屏）下地图按视口高度收窄', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 360);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(
+      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+    ));
+    await tester.pumpAndSettle();
+
+    final double height = tester.widget<RouteMap>(find.byType(RouteMap)).height;
+    expect(height, closeTo(360 * 0.45, 0.01));
+    expect(height, lessThan(260));
+  });
+
+  testWidgets('竖屏视口下地图保持 260dp', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(
+      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<RouteMap>(find.byType(RouteMap)).height, 260);
+  });
+
   // 轨迹用哪套坐标必须跟着瓦片源走：对 OSM 这类 WGS-84 源再转一次 GCJ-02，
   // 轨迹会整体偏出几百米（真机实测约 310 米）。这里直接读折线收到的坐标，
   // 而不是只断言「传了参数」。
