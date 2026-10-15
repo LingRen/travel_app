@@ -1,4 +1,5 @@
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
 import 'package:cycling_app/domain/analysis/gcj02.dart';
@@ -105,7 +106,7 @@ Widget wrap({
         rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
         appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
       ],
-      child: MaterialApp(home: DetailPage(rideId: detail.ride.id!)),
+      child: MaterialApp(theme: buildAppTheme(), home: DetailPage(rideId: detail.ride.id!)),
     );
 
 /// 详情页是 `ListView`，默认 800x600 的测试视口只会懒构建前两屏；

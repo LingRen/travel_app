@@ -145,6 +145,7 @@ class _DetailBody extends ConsumerWidget {
               averageValue: s?.avgSpeedMps,
               formatValue: (double v) => formatSpeedValue(v, unit),
               colorBySpeed: true,
+              baseColorArgb: context.palette.accent.toARGB32(),
             ),
           ),
         if (hr.length >= 2)
@@ -162,6 +163,7 @@ class _DetailBody extends ConsumerWidget {
                   unitLabel: 'bpm',
                   averageValue: s?.avgHr?.toDouble(),
                   formatValue: _wholeNumber,
+                  baseColorArgb: context.palette.accent.toARGB32(),
                 ),
                 const SizedBox(height: kSpaceM),
                 HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
@@ -180,6 +182,7 @@ class _DetailBody extends ConsumerWidget {
               unitLabel: 'rpm',
               averageValue: s?.avgCadence,
               formatValue: _wholeNumber,
+              baseColorArgb: context.palette.accent.toARGB32(),
             ),
           ),
         if (power.length >= 2)
@@ -198,6 +201,7 @@ class _DetailBody extends ConsumerWidget {
               unitLabel: 'W',
               averageValue: s?.avgPowerW,
               formatValue: _wholeNumber,
+              baseColorArgb: context.palette.accent.toARGB32(),
             ),
           ),
         Padding(

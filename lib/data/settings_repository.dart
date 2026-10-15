@@ -1,5 +1,45 @@
+import 'dart:ui' show Color;
+
 import '../domain/analysis/constants.dart';
 import 'db/settings_dao.dart';
+
+/// 可选主题色。语义恒为「正在发生 / 可交互 / 已选中」，只是色相交给用户挑。
+///
+/// 依赖方向：这个枚举是用户设置的一种取值，和 [DistanceUnit] 一样归设置层所有。
+/// 它放在这里（而不是 app 的主题文件）是为了让数据层不反向依赖 UI 层——主题色
+/// 的定义属于「有哪些值可选」，怎么渲染属于 UI 层。
+///
+/// 每组色相都必须能和**数据色**（速度色带、心率区间色）与**安全色**（警告、危险）
+/// 区分开：色相相差 ≥30°，或相对亮度比 ≥1.30。详情页上心率曲线用主题色绘制、
+/// 心率区间条用区间色，两者同屏，撞色就读不出来。该约束由
+/// `test/app/theme_test.dart` 的门禁守住。
+///
+/// 例外是 [ThemeAccent.amber]：它是历史默认色，本身就落在暖色带（速度色带中段、
+/// 心率区间「暖身」段）上，靠亮度与语义区分，是既定取舍，故门禁对其单独放行。
+enum ThemeAccent {
+  amber('amber', '琥珀', Color(0xFFFFA92B)),
+  mint('mint', '薄荷', Color(0xFF33D69F)),
+  // 比初版 #38BDF8 更亮：初版与心率区间蓝（#64B5F6）色相仅差 8°、亮度几乎相同，
+  // 详情页上心率曲线（主题色）与区间条会撞色。提亮后亮度比 1.33，可区分。
+  sky('sky', '天青', Color(0xFF7DD3FC)),
+  violet('violet', '紫罗兰', Color(0xFFA78BFA));
+
+  const ThemeAccent(this.dbValue, this.label, this.color);
+
+  /// 落库用的稳定标识，改显示名不影响已存数据。
+  final String dbValue;
+
+  /// 设置页显示名。
+  final String label;
+
+  /// 强调色本体。
+  final Color color;
+
+  static ThemeAccent fromDb(String? value) => ThemeAccent.values.firstWhere(
+        (ThemeAccent a) => a.dbValue == value,
+        orElse: () => ThemeAccent.amber,
+      );
+}
 
 /// 距离单位。仅支持公里与英里两种，不涉及多语言。
 enum DistanceUnit {
@@ -37,6 +77,7 @@ class AppSettings {
     required this.weightKg,
     required this.distanceUnit,
     required this.mapTileUrlTemplate,
+    this.accent = ThemeAccent.amber,
   });
 
   final int maxHeartRate;
@@ -44,17 +85,22 @@ class AppSettings {
   final DistanceUnit distanceUnit;
   final String mapTileUrlTemplate;
 
+  /// 主题强调色。缺省为琥珀，与历史行为一致。
+  final ThemeAccent accent;
+
   AppSettings copyWith({
     int? maxHeartRate,
     double? weightKg,
     DistanceUnit? distanceUnit,
     String? mapTileUrlTemplate,
+    ThemeAccent? accent,
   }) =>
       AppSettings(
         maxHeartRate: maxHeartRate ?? this.maxHeartRate,
         weightKg: weightKg ?? this.weightKg,
         distanceUnit: distanceUnit ?? this.distanceUnit,
         mapTileUrlTemplate: mapTileUrlTemplate ?? this.mapTileUrlTemplate,
+        accent: accent ?? this.accent,
       );
 }
 
@@ -79,6 +125,7 @@ class SettingsRepository {
       weightKg: (weight != null && weight > 0) ? weight : kDefaultWeightKg,
       distanceUnit: DistanceUnit.fromDb(raw['distance_unit']),
       mapTileUrlTemplate: tileUrl.isEmpty ? kDefaultMapTileUrlTemplate : tileUrl,
+      accent: ThemeAccent.fromDb(raw['accent_theme']),
     );
   }
 
@@ -87,5 +134,6 @@ class SettingsRepository {
     await _dao.setString('weight_kg', settings.weightKg.toString());
     await _dao.setString('distance_unit', settings.distanceUnit.dbValue);
     await _dao.setString('map_tile_url', settings.mapTileUrlTemplate);
+    await _dao.setString('accent_theme', settings.accent.dbValue);
   }
 }

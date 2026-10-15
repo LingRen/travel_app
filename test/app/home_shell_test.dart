@@ -1,5 +1,6 @@
 import 'package:cycling_app/app/home_shell.dart';
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
@@ -81,7 +82,7 @@ void main() {
             ),
             sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
           ],
-          child: const MaterialApp(home: HomeShell()),
+          child: MaterialApp(theme: buildAppTheme(), home: const HomeShell()),
         ),
       );
 

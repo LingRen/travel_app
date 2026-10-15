@@ -147,6 +147,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
           const SizedBox(height: kSpaceXl),
+          const _AppearanceSection(),
+          const SizedBox(height: kSpaceXl),
           // 传感器与备份两块自带标题和分隔线（备份块的标题文本被测试依赖，
           // 必须留在 BackupSection 内部），这里不再套分组标签。
           const _SensorSection(),
@@ -189,6 +191,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           weightKg: weight,
           distanceUnit: _unit,
           mapTileUrlTemplate: tileUrl,
+          // 主题色不在这几个输入框里，保存时必须带上当前值，否则会被重置回默认。
+          accent: ref.read(appSettingsProvider).value?.accent ??
+              ThemeAccent.amber,
         ));
     ref.invalidate(appSettingsProvider);
     if (!mounted) return;
@@ -217,6 +222,125 @@ class _SectionLabel extends StatelessWidget {
             child: Text(text, style: kSectionTextStyle),
           ),
         ],
+      );
+}
+
+/// 主题色选择。见设计文档 10.5。点选即存即生效，无需点「保存」——它不在那几个
+/// 输入框里，单独即时提交比攒着一起保存更顺。
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeAccent current =
+        ref.watch(appSettingsProvider).value?.accent ?? ThemeAccent.amber;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Divider(height: 1),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
+          child: Text('外观', style: kSectionTextStyle),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+          child: Text(
+            '主题色只用在「正在发生 / 可交互 / 已选中」的地方，不参与数据着色。',
+            style: kMutedTextStyle.copyWith(fontSize: 12),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+          child: Row(
+            children: <Widget>[
+              for (final ThemeAccent accent in ThemeAccent.values)
+                Expanded(
+                  child: _AccentDot(
+                    key: Key('accent-${accent.dbValue}'),
+                    accent: accent,
+                    selected: accent == current,
+                    onTap: () => _pick(ref, accent),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pick(WidgetRef ref, ThemeAccent accent) async {
+    final AppSettings? current = ref.read(appSettingsProvider).value;
+    if (current == null) return;
+    await ref
+        .read(settingsRepositoryProvider)
+        .save(current.copyWith(accent: accent));
+    ref.invalidate(appSettingsProvider);
+  }
+}
+
+/// 一颗主题色：色点 + 名称。选中时描白圈并压一枚对勾。
+///
+/// 名称必须写出来——只给一个色点，用户分不清哪个是「薄荷」哪个是「天青」，
+/// 读屏用户靠 [Semantics.label] 能听懂，视觉用户没有标签就只能靠猜。名称也是
+/// 色觉障碍用户唯一能用的区分方式。
+class _AccentDot extends StatelessWidget {
+  const _AccentDot({
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final ThemeAccent accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: accent.label,
+        selected: selected,
+        button: true,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(kSpaceXs),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accent.color,
+                    border: Border.all(
+                      color: selected ? kAppTextPrimary : kAppHairline,
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: selected
+                      ? Icon(
+                          Icons.check,
+                          size: 20,
+                          color: context.palette.onAccent,
+                        )
+                      : null,
+                ),
+                const SizedBox(height: kSpaceXs),
+                Text(
+                  accent.label,
+                  style: kLabelTextStyle.copyWith(
+                    color: selected ? kAppTextPrimary : kAppTextMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
 }
 
@@ -311,7 +435,7 @@ class _SensorSectionState extends ConsumerState<_SensorSection> {
                 : (paired.name.isEmpty ? paired.id : paired.name),
             style: TextStyle(
               fontSize: 13,
-              color: paired == null ? kAppTextMuted : kAppAccent,
+              color: paired == null ? kAppTextMuted : context.palette.accent,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

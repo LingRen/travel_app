@@ -260,8 +260,8 @@ class HandlebarView extends StatelessWidget {
                           ? FilledButton(
                               onPressed: onStart,
                               style: FilledButton.styleFrom(
-                                backgroundColor: kAppAccent,
-                                foregroundColor: kAppOnAccent,
+                                backgroundColor: context.palette.accent,
+                                foregroundColor: context.palette.onAccent,
                               ),
                               child: const Text(
                                 '开始',
@@ -303,8 +303,8 @@ class HandlebarView extends StatelessWidget {
                                   child: FilledButton(
                                     onPressed: paused ? onResume : onPause,
                                     style: FilledButton.styleFrom(
-                                      backgroundColor: kAppAccent,
-                                      foregroundColor: kAppOnAccent,
+                                      backgroundColor: context.palette.accent,
+                                      foregroundColor: context.palette.onAccent,
                                     ),
                                     child: Text(
                                       paused ? '继续' : '暂停',
@@ -389,9 +389,9 @@ class _StatusStrip extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: collecting ? kAppAccent : Colors.transparent,
+                  color: collecting ? context.palette.accent : Colors.transparent,
                   border: Border.all(
-                    color: collecting ? kAppAccent : kAppTextMuted,
+                    color: collecting ? context.palette.accent : kAppTextMuted,
                     width: 1.5,
                   ),
                 ),
@@ -435,14 +435,14 @@ class _StatusStrip extends StatelessWidget {
         _SensorLamp(
           icon: Icons.sync,
           connected: state.cadenceConnected,
-          onColor: kAppAccent,
+          onColor: context.palette.accent,
           tooltip: state.cadenceConnected ? '踏频已连接，点击更换设备' : '点击连接踏频设备',
           onTap: () => onPickDevice(SensorKind.cadence),
         ),
         _SensorLamp(
           icon: Icons.bolt,
           connected: state.powerConnected,
-          onColor: kAppAccent,
+          onColor: context.palette.accent,
           tooltip: state.powerConnected ? '功率计已连接，点击更换设备' : '点击连接功率计',
           onTap: () => onPickDevice(SensorKind.power),
         ),

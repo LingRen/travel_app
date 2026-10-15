@@ -86,7 +86,7 @@ Widget wrap({
         if (detail != null)
           rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
       ],
-      child: const MaterialApp(home: HistoryPage()),
+      child: MaterialApp(theme: buildAppTheme(), home: const HistoryPage()),
     );
 
 /// 历史页是 `ListView.builder`，默认 800x600 的测试视口只懒构建前几屏，

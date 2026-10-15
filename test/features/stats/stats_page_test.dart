@@ -1,4 +1,5 @@
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
@@ -61,7 +62,7 @@ Widget wrap({
         nowProvider.overrideWithValue(() => nowMs),
         appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
       ],
-      child: const MaterialApp(home: StatsPage()),
+      child: MaterialApp(theme: buildAppTheme(), home: const StatsPage()),
     );
 
 /// 统计页是 `ListView`，默认 800x600 的测试视口只构建前几屏，趋势折线与个人最佳

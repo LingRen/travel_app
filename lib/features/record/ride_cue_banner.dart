@@ -104,7 +104,7 @@ class _RideCueBannerState extends State<RideCueBanner> {
           Icon(
             isLap ? Icons.flag_outlined : Icons.campaign_outlined,
             size: 20,
-            color: kAppAccent,
+            color: context.palette.accent,
           ),
           const SizedBox(width: kSpaceM),
           Flexible(

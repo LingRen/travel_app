@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cycling_app/app/providers.dart';
+import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/export/backup.dart';
 import 'package:cycling_app/data/export/backup_io.dart';
@@ -167,7 +168,7 @@ void main() {
           appSettingsProvider
               .overrideWithValue(AsyncValue<AppSettings>.data(current)),
         ],
-        child: const MaterialApp(home: SettingsPage()),
+        child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
       );
 
   /// 设置页是全项目最长的 `ListView`：个人参数 4 个控件 + 保存按钮 + 传感器配对区
@@ -390,5 +391,58 @@ void main() {
     expect(store.applied, isNotNull);
     expect(store.appliedReplaceExisting, isTrue);
     expect(find.textContaining('恢复完成'), findsOneWidget);
+  });
+
+  testWidgets('外观分组列出每一组主题色，并给当前色打勾', (WidgetTester tester) async {
+    await pumpSettings(tester);
+
+    for (final ThemeAccent accent in ThemeAccent.values) {
+      expect(find.byKey(Key('accent-${accent.dbValue}')), findsOneWidget);
+      // 名称写出来，色觉障碍用户与不知道色名的用户都能分辨。
+      expect(find.text(accent.label), findsOneWidget);
+    }
+    // 默认是琥珀，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
+    // 分段也带对勾，所以必须限定在圆点内部去找）。
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('accent-amber')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('accent-sky')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('点选主题色圆点即存即生效，不需要点保存', (WidgetTester tester) async {
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('accent-sky')));
+    await tester.pumpAndSettle();
+
+    expect(settings.saveCalls, 1);
+    expect(settings.saved.accent, ThemeAccent.sky);
+    // 其余设置项不能被这次点选改动。
+    expect(settings.saved.maxHeartRate, _settings.maxHeartRate);
+    expect(settings.saved.weightKg, _settings.weightKg);
+  });
+
+  testWidgets('保存个人参数时保留当前主题色，不重置回默认', (WidgetTester tester) async {
+    final AppSettings violet = _settings.copyWith(accent: ThemeAccent.violet);
+    await pumpSettings(tester, current: violet);
+
+    await tester.tap(find.text('190'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '175');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(settings.saved.maxHeartRate, 175);
+    expect(settings.saved.accent, ThemeAccent.violet);
   });
 }

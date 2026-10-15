@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../data/settings_repository.dart';
+
 // ─────────────────────────────────────────────────────────────────────────
 // 颜色
 //
@@ -8,7 +10,8 @@ import 'package:flutter/material.dart';
 // 与心率区间色（见 features/detail/hr_zone_bar.dart）。装饰一律不上色，
 // 所以分区靠细线而不靠色块与阴影。
 //
-// 琥珀只承担一个语义：**正在发生**（记录中 / 可交互 / 已选中）。
+// 强调色（[ThemeAccent]，定义在设置层）只承担一个语义：**正在发生**
+// （记录中 / 可交互 / 已选中）。色相由用户在设置页挑，语义不随色相变。
 // ─────────────────────────────────────────────────────────────────────────
 
 /// 沥青底色。
@@ -29,11 +32,33 @@ const Color kAppTextPrimary = Color(0xFFE8EDF2);
 /// 次级文字与标签。
 const Color kAppTextMuted = Color(0xFF8A97A6);
 
-/// 琥珀：正在发生 / 可交互。与底色对比度约 10:1，强光下也站得住。
-const Color kAppAccent = Color(0xFFFFA92B);
-
-/// 琥珀上的墨色。
+/// 强调色上的文字色。4 组强调色都偏亮，统一压深墨，无需逐色计算。
 const Color kAppOnAccent = Color(0xFF0B0E12);
+
+/// 运行时可变的强调色令牌。挂在 [ThemeData.extensions] 上，widget 通过
+/// `context.palette.accent` 读取——强调色不再是编译期常量，切主题即整树重着色。
+class AppPalette extends ThemeExtension<AppPalette> {
+  const AppPalette({required this.accent});
+
+  final Color accent;
+
+  Color get onAccent => kAppOnAccent;
+
+  @override
+  AppPalette copyWith({Color? accent}) =>
+      AppPalette(accent: accent ?? this.accent);
+
+  @override
+  AppPalette lerp(ThemeExtension<AppPalette>? other, double t) {
+    if (other is! AppPalette) return this;
+    return AppPalette(accent: Color.lerp(accent, other.accent, t)!);
+  }
+}
+
+/// 便捷读取当前主题色。
+extension AppPaletteContext on BuildContext {
+  AppPalette get palette => Theme.of(this).extension<AppPalette>()!;
+}
 
 /// 淡金：降级提示（GPS 弱、传感器断开）。与琥珀的区别在于语义是「在提醒你」
 /// 而不是「在等你操作」，同屏出现时靠明度差（13:1 vs 10:1）区分。
@@ -169,14 +194,15 @@ const double kRadiusControl = 10;
 /// 1 像素结构线。用 [BorderSide] 而不是 [Divider] 的地方都该用它。
 const BorderSide kHairline = BorderSide(color: kAppHairline, width: 1);
 
-ThemeData buildAppTheme() {
+ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.amber]) {
+  final Color accentColor = accent.color;
   final ColorScheme scheme = ColorScheme.fromSeed(
-    seedColor: kAppAccent,
+    seedColor: accentColor,
     brightness: Brightness.dark,
   ).copyWith(
-    primary: kAppAccent,
+    primary: accentColor,
     onPrimary: kAppOnAccent,
-    secondary: kAppAccent,
+    secondary: accentColor,
     onSecondary: kAppOnAccent,
     error: kAppDanger,
     onError: kAppOnDanger,
@@ -193,6 +219,7 @@ ThemeData buildAppTheme() {
     brightness: Brightness.dark,
     colorScheme: scheme,
     scaffoldBackgroundColor: kAppBackground,
+    extensions: <ThemeExtension<dynamic>>[AppPalette(accent: accentColor)],
     textTheme: const TextTheme(
       titleMedium: TextStyle(
         fontSize: kFontSubtitle,
@@ -224,7 +251,7 @@ ThemeData buildAppTheme() {
       ),
       shape: Border(bottom: kHairline),
     ),
-    // 选中态用琥珀，与主题色一致。琥珀在令牌层写的语义就是「正在发生 /
+    // 选中态用主题色，与强调色一致。强调色在令牌层写的语义就是「正在发生 /
     // 可交互 / 已选中」（见文首），底栏选中态本来就是它该占的位置；此前
     // 为了把颜色全留给数据而让底栏走中性色，收敛过头了。未选中仍是次级灰，
     // 抬高面板继续承担形状上的区分，颜色只负责「哪个被选中」。
@@ -242,7 +269,7 @@ ThemeData buildAppTheme() {
         (Set<WidgetState> states) => IconThemeData(
           size: 22,
           color: states.contains(WidgetState.selected)
-              ? kAppAccent
+              ? accentColor
               : kAppTextMuted,
         ),
       ),
@@ -252,7 +279,7 @@ ThemeData buildAppTheme() {
           fontWeight: FontWeight.w500,
           letterSpacing: 0.4,
           color: states.contains(WidgetState.selected)
-              ? kAppAccent
+              ? accentColor
               : kAppTextMuted,
         ),
       ),
@@ -268,7 +295,7 @@ ThemeData buildAppTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: kAppAccent,
+        backgroundColor: accentColor,
         foregroundColor: kAppOnAccent,
         disabledBackgroundColor: kAppSurfaceRaised,
         disabledForegroundColor: kAppTextMuted,
@@ -296,7 +323,7 @@ ThemeData buildAppTheme() {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: kAppAccent,
+        foregroundColor: accentColor,
         textStyle: const TextStyle(fontSize: kFontBody, fontWeight: FontWeight.w600),
       ),
     ),
@@ -304,7 +331,7 @@ ThemeData buildAppTheme() {
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
-              ? kAppAccent
+              ? accentColor
               : Colors.transparent,
         ),
         foregroundColor: WidgetStateProperty.resolveWith(
@@ -327,7 +354,7 @@ ThemeData buildAppTheme() {
       filled: true,
       fillColor: kAppSurface,
       labelStyle: kMutedTextStyle,
-      floatingLabelStyle: const TextStyle(color: kAppAccent),
+      floatingLabelStyle: TextStyle(color: accentColor),
       helperStyle: const TextStyle(fontSize: 12, color: kAppTextMuted),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: kSpaceM,
@@ -341,9 +368,9 @@ ThemeData buildAppTheme() {
         borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
         borderSide: kHairline,
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
-        borderSide: BorderSide(color: kAppAccent, width: 1.5),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(kRadiusControl)),
+        borderSide: BorderSide(color: accentColor, width: 1.5),
       ),
     ),
     snackBarTheme: const SnackBarThemeData(
@@ -378,8 +405,8 @@ ThemeData buildAppTheme() {
       iconColor: kAppTextMuted,
       textColor: kAppTextPrimary,
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: kAppAccent,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: accentColor,
     ),
   );
 }

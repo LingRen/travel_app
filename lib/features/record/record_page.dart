@@ -158,7 +158,7 @@ class _FinishedView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
               child: Row(
                 children: <Widget>[
-                  const Icon(Icons.check_circle, size: 18, color: kAppAccent),
+                  Icon(Icons.check_circle, size: 18, color: context.palette.accent),
                   const SizedBox(width: kSpaceS),
                   const Text('记录已保存', style: kSectionTextStyle),
                 ],

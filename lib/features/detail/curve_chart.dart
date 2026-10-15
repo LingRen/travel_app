@@ -19,7 +19,7 @@ class CurveChart extends StatelessWidget {
     required this.formatValue,
     this.averageValue,
     this.colorBySpeed = false,
-    this.baseColorArgb = kAppAccentArgb,
+    required this.baseColorArgb,
     super.key,
   });
 
@@ -43,6 +43,9 @@ class CurveChart extends StatelessWidget {
   /// 为真时按每段平均速度着色（速度曲线用），否则用 [baseColorArgb]。
   final bool colorBySpeed;
 
+  /// 非按速度着色时的曲线色（主题强调色的 ARGB 整数）。
+  ///
+  /// 画笔只认 int 不认 `Color`，所以由调用方从 `context.palette.accent` 转好传入。
   final int baseColorArgb;
 
   static const double chartHeight = 140;
@@ -65,10 +68,6 @@ class CurveChart extends StatelessWidget {
     );
   }
 }
-
-/// 主题强调色的 ARGB 整数形式，供画笔使用（画笔只认 int，不认 Color 常量表）。
-/// 与 `app/theme.dart` 里的 `kAppAccent` 保持一致；两处都改才算改。
-const int kAppAccentArgb = 0xFFFFA92B;
 
 /// 画笔真正会连出的相邻点下标对。
 ///

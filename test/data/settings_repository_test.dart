@@ -55,4 +55,27 @@ void main() {
     await SettingsDao(db).setString('max_heart_rate', '10');
     expect((await repo.load()).maxHeartRate, 190);
   });
+
+  test('首次读取的主题色是琥珀', () async {
+    expect((await repo.load()).accent, ThemeAccent.amber);
+  });
+
+  test('保存后可读回主题色', () async {
+    await repo.save(
+      const AppSettings(
+        maxHeartRate: 190,
+        weightKg: 70,
+        distanceUnit: DistanceUnit.kilometer,
+        mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
+        accent: ThemeAccent.sky,
+      ),
+    );
+
+    expect((await repo.load()).accent, ThemeAccent.sky);
+  });
+
+  test('存储的主题色未知时回退到琥珀', () async {
+    await SettingsDao(db).setString('accent_theme', 'no-such-theme');
+    expect((await repo.load()).accent, ThemeAccent.amber);
+  });
 }

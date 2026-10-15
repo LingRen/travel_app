@@ -156,7 +156,8 @@ void main() {
   /// 底部 `NavigationBar` 高度（dp），见 `theme.dart` 的 `navigationBarTheme`。
   const double navBarHeight = 64;
 
-  Widget wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+  Widget wrap(Widget child) =>
+      MaterialApp(theme: buildAppTheme(), home: Scaffold(body: child));
 
   /// 真机几何：360×640dp 的屏幕上，状态栏占 18dp、底部 `NavigationBar` 占 64dp，
   /// 骑行界面拿到的正文区因此只有 558dp。
@@ -164,6 +165,7 @@ void main() {
   /// 量「中间留了多少地图」必须用这个盒子而不是裸的 640dp：少了这两条，正文区凭空
   /// 多出 82dp，量出来的余量会比真机宽出一大截，阈值也就守不住真机。
   Widget wrapDevice(Widget child) => MaterialApp(
+        theme: buildAppTheme(),
         home: Scaffold(
           body: MediaQuery(
             data: const MediaQueryData(
@@ -669,7 +671,7 @@ void main() {
           nowProvider.overrideWithValue(() => 1000),
           sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
         ],
-        child: const MaterialApp(home: RecordPage()),
+        child: MaterialApp(theme: buildAppTheme(), home: const RecordPage()),
       ));
       await tester.pump();
     }

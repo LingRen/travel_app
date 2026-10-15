@@ -22,20 +22,21 @@ class PersonalBestsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Widget> rows = <Widget>[
       if (bests.longestDistanceM != null)
-        _row('最远距离', formatDistance(bests.longestDistanceM!.value, unit)),
+        _row(context, '最远距离', formatDistance(bests.longestDistanceM!.value, unit)),
       if (bests.longestDurationS != null)
-        _row('最长时长', formatDuration(bests.longestDurationS!.value.round())),
+        _row(context, '最长时长', formatDuration(bests.longestDurationS!.value.round())),
       if (bests.fastestMovingAvgMps != null)
         _row(
+          context,
           '最快移动均速',
           '${formatSpeedValue(bests.fastestMovingAvgMps!.value, unit)} '
               '${speedUnitLabel(unit)}',
         ),
       if (bests.mostElevationGainM != null)
-        _row('最大爬升', formatElevation(bests.mostElevationGainM!.value, unit)),
+        _row(context, '最大爬升', formatElevation(bests.mostElevationGainM!.value, unit)),
       // 没配功率计时没有这一项：宁可少一行，也不摆一个「0 W」的最佳纪录。
       if (bests.highestPowerW != null)
-        _row('最高功率', formatPower(bests.highestPowerW!.value)),
+        _row(context, '最高功率', formatPower(bests.highestPowerW!.value)),
     ];
 
     return Padding(
@@ -60,7 +61,7 @@ class PersonalBestsCard extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value) => Padding(
+  Widget _row(BuildContext context, String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: kSpaceS),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -68,17 +69,17 @@ class PersonalBestsCard extends StatelessWidget {
           children: <Widget>[
             Expanded(child: Text(label, style: kLabelTextStyle)),
             const SizedBox(width: kSpaceM),
-            Text(value, style: _bestReadoutStyle),
+            Text(value, style: _bestReadoutStyle(context)),
           ],
         ),
       );
 }
 
-/// 峰值读数：等宽 tabular，琥珀色，比一般正文重一档。
-const TextStyle _bestReadoutStyle = TextStyle(
-  fontFamily: kMonoFamily,
-  fontSize: 16,
-  fontWeight: FontWeight.w700,
-  color: kAppAccent,
-  fontFeatures: kTabularFigures,
-);
+/// 峰值读数：等宽 tabular，主题色，比一般正文重一档。
+TextStyle _bestReadoutStyle(BuildContext context) => TextStyle(
+      fontFamily: kMonoFamily,
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+      color: context.palette.accent,
+      fontFeatures: kTabularFigures,
+    );
