@@ -520,5 +520,32 @@ void main() {
       expect(tester.getSize(zones.at(1)).width, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
+
+    // 只钉宽度会漏掉上面那条同一处的缺陷：`ColoredBox` 没有子节点，`Row` 缺
+    // `CrossAxisAlignment.stretch` 时每段在松高度约束下量成 0 高，整条退化成
+    // 「一圈细线边框的空矩形」——真机上图例写着 Z1 41%/Z2 29%/Z3 30%，条上却
+    // 一片空白（截图 y 1283–1324 内部全是底色 #0B0E12）。宽度断言照样全绿。
+    testWidgets('每段高度撑满 14dp，不会退化成空矩形', (WidgetTester tester) async {
+      const HrZoneBreakdown breakdown = HrZoneBreakdown(
+        secondsByZone: <int, double>{1: 1.0, 3: 2.0},
+        totalSeconds: 3.0,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(width: 400, child: HrZoneBar(breakdown: breakdown)),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final Finder zones = find.descendant(
+        of: find.byType(HrZoneBar),
+        matching: find.byType(ColoredBox),
+      );
+      expect(zones, findsNWidgets(2));
+      for (int i = 0; i < 2; i++) {
+        expect(tester.getSize(zones.at(i)).height, 14);
+      }
+    });
   });
 }

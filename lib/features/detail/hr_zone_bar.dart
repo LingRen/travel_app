@@ -41,9 +41,18 @@ class HrZoneBar extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border.fromBorderSide(kHairline),
             ),
+            // 边框画在前景：色块撑满 14dp 之后会把默认画在背景里的那圈细线整个
+            // 盖住，条就从「细线兜住的色块」变成一条没边框的实心条，丢掉这块
+            // 本来的器件语言。
+            position: DecorationPosition.foreground,
             child: SizedBox(
               height: 14,
               child: Row(
+                // 必须 stretch（真机实测漏了这一条）：`ColoredBox` 没有子节点，
+                // 在松高度约束下按 `constraints.smallest` 量出 0 高度，整条只剩
+                // 外面那圈细线边框——图例写着 Z1 41%/Z2 29%/Z3 30%，条上却一片
+                // 空白。stretch 把每段拉到 14dp 满高，宽度仍然由 flex 决定。
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   for (final HrZone zone in kHrZones)
                     if (breakdown.ratioOf(zone.index) > 0)
