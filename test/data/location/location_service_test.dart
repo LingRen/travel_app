@@ -292,8 +292,13 @@ void main() {
       expect(settings.accuracy, LocationAccuracy.best);
       expect(settings.distanceFilter, 0);
 
+      final AndroidSettings android = settings as AndroidSettings;
+      // 真机实测无 GMS 的机器不写这项只有约 5 秒一个点；落盘与曲线口径都按
+      // 1 Hz 设计的，必须显式要。
+      expect(android.intervalDuration, const Duration(seconds: 1));
+
       final ForegroundNotificationConfig? config =
-          (settings as AndroidSettings).foregroundNotificationConfig;
+          android.foregroundNotificationConfig;
       expect(config, isNotNull);
       expect(config!.notificationTitle, '骑行记录中');
       expect(config.setOngoing, isTrue);

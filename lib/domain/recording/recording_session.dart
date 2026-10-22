@@ -88,8 +88,14 @@ class RecordingSession {
         _lastWrittenMs = lastWritten?.tMs ?? startedAtMs {
     // 崩溃恢复时把已落盘的那段轨迹接上，否则恢复后缩略图是空的，
     // 要等新点攒够才慢慢长出来。走同一条抽稀路径，不另写一套。
+    // 落盘点之间的真实断点按时间差还原（这批点没被抽稀过，2 秒一点）。
+    TrackPoint? prev;
     for (final TrackPoint p in recentTrack) {
-      _appendToLiveTrack(p);
+      _appendToLiveTrack(
+        p,
+        gpsLostBefore: prev != null && p.tMs - prev.tMs > kGpsGapMs,
+      );
+      prev = p;
     }
   }
 
@@ -148,6 +154,9 @@ class RecordingSession {
   /// 本次骑行到此刻为止的轨迹（已抽稀）。见设计文档 9.4。
   List<TrackPoint> get liveTrack => _liveTrack;
 
+  /// [liveTrack] 上真实 GPS 丢失造成的段首下标。见 [_liveBreaks]。
+  Set<int> get liveBreakIndexes => _liveBreaks;
+
   /// 取出并清空这一拍新产生的提示。调用方负责播报与展示。
   List<RideCue> takeCues() {
     if (_pendingCues.isEmpty) return const <RideCue>[];
@@ -165,6 +174,16 @@ class RecordingSession {
   /// **永不原地改动已经交出去的列表**：压缩时换一个新的列表对象，界面才能用
   /// `identical` 判断「轨迹到底变没变」，不必每秒重算折线（见 `LiveRouteMap`）。
   List<TrackPoint> _liveTrack = const <TrackPoint>[];
+
+  /// 真实 GPS 丢失造成的断点：下标 i 表示 `_liveTrack[i]` 与 `[i-1]` 之间必须
+  /// 断开。**不能拿时间间隔反推**——抽稀后相邻两点本来就可能隔十几秒（慢速骑行、
+  /// 红绿灯、折半压缩），那样会把连续轨迹切成一截截（真机实测的「断断续续」）。
+  /// 断点只在确实有超过 [kGpsGapMs] 没有新定位时才记一笔。
+  Set<int> _liveBreaks = const <int>{};
+
+  /// 断点已经发生、但对应的点还没被抽稀规则收进 `_liveTrack`：等下一个被收下的
+  /// 点把它标成段首，否则这次真实丢失会被抽稀吞掉。
+  bool _liveBreakPending = false;
 
   /// 落盘与读数共用的功率：接了功率计用实测值，否则用估算值。
   int? get _effectivePower => _power ?? _estimatedPower;
@@ -193,6 +212,10 @@ class RecordingSession {
     if (_phase != RecordingPhase.recording || !fix.hasPosition) return;
 
     final LocationFix? prev = _lastFix;
+    // 上一次定位到这里已经超过断点阈值：这次是真丢了信号，而不是抽稀造成的
+    // 时间跨度。缩略图要靠它断开，不能等画的时候再按时间猜。
+    final bool gpsLostBefore =
+        prev != null && fix.tMs - prev.tMs > kGpsGapMs;
     double segmentM = 0;
     if (prev != null && prev.hasPosition) {
       segmentM = segmentDistanceMeters(_toPoint(prev), _toPoint(fix));
@@ -214,7 +237,10 @@ class RecordingSession {
     _estimatedPower = _estimatePower();
 
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
-      _write(_toPoint(fix));
+      _write(_toPoint(fix), gpsLostBefore: gpsLostBefore);
+    } else if (gpsLostBefore) {
+      // 这个点没落盘（几乎没位移），但它标记的断点不能丢：留给下一个落盘点。
+      _liveBreakPending = true;
     }
   }
 
@@ -397,18 +423,24 @@ class RecordingSession {
     ));
   }
 
-  void _write(TrackPoint point) {
+  void _write(TrackPoint point, {bool gpsLostBefore = false}) {
     _lastWritten = point;
     _lastWrittenMs = point.tMs;
     _pointCount++;
     _buffer.add(point);
-    _appendToLiveTrack(point);
+    _appendToLiveTrack(point, gpsLostBefore: gpsLostBefore);
   }
 
   /// 往实时轨迹里追加一个点，按距离或时间抽稀。只有带定位的点才进得来：
   /// 缩略图上画的是轨迹，隧道里那些纯传感器点没有坐标，接进去会变成假直线。
-  void _appendToLiveTrack(TrackPoint point) {
+  ///
+  /// [gpsLostBefore] 是这次定位之前确实丢了超过 [kGpsGapMs] 的信号。它标记的
+  /// 断点必须跟着点一起进 `_liveBreaks`——**不要指望画线时按时间差反推**：
+  /// 抽稀之后相邻两点本来就常常隔 15 秒以上。
+  void _appendToLiveTrack(TrackPoint point, {required bool gpsLostBefore}) {
     if (!point.hasPosition) return;
+
+    if (gpsLostBefore) _liveBreakPending = true;
 
     if (_liveTrack.isNotEmpty) {
       final TrackPoint last = _liveTrack.last;
@@ -418,16 +450,39 @@ class RecordingSession {
       if (!farEnough && !lateEnough) return;
     }
 
+    if (_liveBreakPending) {
+      _liveBreaks = <int>{..._liveBreaks, _liveTrack.length};
+      _liveBreakPending = false;
+    }
     _liveTrack = <TrackPoint>[..._liveTrack, point];
     if (_liveTrack.length > kLiveTrackMaxPoints) _compactLiveTrack();
   }
 
   /// 折半压缩：隔一个取一个，并保证最新点留在里面（否则轨迹末端会缺一截）。
+  ///
+  /// 断点下标要跟着重新映射：保留下来的点如果自己、或被丢掉的前一个点处有断，
+  /// 新下标同样要断。否则真实 GPS 丢失会在压缩时被悄悄抹平。
   void _compactLiveTrack() {
-    final List<TrackPoint> kept = <TrackPoint>[
-      for (int i = 0; i < _liveTrack.length; i += 2) _liveTrack[i],
+    final List<int> sourceIndexes = <int>[
+      for (int i = 0; i < _liveTrack.length; i += 2) i,
     ];
-    if (!identical(kept.last, _liveTrack.last)) kept.add(_liveTrack.last);
+    final bool lastKept = sourceIndexes.last == _liveTrack.length - 1;
+    if (!lastKept) sourceIndexes.add(_liveTrack.length - 1);
+
+    final List<TrackPoint> kept = <TrackPoint>[
+      for (final int i in sourceIndexes) _liveTrack[i],
+    ];
+
+    final Set<int> keptBreaks = <int>{};
+    for (int k = 0; k < sourceIndexes.length; k++) {
+      final int src = sourceIndexes[k];
+      if (_liveBreaks.contains(src) ||
+          (src > 0 && _liveBreaks.contains(src - 1))) {
+        keptBreaks.add(k);
+      }
+    }
+
+    _liveBreaks = keptBreaks;
     _liveTrack = kept;
   }
 

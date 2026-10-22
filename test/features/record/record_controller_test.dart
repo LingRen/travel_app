@@ -12,6 +12,7 @@ import 'package:cycling_app/domain/models/ride.dart';
 import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/analysis/route_segments.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
@@ -748,6 +749,54 @@ void main() {
     // 累计 33 米，超过阈值，留下第二个点。
     await rideOneSecond(tester, lat: 31.0003);
     expect(container.read(recordControllerProvider).liveTrack.length, 2);
+    container.dispose();
+  });
+
+  // 缩略图上的点是抽稀过的：慢速骑行时相邻两点隔 15 秒是常态，画线若按
+  // `kGpsGapMs`（10 秒）判断，一条连续轨迹会被切成一截截——这就是真机上看到的
+  // 「断断续续」。断点必须由采集侧在确实丢信号时显式标出来。
+  testWidgets('慢速骑行的时间跨度不算断点，真丢信号才断', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    // 每秒 1.1 米（0.00001 度）：25 米要走 22 秒，缩略图只能靠 15 秒的时间规则
+    // 追加点，于是相邻两点必然超过 10 秒。
+    for (int i = 0; i < 46; i++) {
+      await rideOneSecond(tester, lat: 31.0 + i * 0.00001);
+    }
+
+    final RecordState slow = container.read(recordControllerProvider);
+    expect(slow.liveTrack.length, greaterThanOrEqualTo(2));
+    expect(slow.liveTrackBreaks, isEmpty, reason: '一路都有定位，不该有断点');
+    expect(
+      buildRouteSegments(slow.liveTrack, breakBefore: slow.liveTrackBreaks).length,
+      1,
+      reason: '抽稀造成的 15 秒间隔不能把轨迹切开',
+    );
+
+    // 12 秒没有定位：再恢复时，下一个被缩略图收下的点必须是段首。
+    clockMs += 12000;
+    location.emit(LocationFix(
+      tMs: clockMs,
+      lat: 31.0005,
+      lon: 121.0,
+      speedMps: 5,
+    ));
+    await tester.pump(const Duration(seconds: 1));
+    // 恢复后按 ~11 m/s 推进 12 秒：断点那个点之后还要再攒一个点，否则断出来的
+    // 尾段只有一个顶点、会被 `_flush` 丢掉，看不出「断成两段」。
+    for (int i = 0; i < 12; i++) {
+      await rideOneSecond(tester, lat: 31.0005 + i * 0.0001, speedMps: 5);
+    }
+
+    final RecordState after = container.read(recordControllerProvider);
+    expect(after.liveTrackBreaks, isNotEmpty, reason: '真丢了 12 秒信号');
+    expect(
+      buildRouteSegments(after.liveTrack, breakBefore: after.liveTrackBreaks).length,
+      2,
+    );
     container.dispose();
   });
 

@@ -30,7 +30,8 @@ class RouteSegment {
 /// 转换只发生在这里，落盘与 GPX 导出的仍是 WGS-84 原始坐标。
 ///
 /// **两种情况下断开折线**，否则地图上会出现横穿隧道或建筑物的假直线：
-/// - 时间间隔超过 [kGpsGapMs]（设计文档 9.3）
+/// - 时间间隔超过 [kGpsGapMs] **且**位移超过 [kGapBreakMinDistanceM]（设计文档
+///   9.3；只看时间会在每次停车处断开，见 [isMeaningfulGap]）
 /// - 隐含速度超过 [kMaxPlausibleSpeedMps]（GPS 跳变）
 ///
 /// [maxVerticesPerSegment] 是对设计文档 9.2「按相邻两点平均速度分段着色」的
@@ -38,31 +39,41 @@ class RouteSegment {
 /// 就是 3000+ 条，`flutter_map` 会卡。这里把连续点分组，每组一条 `Polyline`、
 /// 一个颜色（取该组平均速度）。断点一定会断开，不受分组影响。
 /// 相邻两段共享一个顶点，折线才连得上。
+///
+/// [breakBefore] 给出「第 i 个点与上一个点之间必须断开」的下标集合（下标对
+/// [points] 的顺序，不是过滤掉无坐标点之后的下标）。给了它就不再按时间间隔判
+/// 断点——输入已经被抽稀过的情况（实时轨迹缩略图，见 9.4）里，点与点的时间跨度
+/// 是抽稀的产物，拿 [kGpsGapMs] 去卡会把连续轨迹切成一截截。跳变检查仍然生效。
 List<RouteSegment> buildRouteSegments(
   List<TrackPoint> points, {
   bool toGcj02 = true,
   double maxSpeedMps = kColorScaleMaxSpeedMps,
   int maxVerticesPerSegment = 24,
+  Set<int>? breakBefore,
 }) {
   assert(maxVerticesPerSegment >= 2, '一段至少要两个顶点才画得出线');
 
-  final List<TrackPoint> located =
-      points.where((TrackPoint p) => p.hasPosition).toList();
+  final List<({int index, TrackPoint point})> located = <({int index, TrackPoint point})>[
+    for (int i = 0; i < points.length; i++)
+      if (points[i].hasPosition) (index: i, point: points[i]),
+  ];
   if (located.length < 2) return const <RouteSegment>[];
 
   final List<RouteSegment> segments = <RouteSegment>[];
 
   /// 当前正在攒的顶点。段与段之间靠「保留最后一个顶点」连起来。
   List<RouteVertex> current = <RouteVertex>[
-    _vertex(located.first, toGcj02),
+    _vertex(located.first.point, toGcj02),
   ];
-  final List<double> currentSpeeds = <double>[_speed(located.first)];
+  final List<double> currentSpeeds = <double>[_speed(located.first.point)];
 
   for (int i = 1; i < located.length; i++) {
-    final TrackPoint prev = located[i - 1];
-    final TrackPoint cur = located[i];
+    final TrackPoint prev = located[i - 1].point;
+    final TrackPoint cur = located[i].point;
 
-    if (!_connectable(prev, cur)) {
+    final bool explicitBreak = breakBefore?.contains(located[i].index) ?? false;
+    if (explicitBreak ||
+        !_connectable(prev, cur, checkTimeGap: breakBefore == null)) {
       _flush(segments, current, currentSpeeds, maxSpeedMps);
       current = <RouteVertex>[_vertex(cur, toGcj02)];
       currentSpeeds
@@ -106,14 +117,18 @@ void _flush(
   ));
 }
 
-bool _connectable(TrackPoint a, TrackPoint b) {
+bool _connectable(TrackPoint a, TrackPoint b, {bool checkTimeGap = true}) {
   final int dt = b.tMs - a.tMs;
-  if (dt <= 0 || dt > kGpsGapMs) return false;
+  if (dt <= 0) return false;
+  if (checkTimeGap && isMeaningfulGap(a, b)) return false;
   // 缺速度时判不出跳变，退回纯时间判定（与 splitMovingStationary 一致）。
   final double? speedA = a.speedMps;
   final double? speedB = b.speedMps;
   if (speedA == null || speedB == null) return true;
-  return isTrustedSegment(a, b);
+  // 不能直接调 `isTrustedSegment`：它内部还带着 [kGpsGapMs] 的时间判定，
+  // 这里已经按调用方的要求把那一半关掉了。
+  return haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) / (dt / 1000.0) <=
+      kMaxPlausibleSpeedMps;
 }
 
 RouteVertex _vertex(TrackPoint p, bool toGcj02) {

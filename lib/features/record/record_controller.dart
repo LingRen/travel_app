@@ -39,6 +39,7 @@ class RecordState {
     this.gpsWeak = false,
     this.errorMessage,
     this.liveTrack = const <TrackPoint>[],
+    this.liveTrackBreaks = const <int>{},
     this.currentAltitudeM,
     this.elevationGainM = 0,
     this.lastCue,
@@ -76,6 +77,12 @@ class RecordState {
   /// 拷贝），而那个列表只在真正追加或压缩时换新对象——所以界面可以靠
   /// `identical` 判断轨迹有没有变，不必每秒重算折线。
   final List<TrackPoint> liveTrack;
+
+  /// [liveTrack] 上真实 GPS 丢失造成的段首下标（和列表一样透传引用）。
+  ///
+  /// 缩略图**不能**自己按时间差判断点：抽稀后相邻两点本来就常常隔十几秒，
+  /// 按 [kGpsGapMs] 卡会把连续轨迹切碎。真实丢失由采集侧标记后传下来。
+  final Set<int> liveTrackBreaks;
 
   /// 最近一次可信定位的海拔（米）。没有高程数据时为 null，界面显示 `--`。
   final double? currentAltitudeM;
@@ -510,6 +517,7 @@ class RecordController extends Notifier<RecordState> {
       errorMessage: _error,
       // 直接透传引用，不拷贝：见 RecordState.liveTrack 的说明。
       liveTrack: session?.liveTrack ?? const <TrackPoint>[],
+      liveTrackBreaks: session?.liveBreakIndexes ?? const <int>{},
       currentAltitudeM: snap?.currentAltitudeM,
       elevationGainM: snap?.elevationGainM ?? 0,
       lastCue: _lastCue,

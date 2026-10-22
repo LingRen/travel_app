@@ -23,6 +23,7 @@ class LiveRouteMap extends StatefulWidget {
   const LiveRouteMap({
     required this.points,
     required this.tileUrlTemplate,
+    this.breakIndexes = const <int>{},
     this.subdomains = const <String>[],
     this.height,
     this.placeholderAlignment = Alignment.center,
@@ -32,6 +33,12 @@ class LiveRouteMap extends StatefulWidget {
   /// 轨迹点。**每次刷新请传同一个列表对象**（没变就别新建）：这里靠
   /// [identical] 判断轨迹有没有真的变，从而跳过重算折线。
   final List<TrackPoint> points;
+
+  /// 真实 GPS 丢失造成的段首下标；见 `RecordState.liveTrackBreaks`。
+  ///
+  /// 不能改成在这里按时间差判断：这张图上的点是抽稀过的，相邻两点隔 15 秒是
+  /// 常态（慢速骑行、红绿灯），按 10 秒阈值卡会把连续轨迹切成一截截。
+  final Set<int> breakIndexes;
 
   /// 瓦片源，来自设置（设计文档 9.1 的对冲措施：接口失效时可换源）。
   final String tileUrlTemplate;
@@ -88,7 +95,10 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     super.didUpdateWidget(oldWidget);
     // 没变就不重算：每秒重建一次折线会逼 flutter_map 重走一遍折线布局，
     // 而轨迹实际只在攒够 25 米时才多一个点。
-    if (identical(oldWidget.points, widget.points)) return;
+    if (identical(oldWidget.points, widget.points) &&
+        identical(oldWidget.breakIndexes, widget.breakIndexes)) {
+      return;
+    }
     _rebuild(widget.points);
     _scheduleSyncCamera();
   }
@@ -109,6 +119,8 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     final List<RouteSegment> segments = buildRouteSegments(
       points,
       toGcj02: isGcj02TileSource(widget.tileUrlTemplate),
+      // 抽稀过的点不能按时间差断开，断点由采集侧标好传进来。
+      breakBefore: widget.breakIndexes,
     );
     _polylines = <Polyline<Object>>[
       for (final RouteSegment s in segments)

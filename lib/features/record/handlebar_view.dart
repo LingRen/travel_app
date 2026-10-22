@@ -106,6 +106,7 @@ class HandlebarView extends StatelessWidget {
         // 整页就是地图。读数与按钮浮在它上面（见类注释与设计文档 10.1）。
         LiveRouteMap(
           points: state.liveTrack,
+          breakIndexes: state.liveTrackBreaks,
           tileUrlTemplate: tileUrlTemplate,
           subdomains: kDefaultMapTileSubdomains,
           placeholderAlignment: _kPlaceholderAlignment,

@@ -102,17 +102,33 @@ void main() {
   });
 
   group('断线规则', () {
-    test('时间间隔超过 kGpsGapMs 时断开', () {
+    test('时间间隔超过 kGpsGapMs 且位移明显时断开', () {
       final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
         pt(0, speed: 5),
         pt(1000, lat: 31.0001, speed: 5),
-        pt(1000 + kGpsGapMs + 1, lat: 31.0002, speed: 5),
-        pt(2000 + kGpsGapMs + 1, lat: 31.0003, speed: 5),
+        // 断点两侧真的挪了地方（约 1.1 km），连起来就是一条假直线。
+        pt(1000 + kGpsGapMs + 1, lat: 31.0102, speed: 5),
+        pt(2000 + kGpsGapMs + 1, lat: 31.0103, speed: 5),
       ]);
 
       expect(segs.length, 2);
       expect(segs[0].vertices.length, 2);
       expect(segs[1].vertices.length, 2);
+    });
+
+    // 真机实测（2026-10-20）：一趟 20 分钟的骑行里 8 处超过 10 秒的间隔有 6 处
+    // 只是「停在原地时系统不再送定位」，位移 0~13 米。纯按时间判会在每次停车处
+    // 画出断口，看起来就是「断断续续」。
+    test('时间间隔超过 kGpsGapMs 但几乎没位移时不断开', () {
+      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
+        pt(0, speed: 0),
+        pt(1000, lat: 31.0001, speed: 0),
+        pt(1000 + kGpsGapMs + 1, lat: 31.00018, speed: 0), // 约 9 米
+        pt(2000 + kGpsGapMs + 1, lat: 31.00019, speed: 0),
+      ]);
+
+      expect(segs.length, 1);
+      expect(segs.single.vertices.length, 4);
     });
 
     test('恰好等于 kGpsGapMs 不断开', () {
@@ -131,8 +147,8 @@ void main() {
       final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
         pt(0),
         pt(1000, lat: 31.0001),
-        pt(1000 + kGpsGapMs + 1, lat: 31.0002),
-        pt(2000 + kGpsGapMs + 1, lat: 31.0003),
+        pt(1000 + kGpsGapMs + 1, lat: 31.0102),
+        pt(2000 + kGpsGapMs + 1, lat: 31.0103),
       ]);
 
       expect(segs.length, 2);
@@ -266,6 +282,76 @@ void main() {
       ]);
 
       expect(segs.single.colorArgb, isNotNull);
+    });
+  });
+
+  // 实时轨迹缩略图（设计文档 9.4）喂进来的是抽稀过的点：相邻两点隔 15 秒是
+  // 常态（慢速骑行、红绿灯、400 点后折半压缩），拿 kGpsGapMs 去卡会把一条连续
+  // 轨迹切成一截截——真机上看到的「断断续续」。断点改由采集侧显式标记。
+  group('抽稀轨迹的显式断点', () {
+    test('点了 breakBefore 就不按时间间隔断开', () {
+      final List<RouteSegment> segs = buildRouteSegments(
+        <TrackPoint>[
+          pt(0, speed: 5),
+          pt(15000, lat: 31.0001, speed: 5),
+          pt(30000, lat: 31.0002, speed: 5),
+        ],
+        breakBefore: const <int>{},
+      );
+
+      expect(segs.length, 1, reason: '15 秒间隔是抽稀的产物，不是丢信号');
+      expect(segs.single.vertices.length, 3);
+    });
+
+    test('breakBefore 指定的下标处真的断开', () {
+      final List<RouteSegment> segs = buildRouteSegments(
+        <TrackPoint>[
+          pt(0, speed: 5),
+          pt(2000, lat: 31.0001, speed: 5),
+          pt(4000, lat: 31.2002, speed: 5),
+          pt(6000, lat: 31.2003, speed: 5),
+        ],
+        breakBefore: const <int>{2},
+      );
+
+      expect(segs.length, 2);
+      expect(segs[0].vertices.length, 2);
+      expect(segs[1].vertices.length, 2);
+    });
+
+    // 实时轨迹全部带坐标，但断点下标是按原列表算的，写错了会在跳过无坐标点后
+    // 错位一格——把「下标口径」钉住。
+    test('断点下标按原列表算，无坐标点不影响', () {
+      final List<RouteSegment> segs = buildRouteSegments(
+        <TrackPoint>[
+          pt(0, speed: 5),
+          const TrackPoint(rideId: 1, tMs: 1000, hr: 140), // 无坐标
+          pt(2000, lat: 31.0001, speed: 5),
+          pt(4000, lat: 31.2002, speed: 5),
+          pt(6000, lat: 31.2003, speed: 5),
+        ],
+        // 原列表下标 3 是「31.2002」那个点：断在它前面。
+        breakBefore: const <int>{3},
+      );
+
+      expect(segs.length, 2);
+      expect(segs[0].vertices.length, 2, reason: '31.0 与 31.0001 连成第一段');
+      expect(segs[1].vertices.length, 2, reason: '31.2002 与 31.2003 连成第二段');
+    });
+
+    test('显式断点模式下跳变仍然断开', () {
+      // 1 秒跨 0.01 度 ≈ 1113 米，远超 30 m/s。
+      final List<RouteSegment> segs = buildRouteSegments(
+        <TrackPoint>[
+          pt(0, speed: 5),
+          pt(1000, lat: 31.0, speed: 5),
+          pt(2000, lat: 31.01, speed: 5),
+          pt(3000, lat: 31.0101, speed: 5),
+        ],
+        breakBefore: const <int>{},
+      );
+
+      expect(segs.length, 2);
     });
   });
 }

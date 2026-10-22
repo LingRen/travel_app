@@ -1,5 +1,6 @@
 import '../models/track_point.dart';
 import 'constants.dart';
+import 'geo.dart';
 import 'speed.dart';
 
 /// 曲线要画哪个指标。
@@ -7,8 +8,9 @@ enum CurveMetric { speed, heartRate, cadence, power }
 
 /// 曲线上的一个采样点。
 ///
-/// [segment] 是断点分段号：GPS 断点（时间间隔超过 [kGpsGapMs]）或时间不前进时
-/// 递增，图表按它拆成多条折线，避免把隧道两侧连成假直线。见设计文档 9.3。
+/// [segment] 是断点分段号：GPS 断点（时间间隔超过 [kGpsGapMs] 且位移超过
+/// [kGapBreakMinDistanceM]，见 [isMeaningfulGap]）或时间不前进时递增，图表按它
+/// 拆成多条折线，避免把隧道两侧连成假直线。见设计文档 9.3。
 class CurveSample {
   const CurveSample({
     required this.xSeconds,
@@ -49,19 +51,22 @@ List<CurveSample> buildCurve(
 
   final List<CurveSample> all = <CurveSample>[];
   int segment = 0;
-  int? prevTMs;
+  TrackPoint? prev;
   double? originTMs;
 
   for (int i = 0; i < points.length; i++) {
     final double? y = values[i];
     if (y == null) continue;
 
-    final int tMs = points[i].tMs;
-    if (prevTMs != null) {
-      final int dt = tMs - prevTMs;
-      if (dt <= 0 || dt > kGpsGapMs) segment++;
+    final TrackPoint point = points[i];
+    final int tMs = point.tMs;
+    if (prev != null) {
+      final int dt = tMs - prev.tMs;
+      // 停车时系统不再送定位也是十几秒空档，但位移接近零——连起来画不出假
+      // 直线，断开只会让曲线看着断断续续。见 [isMeaningfulGap]。
+      if (dt <= 0 || isMeaningfulGap(prev, point)) segment++;
     }
-    prevTMs = tMs;
+    prev = point;
     originTMs ??= tMs.toDouble();
 
     all.add(CurveSample(

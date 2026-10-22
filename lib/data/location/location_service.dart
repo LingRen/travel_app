@@ -81,6 +81,10 @@ LocationSettings buildLocationSettings({required bool isAndroid}) {
     return AndroidSettings(
       accuracy: LocationAccuracy.best,
       distanceFilter: 0,
+      // 显式要 1 Hz。真机实测（无 GMS 的 OPPO，走系统 LocationManager）不写这项时
+      // 只给到约 5 秒一个点，落盘 5m/2s、曲线采样与断点判定全部建立在 1 Hz 的
+      // 假设上（见 6.3），空档稍一拉长就会被当成丢信号。
+      intervalDuration: const Duration(seconds: 1),
       // 前台服务通知：Android 10+ 后台持续定位必需，与 Task 2 声明的
       // com.baseflow.geolocator.GeolocatorService 配套。
       foregroundNotificationConfig: const ForegroundNotificationConfig(

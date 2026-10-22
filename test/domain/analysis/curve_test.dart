@@ -7,6 +7,10 @@ import 'package:cycling_app/features/detail/curve_chart.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 造一串等间隔的轨迹点。`hr`/`cadence` 与序号绑定，便于断言取到的是哪个点。
+///
+/// 传 [gapAfter] 时，其后的点整体后移 [kGpsGapMs] + 1，并且纬度再跳 0.01 度
+/// （约 1.1 km）——断点现在要求「时间超时 **且** 真的挪了地方」，只拉长时间
+/// 是停车，不会被判成断点。
 List<TrackPoint> buildPoints(int count, {int stepMs = 1000, int? gapAfter}) {
   return <TrackPoint>[
     for (int i = 0; i < count; i++)
@@ -15,7 +19,7 @@ List<TrackPoint> buildPoints(int count, {int stepMs = 1000, int? gapAfter}) {
         tMs: (gapAfter != null && i > gapAfter)
             ? i * stepMs + kGpsGapMs + 1
             : i * stepMs,
-        lat: 31.0 + i * 0.0001,
+        lat: 31.0 + i * 0.0001 + ((gapAfter != null && i > gapAfter) ? 0.01 : 0),
         lon: 121.0,
         speedMps: i.toDouble(),
         hr: 100 + i,
@@ -175,6 +179,27 @@ void main() {
       final List<CurveSample> curve =
           buildCurve(points, metric: CurveMetric.heartRate);
       expect(curve[1].segment, 0);
+    });
+
+    // 停车时系统不再送定位：间隔超过 10 秒但人没动。断开只会让曲线在每次停车
+    // 处缺一段（真机实测那趟 20 分钟里有 6 处），连起来也画不出假直线。
+    test('时间超过 kGpsGapMs 但几乎没位移时不递增 segment', () {
+      final List<TrackPoint> points = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 0, lat: 31.0, lon: 121.0, hr: 100),
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 31.00002, lon: 121.0, hr: 101),
+        // 15 秒后原地（约 10 米）恢复定位。
+        const TrackPoint(
+          rideId: 1,
+          tMs: 1000 + kGpsGapMs + 5000,
+          lat: 31.0001,
+          lon: 121.0,
+          hr: 102,
+        ),
+      ];
+      final List<CurveSample> curve =
+          buildCurve(points, metric: CurveMetric.heartRate);
+
+      expect(curve.map((CurveSample s) => s.segment).toList(), <int>[0, 0, 0]);
     });
   });
 
