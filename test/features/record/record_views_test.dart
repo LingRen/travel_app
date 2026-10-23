@@ -195,11 +195,15 @@ void main() {
     VoidCallback? onPause,
     VoidCallback? onResume,
     VoidCallback? onFinish,
+    ActivityType selectedActivityType = ActivityType.cycling,
+    ValueChanged<ActivityType>? onSelectActivityType,
   }) =>
       HandlebarView(
         state: state,
         unit: DistanceUnit.kilometer,
         tileUrlTemplate: kDefaultMapTileUrlTemplate,
+        selectedActivityType: selectedActivityType,
+        onSelectActivityType: onSelectActivityType ?? (_) {},
         onStart: onStart ?? () {},
         onPause: onPause ?? () {},
         onResume: onResume ?? () {},
@@ -216,14 +220,15 @@ void main() {
       )));
 
       // 记录 tab 落地就是这一页（设计文档 10.1），未开始态即入口态：
-      // 状态条写「未开始」，主按钮是「开始」，暂停键不出现（没东西可暂停）。
+      // 状态条写「未开始」，主按钮是「开始骑行」（文案带类型，见 chip 行），
+      // 暂停键不出现（没东西可暂停）。
       expect(find.text('未开始'), findsOneWidget);
-      expect(find.text('开始'), findsOneWidget);
+      expect(find.text('开始骑行'), findsOneWidget);
       expect(find.text('暂停'), findsNothing);
       expect(find.text('继续'), findsNothing);
       expect(find.text('结束'), findsNothing);
 
-      await tester.tap(find.text('开始'));
+      await tester.tap(find.text('开始骑行'));
       expect(starts, 1);
     });
 
@@ -509,7 +514,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('定位权限已被永久拒绝，请到系统设置中开启'), findsOneWidget);
-      expect(find.text('开始'), findsOneWidget);
+      expect(find.text('开始骑行'), findsOneWidget);
     });
 
     testWidgets('主指标字号不小于 72 且各项指标齐全', (WidgetTester tester) async {
@@ -667,6 +672,79 @@ void main() {
       expect(find.byType(FlutterMap), findsOneWidget);
       expect(find.text('等待定位…'), findsNothing);
     });
+
+    testWidgets('未开始态有运动类型 chip 行，点「跑步」回调收到 running',
+        (WidgetTester tester) async {
+      final List<ActivityType> picked = <ActivityType>[];
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(),
+        onSelectActivityType: picked.add,
+      )));
+
+      // 未开始时 4 个类型都在（主按钮文案「开始骑行」里的「骑行」不算）。
+      for (final ActivityType t in ActivityType.values) {
+        expect(find.text(t.label), findsOneWidget);
+      }
+      await tester.tap(find.text('跑步'));
+      expect(picked, <ActivityType>[ActivityType.running]);
+
+      // 记录中 chip 行整体消失：类型已冻结落库，不可再切。
+      await tester.pumpWidget(wrap(handlebar(active)));
+      expect(find.text('跑步'), findsNothing);
+      expect(find.text('健走'), findsNothing);
+    });
+
+    testWidgets('跑步类型：主读数显示配速，无踏频/功率格与灯',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          rideId: 1,
+          phase: RecordingPhase.recording,
+          elapsedMs: 90000,
+          distanceM: 1234.0,
+          currentSpeedMps: 3.0,
+          hr: 132,
+          hrConnected: true,
+          selectedActivityType: ActivityType.running,
+        ),
+        selectedActivityType: ActivityType.running,
+      )));
+
+      // 3 m/s → 每公里 333.3 秒 = 5'33"，单位是 /km 而不是 km/h。
+      expect(find.text("5'33\""), findsOneWidget);
+      expect(find.text('/km'), findsOneWidget);
+      expect(find.text('km/h'), findsNothing);
+      expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
+      // 无踏频/功率格，也没有对应的传感器灯。
+      expect(find.text('踏频'), findsNothing);
+      expect(find.text('功率（估算）'), findsNothing);
+      expect(find.text('功率'), findsNothing);
+      expect(find.byTooltip('点击连接踏频设备'), findsNothing);
+      expect(find.byTooltip('点击连接功率计'), findsNothing);
+      // 心率格与灯还在。
+      expect(find.text('心率'), findsOneWidget);
+      expect(find.byTooltip('心率已连接，点击更换设备'), findsOneWidget);
+    });
+
+    testWidgets('跑步类型下横幅说「已跑」而不是「已骑」', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          rideId: 1,
+          phase: RecordingPhase.recording,
+          elapsedMs: 90000,
+          distanceM: 10000,
+          currentSpeedMps: 3.0,
+          lastCue: DistanceCue(10),
+          cueSeq: 1,
+          selectedActivityType: ActivityType.running,
+        ),
+        selectedActivityType: ActivityType.running,
+      )));
+      await tester.pump();
+
+      expect(find.text('已跑 10 公里'), findsOneWidget);
+      expect(find.textContaining('已骑'), findsNothing);
+    });
   });
 
   group('速度刻度尺', () {
@@ -728,13 +806,13 @@ void main() {
       await pumpRecordPage(tester);
 
       // 原来的准备页已经并进这一屏（设计文档 10.1）：进来就能看到读数区、
-      // 缩略图与传感器灯，只是还没开始。
+      // 缩略图、传感器灯与运动类型 chip 行，只是还没开始。
       expect(find.text('未开始'), findsOneWidget);
-      expect(find.text('开始'), findsOneWidget);
+      expect(find.text('开始骑行'), findsOneWidget);
+      expect(find.text('开始'), findsNothing);
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
       expect(find.byKey(const Key('live-route-map')), findsOneWidget);
       expect(find.text('准备骑行'), findsNothing);
-      expect(find.text('开始骑行'), findsNothing);
       expect(find.text('骑行方式'), findsNothing);
       expect(find.text('暂停'), findsNothing);
       expect(find.text('结束'), findsNothing);
@@ -744,12 +822,12 @@ void main() {
       location.readiness = LocationReadiness.permissionDenied;
       await pumpRecordPage(tester);
 
-      await tester.tap(find.text('开始'));
+      await tester.tap(find.text('开始骑行'));
       await tester.pump();
 
       expect(find.text('未获得定位权限，无法记录骑行'), findsOneWidget);
       expect(repo.startWorkoutCalls, 0, reason: '阻断类错误下不能创建骑行记录');
-      expect(find.text('开始'), findsOneWidget, reason: '仍停在未开始状态');
+      expect(find.text('开始骑行'), findsOneWidget, reason: '仍停在未开始状态');
       // 失败时不该顺手把用户推进记录中：状态条与主按钮都得留在未开始态。
       expect(find.text('未开始'), findsOneWidget);
       expect(find.text('结束'), findsNothing);
@@ -759,7 +837,7 @@ void main() {
         (WidgetTester tester) async {
       await pumpRecordPage(tester);
 
-      await tester.tap(find.text('开始'));
+      await tester.tap(find.text('开始骑行'));
       await tester.pump();
       await tester.pump();
 
@@ -768,7 +846,7 @@ void main() {
       expect(find.text('进行中'), findsOneWidget);
       expect(find.text('结束'), findsOneWidget);
       expect(find.text('暂停'), findsOneWidget);
-      expect(find.text('开始'), findsNothing);
+      expect(find.text('开始骑行'), findsNothing);
       expect(
         tester.getSize(find.widgetWithText(FilledButton, '暂停')).width,
         greaterThan(tester.getSize(find.widgetWithText(OutlinedButton, '结束')).width),

@@ -44,6 +44,7 @@ class _FakeWorkoutRepository implements WorkoutRepository {
 
   /// startWorkout 收到的参数，供断言设备名与开始时间是否传对。
   int? startedAtMs;
+  ActivityType? activityType;
   String? hrDeviceName;
   String? cadenceDeviceName;
   String? powerDeviceName;
@@ -64,6 +65,7 @@ class _FakeWorkoutRepository implements WorkoutRepository {
   }) async {
     startWorkoutCalls++;
     this.startedAtMs = startedAtMs;
+    this.activityType = activityType;
     this.hrDeviceName = hrDeviceName;
     this.cadenceDeviceName = cadenceDeviceName;
     this.powerDeviceName = powerDeviceName;
@@ -742,6 +744,43 @@ void main() {
     expect(state.phase, isNull);
     expect(state.rideId, isNull);
     expect(state.distanceM, 0);
+    container.dispose();
+  });
+
+  testWidgets('selectActivityType 未开始时更新状态，记录中忽略，reset 保留选择',
+      (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+
+    // 默认骑行。
+    expect(
+      container.read(recordControllerProvider).selectedActivityType,
+      ActivityType.cycling,
+    );
+
+    // 未开始时切换生效。
+    controller.selectActivityType(ActivityType.running);
+    expect(
+      container.read(recordControllerProvider).selectedActivityType,
+      ActivityType.running,
+    );
+
+    // 开始后类型冻结落库：startWorkout 收到 running，界面上的再切换被忽略。
+    await controller.start();
+    expect(repo.activityType, ActivityType.running);
+    controller.selectActivityType(ActivityType.walking);
+    expect(
+      container.read(recordControllerProvider).selectedActivityType,
+      ActivityType.running,
+    );
+
+    // reset 保留上次选择：下一次进来还是跑步，不用重选。
+    controller.reset();
+    expect(
+      container.read(recordControllerProvider).selectedActivityType,
+      ActivityType.running,
+    );
     container.dispose();
   });
 

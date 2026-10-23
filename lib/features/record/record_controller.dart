@@ -13,6 +13,7 @@ import '../../data/workout_repository.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/elevation.dart';
 import '../../domain/analysis/geo.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/models/location_fix.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
@@ -45,6 +46,7 @@ class RecordState {
     this.elevationGainM = 0,
     this.lastCue,
     this.cueSeq = 0,
+    this.selectedActivityType = ActivityType.cycling,
   });
 
   final int? rideId;
@@ -106,6 +108,9 @@ class RecordState {
   /// 提示序号，每产生一条新提示 +1。同一句提示重复出现时靠它重新计时。
   final int cueSeq;
 
+  /// 选中的运动类型。未开始时由 chip 行修改；开始记录时冻结落库。
+  final ActivityType selectedActivityType;
+
   bool get isActive =>
       phase == RecordingPhase.recording || phase == RecordingPhase.paused;
 
@@ -163,6 +168,9 @@ class RecordController extends Notifier<RecordState> {
   RideCue? _lastCue;
   int _cueSeq = 0;
 
+  /// 选中的运动类型。未开始态由 chip 行修改；开始记录时冻结落库。
+  ActivityType _selectedActivityType = ActivityType.cycling;
+
   /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
   bool _foreground = true;
 
@@ -209,6 +217,7 @@ class RecordController extends Notifier<RecordState> {
 
     final Workout ride = await ref.read(workoutRepositoryProvider).startWorkout(
           startedAtMs: _now(),
+          activityType: _selectedActivityType,
           hrDeviceName: _monitors[SensorKind.heartRate]?.deviceName,
           cadenceDeviceName: _monitors[SensorKind.cadence]?.deviceName,
           powerDeviceName: _monitors[SensorKind.power]?.deviceName,
@@ -217,6 +226,7 @@ class RecordController extends Notifier<RecordState> {
     _session = RecordingSession(
       rideId: ride.id!,
       startedAtMs: ride.startedAtMs,
+      activityType: _selectedActivityType,
       weightKg: weightKg,
     );
     _startStreams();
@@ -245,6 +255,8 @@ class RecordController extends Notifier<RecordState> {
     }
 
     _rideId = rideId;
+    // 恢复的会话按已落盘的类型渲染：横幅动词、配速主读数都跟着它走。
+    _selectedActivityType = ride.activityType;
     _session = RecordingSession(
       rideId: rideId,
       startedAtMs: ride.startedAtMs,
@@ -313,6 +325,8 @@ class RecordController extends Notifier<RecordState> {
   }
 
   /// 回到「未开始」状态，供用户开始下一次记录。
+  ///
+  /// 选中的运动类型**保留**：用户上一次选的是跑步，下一次进来还想跑，不用重选。
   void reset() {
     _session = null;
     _rideId = null;
@@ -324,13 +338,26 @@ class RecordController extends Notifier<RecordState> {
     _lastBackgroundFlushMs = 0;
     _lastCue = null;
     _cueSeq = 0;
-    state = RecordState(foreground: _foreground);
+    state = RecordState(
+      foreground: _foreground,
+      selectedActivityType: _selectedActivityType,
+    );
+  }
+
+  /// 未开始时切换运动类型。记录中不可切换：类型在开始那一刻已经冻结落库。
+  void selectActivityType(ActivityType type) {
+    if (_session != null) return; // 记录中不可切换
+    _selectedActivityType = type;
+    _publish();
   }
 
   /// 连接一个传感器。失败不阻断骑行，[SensorMonitor] 会自动退避重连。
   ///
   /// 同一类型已有连接时先释放：换设备不应该留下一个还在后台重连的旧连接。
+  /// 不支持的传感器类型（跑步时点踏频入口）直接忽略，不弹任何反馈——界面上
+  /// 压根没有那个入口。
   Future<void> connectSensor(SensorKind kind, BleDeviceHandle device) async {
+    if (!_sensorKindAllowed(kind)) return;
     await _monitors.remove(kind)?.dispose();
 
     final SensorMonitor monitor = SensorMonitor(
@@ -471,14 +498,25 @@ class RecordController extends Notifier<RecordState> {
   /// 自动重连上次配对成功的传感器。见设计文档 10.5 与 6.1。
   ///
   /// 任何一步失败都直接跳过：传感器连不上不阻断开始记录（设计文档 6.1）。
+  /// 按当前选中的运动类型裁剪：跑步没有踏频/功率概念，即使配过对也不连。
   Future<void> _autoConnectPairedSensors() async {
     for (final SensorKind kind in SensorKind.values) {
+      if (!_sensorKindAllowed(kind)) continue;
       final PairedSensor? paired = await _pairing.load(kind);
       if (paired == null) continue;
       final BleDeviceHandle? device = await _blePlatform.deviceById(paired.id);
       if (device == null) continue;
       await connectSensor(kind, device);
     }
+  }
+
+  /// 这个传感器类型在当前选中的运动类型下是否可用。
+  bool _sensorKindAllowed(SensorKind kind) {
+    if (kind == SensorKind.heartRate) return true;
+    if (kind == SensorKind.cadence) {
+      return _selectedActivityType.supportsCadence;
+    }
+    return _selectedActivityType.supportsPower;
   }
 
   /// 攒够一批就提交一个事务；[force] 为真时无条件提交（暂停、结束、退后台）。
@@ -551,6 +589,7 @@ class RecordController extends Notifier<RecordState> {
       elevationGainM: snap?.elevationGainM ?? 0,
       lastCue: _lastCue,
       cueSeq: _cueSeq,
+      selectedActivityType: _selectedActivityType,
     );
   }
 

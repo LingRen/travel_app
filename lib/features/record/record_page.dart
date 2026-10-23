@@ -127,6 +127,8 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
         state: state,
         unit: unit,
         tileUrlTemplate: tileUrl,
+        selectedActivityType: state.selectedActivityType,
+        onSelectActivityType: controller.selectActivityType,
         onStart: controller.start,
         onPause: controller.pause,
         onResume: controller.resume,

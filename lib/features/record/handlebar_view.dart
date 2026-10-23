@@ -6,6 +6,7 @@ import '../../data/ble/sensor_monitor.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/color_scale.dart';
 import '../../domain/analysis/constants.dart';
+import '../../domain/models/activity_type.dart';
 import 'live_route_map.dart';
 import 'record_controller.dart';
 import 'ride_cue_banner.dart';
@@ -52,6 +53,8 @@ class HandlebarView extends StatelessWidget {
     required this.state,
     required this.unit,
     required this.tileUrlTemplate,
+    required this.selectedActivityType,
+    required this.onSelectActivityType,
     required this.onStart,
     required this.onPause,
     required this.onResume,
@@ -80,6 +83,12 @@ class HandlebarView extends StatelessWidget {
   /// 瓦片源，与详情页同一个口径（来自设置，接口失效时可换源）。
   final String tileUrlTemplate;
 
+  /// 本次运动的类型。未开始时由 chip 行选择；记录中不可切换。
+  final ActivityType selectedActivityType;
+
+  /// 未开始时点 chip 行的回调。
+  final ValueChanged<ActivityType> onSelectActivityType;
+
   /// 未开始时的「开始」。整宽独占底部动作区——未开始态只有这一个动作。
   final VoidCallback onStart;
   final VoidCallback onPause;
@@ -101,6 +110,8 @@ class HandlebarView extends StatelessWidget {
     // 主按钮是「开始」，暂停小键不出现（没东西可暂停）。
     final bool idle = state.phase == null;
     final double? altitudeM = state.currentAltitudeM;
+    // 跑步/健走/徒步的主读数用配速，骑行用速度。
+    final bool usePace = selectedActivityType.usesPace;
 
     return Stack(
       fit: StackFit.expand,
@@ -134,6 +145,7 @@ class HandlebarView extends StatelessWidget {
                       state: state,
                       idle: idle,
                       paused: paused,
+                      activityType: selectedActivityType,
                       onPickDevice: onPickDevice,
                     ),
                     const SizedBox(height: kSpaceS),
@@ -180,6 +192,7 @@ class HandlebarView extends StatelessWidget {
                       cue: state.lastCue,
                       seq: state.cueSeq,
                       unit: unit,
+                      activityType: selectedActivityType,
                     ),
                   ],
                 ),
@@ -204,21 +217,29 @@ class HandlebarView extends StatelessWidget {
                         textBaseline: TextBaseline.alphabetic,
                         children: <Widget>[
                           Text(
-                            formatSpeedValue(state.currentSpeedMps, unit),
+                            usePace
+                                ? formatPace(state.currentSpeedMps, unit)
+                                : formatSpeedValue(state.currentSpeedMps, unit),
                             key: const Key('handlebar-speed'),
                             style: _hud(kInstrumentTextStyle),
                           ),
                           const SizedBox(width: kSpaceS),
                           Text(
-                            speedUnitLabel(unit),
+                            usePace
+                                ? (unit == DistanceUnit.mile ? '/mi' : '/km')
+                                : speedUnitLabel(unit),
                             style: _hud(kLabelTextStyle),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: kSpaceS),
-                    _SpeedScale(speedMps: state.currentSpeedMps),
-                    const SizedBox(height: kSpaceS),
+                    // 速度刻度尺只有骑行有意义：配速没有「现在处于什么档位」的
+                    // 参照，跑步看它纯属噪音。
+                    if (!usePace) ...<Widget>[
+                      _SpeedScale(speedMps: state.currentSpeedMps),
+                      const SizedBox(height: kSpaceS),
+                    ],
                     _MetricRow(
                       dividerMargin: kSpaceS,
                       cells: <Widget>[
@@ -230,25 +251,27 @@ class HandlebarView extends StatelessWidget {
                               ? null
                               : () => onPickDevice(SensorKind.heartRate),
                         ),
-                        _MetricCell(
-                          label: '踏频',
-                          value: state.cadence?.toString() ?? '--',
-                          tooltip: state.cadenceConnected ? null : '踏频未连接，点击连接',
-                          onTap: state.cadenceConnected
-                              ? null
-                              : () => onPickDevice(SensorKind.cadence),
-                        ),
+                        if (selectedActivityType.supportsCadence)
+                          _MetricCell(
+                            label: '踏频',
+                            value: state.cadence?.toString() ?? '--',
+                            tooltip: state.cadenceConnected ? null : '踏频未连接，点击连接',
+                            onTap: state.cadenceConnected
+                                ? null
+                                : () => onPickDevice(SensorKind.cadence),
+                          ),
                         // 没接功率计时这一格是估算值（速度 + 坡度 + 体重），标签里
                         // 直接写明：骑到一半才发现「功率」其实不是功率计读数，
-                        // 不是好体验。
-                        _MetricCell(
-                          label: state.powerConnected ? '功率' : '功率（估算）',
-                          value: state.power?.toString() ?? '--',
-                          tooltip: state.powerConnected ? null : '功率计未连接，点击连接',
-                          onTap: state.powerConnected
-                              ? null
-                              : () => onPickDevice(SensorKind.power),
-                        ),
+                        // 不是好体验。跑步类型没有功率概念，整格不出现。
+                        if (selectedActivityType.supportsPower)
+                          _MetricCell(
+                            label: state.powerConnected ? '功率' : '功率（估算）',
+                            value: state.power?.toString() ?? '--',
+                            tooltip: state.powerConnected ? null : '功率计未连接，点击连接',
+                            onTap: state.powerConnected
+                                ? null
+                                : () => onPickDevice(SensorKind.power),
+                          ),
                       ],
                     ),
                     // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
@@ -260,6 +283,27 @@ class HandlebarView extends StatelessWidget {
                       _InlineNotice(message: state.errorMessage!),
                     ],
                     const SizedBox(height: kSpaceS),
+                    // 运动类型选择：4 个 chip 一行。只在未开始态出现——开始后类型
+                    // 已冻结落库，记录中不可切换。
+                    if (idle) ...<Widget>[
+                      const SizedBox(height: kSpaceS),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<ActivityType>(
+                          segments: <ButtonSegment<ActivityType>>[
+                            for (final ActivityType t in ActivityType.values)
+                              ButtonSegment<ActivityType>(
+                                value: t,
+                                label: Text(t.label),
+                              ),
+                          ],
+                          selected: <ActivityType>{selectedActivityType},
+                          onSelectionChanged: (Set<ActivityType> selected) =>
+                              onSelectActivityType(selected.first),
+                          showSelectedIcon: false,
+                        ),
+                      ),
+                    ],
                     // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；
                     // 记录中按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，
                     // 「结束」占 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满
@@ -274,9 +318,9 @@ class HandlebarView extends StatelessWidget {
                                 backgroundColor: context.palette.accent,
                                 foregroundColor: context.palette.onAccent,
                               ),
-                              child: const Text(
-                                '开始',
-                                style: TextStyle(
+                              child: Text(
+                                '开始${selectedActivityType.label}',
+                                style: const TextStyle(
                                   fontSize: kFontTitle,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -400,12 +444,16 @@ class _StatusStrip extends StatelessWidget {
     required this.state,
     required this.idle,
     required this.paused,
+    required this.activityType,
     required this.onPickDevice,
   });
 
   final RecordState state;
   final bool idle;
   final bool paused;
+
+  /// 本次运动的类型。传感器灯按它裁剪：跑步没有踏频/功率灯。
+  final ActivityType activityType;
   final void Function(SensorKind kind) onPickDevice;
 
   @override
@@ -468,20 +516,22 @@ class _StatusStrip extends StatelessWidget {
           tooltip: state.hrConnected ? '心率已连接，点击更换设备' : '点击连接心率设备',
           onTap: () => onPickDevice(SensorKind.heartRate),
         ),
-        _SensorLamp(
-          icon: Icons.sync,
-          connected: state.cadenceConnected,
-          onColor: context.palette.accent,
-          tooltip: state.cadenceConnected ? '踏频已连接，点击更换设备' : '点击连接踏频设备',
-          onTap: () => onPickDevice(SensorKind.cadence),
-        ),
-        _SensorLamp(
-          icon: Icons.bolt,
-          connected: state.powerConnected,
-          onColor: context.palette.accent,
-          tooltip: state.powerConnected ? '功率计已连接，点击更换设备' : '点击连接功率计',
-          onTap: () => onPickDevice(SensorKind.power),
-        ),
+        if (activityType.supportsCadence)
+          _SensorLamp(
+            icon: Icons.sync,
+            connected: state.cadenceConnected,
+            onColor: context.palette.accent,
+            tooltip: state.cadenceConnected ? '踏频已连接，点击更换设备' : '点击连接踏频设备',
+            onTap: () => onPickDevice(SensorKind.cadence),
+          ),
+        if (activityType.supportsPower)
+          _SensorLamp(
+            icon: Icons.bolt,
+            connected: state.powerConnected,
+            onColor: context.palette.accent,
+            tooltip: state.powerConnected ? '功率计已连接，点击更换设备' : '点击连接功率计',
+            onTap: () => onPickDevice(SensorKind.power),
+          ),
       ],
     );
   }

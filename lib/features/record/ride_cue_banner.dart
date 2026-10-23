@@ -23,7 +23,7 @@ class RideCueBanner extends StatefulWidget {
     required this.cue,
     required this.seq,
     required this.unit,
-    this.activityType = ActivityType.cycling,
+    required this.activityType,
     this.duration = const Duration(seconds: 5),
     super.key,
   });
