@@ -11,6 +11,7 @@ import '../../domain/analysis/curve.dart';
 import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/heart_rate.dart';
 import '../../domain/analysis/route_segments.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_summary.dart';
@@ -47,7 +48,12 @@ class DetailPage extends ConsumerWidget {
             DistanceUnit.kilometer;
 
     return Scaffold(
-      appBar: AppBar(title: Text(detail.value?.ride.title ?? '骑行详情')),
+      appBar: AppBar(
+        title: Text(
+          detail.value?.ride.title ??
+              '${detail.value?.ride.activityType.label ?? '骑行'}详情',
+        ),
+      ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
@@ -111,13 +117,34 @@ class _DetailBody extends ConsumerWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-          child: Text(
-            formatDateTime(ride.startedAtMs),
-            style: const TextStyle(
-              fontSize: 13,
-              color: kAppTextMuted,
-              fontFeatures: kTabularFigures,
-            ),
+          child: Row(
+            children: <Widget>[
+              // 类型徽标：图标 + 标签 + 日期一排。图标与历史卡片同规格（16、
+              // 不占色），混合类型的记录在详情页里一眼能看出是骑行还是跑步。
+              Icon(
+                _activityIcon(ride.activityType),
+                size: 16,
+                color: kAppTextMuted,
+              ),
+              const SizedBox(width: kSpaceS),
+              Text(
+                ride.activityType.label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: kAppTextMuted,
+                  fontFeatures: kTabularFigures,
+                ),
+              ),
+              const SizedBox(width: kSpaceS),
+              Text(
+                formatDateTime(ride.startedAtMs),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: kAppTextMuted,
+                  fontFeatures: kTabularFigures,
+                ),
+              ),
+            ],
           ),
         ),
         SummaryGrid(ride: ride, unit: unit),
@@ -237,6 +264,15 @@ class _DetailBody extends ConsumerWidget {
 /// 与上方读数同源——汇总里写着「平均心率 142」，曲线上的标注就不能是 141.7，
 /// 两个地方对不上时用户会以为是算错了。
 String _wholeNumber(double value) => value.round().toString();
+
+/// 各运动类型的图标。图标只做类型区分，与历史卡片同源（见 ride_card.dart），
+/// 四个值都要能映射到，缺一个详情页就崩。
+IconData _activityIcon(ActivityType t) => switch (t) {
+      ActivityType.cycling => Icons.directions_bike,
+      ActivityType.running => Icons.directions_run,
+      ActivityType.walking => Icons.directions_walk,
+      ActivityType.hiking => Icons.terrain,
+    };
 
 /// 一个指标区块：标题 → 该项读数 → 该项曲线。
 ///

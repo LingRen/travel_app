@@ -4,6 +4,7 @@ import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
 import 'package:cycling_app/domain/analysis/gcj02.dart';
 import 'package:cycling_app/domain/analysis/heart_rate.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
@@ -27,12 +28,18 @@ const AppSettings _settings = AppSettings(
   mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
 );
 
-Workout rideWith({WorkoutSummary? summary, String? powerDeviceName}) => Workout(
+Workout rideWith({
+  WorkoutSummary? summary,
+  String? powerDeviceName,
+  ActivityType? activityType,
+}) =>
+    Workout(
       id: 1,
       startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
       status: WorkoutStatus.finished,
       title: '晨骑',
+      activityType: activityType ?? ActivityType.cycling,
       powerDeviceName: powerDeviceName,
       summary: summary ??
           const WorkoutSummary(
@@ -140,6 +147,35 @@ void main() {
 
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.text('2026-09-21 08:00'), findsOneWidget);
+  });
+
+  // 详情页头部徽标：类型图标 + 标签 + 日期一排（Task 8）。
+  testWidgets('跑步记录：徽标显示跑步图标与「跑步」标签', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: rideWith(activityType: ActivityType.running),
+        points: pointsWithHr(),
+      ),
+    );
+
+    expect(find.text('跑步'), findsOneWidget);
+    expect(find.byIcon(Icons.directions_run), findsOneWidget);
+    // 日期仍在同一排。
+    expect(find.text('2026-09-21 08:00'), findsOneWidget);
+  });
+
+  testWidgets('无标题的骑行记录：AppBar 显示「骑行详情」而非「跑步详情」', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished),
+        points: const <TrackPoint>[],
+      ),
+    );
+
+    expect(find.text('骑行详情'), findsOneWidget);
+    expect(find.text('跑步详情'), findsNothing);
   });
 
   testWidgets('三条曲线区块都渲染出来', (WidgetTester tester) async {
