@@ -8,7 +8,7 @@ import '../../domain/models/activity_type.dart';
 import '../../domain/recording/ride_cue.dart';
 import 'ride_cue_text.dart';
 
-/// 骑行中的提示横幅。见设计文档 10.1。
+/// 运动中的提示横幅。见设计文档 10.1。
 ///
 /// 它是一条**不改动上下两块布局**的浮层：整公里、跨速档、十公里都会在这里闪一下，
 /// 如果它参与 Column 布局，每闪一次上下两块（读数、按钮）都会跳一次，骑行中瞄一眼
@@ -16,7 +16,7 @@ import 'ride_cue_text.dart';
 /// 出现与消失都不挤压邻居。
 ///
 /// 显示时长由 [duration] 决定，到点自己收回：它是事件通知，不是常驻读数——常驻的
-/// 读数在上下两块里已经有了。同一次骑行的两条提示挨得很近时，后一条会重置计时，
+/// 读数在上下两块里已经有了。同一次运动的两条提示挨得很近时，后一条会重置计时，
 /// 不排队展示（排队的后果是屏幕上停着一句已经过时的话）。
 class RideCueBanner extends StatefulWidget {
   const RideCueBanner({

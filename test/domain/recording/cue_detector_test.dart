@@ -11,13 +11,11 @@ void main() {
     double distanceM = 0,
     int elapsedMs = 0,
     double speedMps = 0,
-    ActivityType activityType = ActivityType.cycling,
   }) =>
       d.update(
         distanceM: distanceM,
         elapsedMs: elapsedMs,
         speedMps: speedMps,
-        activityType: activityType,
       );
 
   group('整公里提示', () {
@@ -201,7 +199,6 @@ void main() {
         distanceM: 1500,
         elapsedMs: 300000,
         speedMps: 12, // 远超过 10km/h 档
-        activityType: ActivityType.running,
       );
       expect(cues.whereType<SpeedCue>(), isEmpty);
       expect(cues.whereType<LapCue>().length, 1);

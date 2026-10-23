@@ -360,7 +360,6 @@ class RecordingSession {
       distanceM: _distanceM,
       elapsedMs: _elapsedMs,
       speedMps: _currentSpeedMps,
-      activityType: activityType,
     ));
   }
 
@@ -370,7 +369,7 @@ class RecordingSession {
     _advanceElapsed(nowMs);
     _phase = RecordingPhase.paused;
     _currentSpeedMps = 0;
-    _estimatedPower = 0;
+    if (activityType.supportsPower) _estimatedPower = 0;
   }
 
   /// 恢复采样。暂停期间的位移不属于骑行，因此断开与暂停前状态的关联。
@@ -393,7 +392,7 @@ class RecordingSession {
       _advanceElapsed(nowMs);
       _phase = RecordingPhase.finished;
       _currentSpeedMps = 0;
-      _estimatedPower = 0;
+      if (activityType.supportsPower) _estimatedPower = 0;
     }
     return _buffer.drain();
   }
@@ -411,7 +410,7 @@ class RecordingSession {
     if (_phase == RecordingPhase.recording &&
         (last == null || nowMs - last.tMs > kGpsGapMs)) {
       _currentSpeedMps = 0;
-      _estimatedPower = 0;
+      if (activityType.supportsPower) _estimatedPower = 0;
     }
   }
 

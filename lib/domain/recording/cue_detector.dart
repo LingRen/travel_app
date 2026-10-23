@@ -56,7 +56,6 @@ class CueDetector {
     required double distanceM,
     required int elapsedMs,
     required double speedMps,
-    required ActivityType activityType,
   }) {
     final List<RideCue> cues = <RideCue>[];
 
