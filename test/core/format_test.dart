@@ -133,6 +133,11 @@ void main() {
       expect(formatPace(0, DistanceUnit.kilometer), '--');
       expect(formatPace(-1, DistanceUnit.kilometer), '--');
     });
+
+    test('formatPace 秒进位到整分', () {
+      // 359.6 s/km round 后 60 秒 → 进位为整分：6'00" 而非 5'00"。
+      expect(formatPace(1000 / 359.6, DistanceUnit.kilometer), "6'00\"");
+    });
   });
 
   group('formatDateTime', () {

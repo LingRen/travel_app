@@ -85,9 +85,9 @@ String formatPace(double speedMps, DistanceUnit unit) {
   final double seconds = metersPerUnit / speedMps;
   final int minutes = seconds ~/ 60;
   final int rest = seconds.remainder(60).round();
-  // remainder 可能为 60（round 进位），归一化。
+  // remainder 可能为 60（round 进位），归一化进位到整分。
   if (rest == 60) {
-    return "$minutes'00\"";
+    return "${minutes + 1}'00\"";
   }
   return "$minutes'${rest.toString().padLeft(2, '0')}\"";
 }
