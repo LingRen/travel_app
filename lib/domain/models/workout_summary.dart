@@ -1,6 +1,6 @@
-/// 一次骑行的汇总指标。冗余存储在 `rides` 表中，列表页与统计页直接读取。
-class RideSummary {
-  const RideSummary({
+/// 一次运动的汇总指标。冗余存储在 `workouts` 表中，列表页与统计页直接读取。
+class WorkoutSummary {
+  const WorkoutSummary({
     required this.distanceM,
     required this.durationS,
     required this.movingS,
@@ -60,7 +60,7 @@ class RideSummary {
         'point_count': pointCount,
       };
 
-  static RideSummary fromDbColumns(Map<String, Object?> m) => RideSummary(
+  static WorkoutSummary fromDbColumns(Map<String, Object?> m) => WorkoutSummary(
         distanceM: (m['distance_m'] as num?)?.toDouble() ?? 0,
         durationS: (m['duration_s'] as num?)?.toInt() ?? 0,
         movingS: (m['moving_s'] as num?)?.toInt() ?? 0,
