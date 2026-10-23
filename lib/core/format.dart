@@ -67,3 +67,23 @@ String formatDateTime(int epochMs) {
   String two(int v) => v.toString().padLeft(2, '0');
   return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
 }
+
+/// 配速文本（跑步/健走/徒步的主读数）。由速度（m/s）换算。
+///
+/// 公里模式为分钟每公里（mm:ss / km），英里模式为分钟每英里（mm:ss / mi）。
+/// 速度无效（0、负值）时显示 `--`：起步前没有速度可言，摆 0 会像「停着」。
+/// 显示格式固定 `5'30"`（分'秒"，秒数两位补齐），单位尾缀由调用方拼。
+String formatPace(double speedMps, DistanceUnit unit) {
+  if (speedMps <= 0) return '--';
+  // 秒每单位距离：公里 1000m，英里 1609.344m。
+  final double metersPerUnit =
+      unit == DistanceUnit.mile ? _metersPerMile : 1000.0;
+  final double seconds = metersPerUnit / speedMps;
+  final int minutes = seconds ~/ 60;
+  final int rest = seconds.remainder(60).round();
+  // remainder 可能为 60（round 进位），归一化。
+  if (rest == 60) {
+    return "$minutes'00\"";
+  }
+  return "$minutes'${rest.toString().padLeft(2, '0')}\"";
+}

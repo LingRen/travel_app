@@ -123,6 +123,18 @@ void main() {
     });
   });
 
+  group('formatPace', () {
+    test('公里/英里两种单位', () {
+      // 10 km/h = 2.777... m/s → 6分整每公里。
+      expect(formatPace(10 / 3.6, DistanceUnit.kilometer), "6'00\"");
+      // 6 min/km 对英里 = 9'39" / mi（6 * 1.609344 ≈ 9.656，取整分后余秒）。
+      expect(formatPace(10 / 3.6, DistanceUnit.mile), "9'39\"");
+      // 0 速度 / 负值 → '--'。
+      expect(formatPace(0, DistanceUnit.kilometer), '--');
+      expect(formatPace(-1, DistanceUnit.kilometer), '--');
+    });
+  });
+
   group('formatDateTime', () {
     test('按本地时区输出 yyyy-MM-dd HH:mm', () {
       final int ms = DateTime(2026, 9, 21, 8, 5).millisecondsSinceEpoch;
