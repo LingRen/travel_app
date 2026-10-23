@@ -2,6 +2,7 @@ import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
@@ -35,12 +36,20 @@ const WorkoutSummary _summary = WorkoutSummary(
   pointCount: 4,
 );
 
-Workout ride(int id, {String? title, int? startedAtMs, WorkoutSummary? summary}) => Workout(
+Workout ride(
+  int id, {
+  String? title,
+  int? startedAtMs,
+  WorkoutSummary? summary,
+  ActivityType activityType = ActivityType.cycling,
+}) =>
+    Workout(
       id: id,
       startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
       status: WorkoutStatus.finished,
       title: title,
+      activityType: activityType,
       summary: summary ?? _summary,
     );
 
@@ -74,7 +83,15 @@ Widget wrap({
 }) =>
     ProviderScope(
       overrides: <Override>[
-        historyRidesProvider.overrideWith((Ref ref) => rides),
+        // 与真实 provider 同口径：筛选只过滤类型，null（全部）时原样返回。
+        historyRidesProvider.overrideWith((Ref ref) {
+          final ActivityType? filter = ref.watch(historyFilterProvider);
+          return filter == null
+              ? rides
+              : rides
+                    .where((Workout r) => r.activityType == filter)
+                    .toList();
+        }),
         appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
         // id 为 null 的记录根本不会查询轨迹点（`_MiniCurve` 直接返回占位），
         // 这里也跳过，否则 `r.id!` 会在建 ProviderScope 时就抛。
@@ -145,6 +162,80 @@ void main() {
     expect(find.text('爬升 180 m'), findsOneWidget);
     // 这次骑行没有功率数据，不能摆一个 `功率 0 W`。
     expect(find.textContaining('功率'), findsNothing);
+  });
+
+  testWidgets('类型筛选：选跑步只留跑步卡片，选全部恢复', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(
+          1,
+          title: '晨骑',
+          startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
+        ),
+        ride(
+          2,
+          title: '夜跑',
+          startedAtMs: DateTime(2026, 9, 22, 8).millisecondsSinceEpoch,
+          activityType: ActivityType.running,
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    expect(find.byType(WorkoutCard), findsNWidgets(2));
+
+    await tester.tap(find.text('跑步'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('晨骑'), findsNothing);
+    expect(find.text('夜跑'), findsOneWidget);
+    expect(find.byType(WorkoutCard), findsOneWidget);
+
+    await tester.tap(find.text('全部'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('晨骑'), findsOneWidget);
+    expect(find.text('夜跑'), findsOneWidget);
+    expect(find.byType(WorkoutCard), findsNWidgets(2));
+  });
+
+  testWidgets('空态文案随筛选类型变化', (WidgetTester tester) async {
+    await pumpHistory(tester, rides: const <Workout>[]);
+
+    expect(find.text('还没有骑行记录'), findsOneWidget);
+
+    await tester.tap(find.text('跑步'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('还没有跑步记录'), findsOneWidget);
+  });
+
+  testWidgets('跑步卡片次级列显示配速而非 km/h', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(
+          1,
+          activityType: ActivityType.running,
+          summary: const WorkoutSummary(
+            distanceM: 10000,
+            durationS: 3600,
+            movingS: 3400,
+            avgSpeedMps: 3.0,
+            movingAvgSpeedMps: 2.5,
+            maxSpeedMps: 4.0,
+            elevationGainM: 60,
+            pointCount: 4,
+          ),
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    // 2.5 m/s → 1000/2.5 = 400 s/km → 6'40"。
+    expect(find.text('配速 6\'40"'), findsOneWidget);
+    expect(find.textContaining('km/h'), findsNothing);
   });
 
   testWidgets('配了功率计时卡片多一项功率读数', (WidgetTester tester) async {
