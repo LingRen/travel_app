@@ -5,15 +5,15 @@ import 'package:sqflite/sqflite.dart';
 
 import '../data/ble/ble_platform.dart';
 import '../data/ble/ble_scanner.dart';
-import '../data/db/ride_dao.dart';
 import '../data/db/settings_dao.dart';
 import '../data/db/track_point_dao.dart';
+import '../data/db/workout_dao.dart';
 import '../data/export/backup_io.dart';
 import '../data/export/backup_store.dart';
 import '../data/location/location_service.dart';
-import '../data/ride_repository.dart';
 import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
+import '../data/workout_repository.dart';
 
 /// 数据库连接。在 `main()` 里打开后用 override 注入，因此这里不需要异步。
 final Provider<Database> databaseProvider = Provider<Database>(
@@ -25,12 +25,13 @@ final Provider<SettingsRepository> settingsRepositoryProvider =
   (Ref ref) => SettingsRepository(SettingsDao(ref.watch(databaseProvider))),
 );
 
-final Provider<RideRepository> rideRepositoryProvider = Provider<RideRepository>(
-  (Ref ref) => RideRepository(
-    rides: RideDao(ref.watch(databaseProvider)),
+final Provider<WorkoutRepository> workoutRepositoryProvider =
+    Provider<WorkoutRepository>(
+  (Ref ref) => WorkoutRepository(
+    workouts: WorkoutDao(ref.watch(databaseProvider)),
     points: TrackPointDao(ref.watch(databaseProvider)),
     settings: ref.watch(settingsRepositoryProvider),
-    onRideDataChanged: () =>
+    onWorkoutDataChanged: () =>
         ref.read(rideDataRevisionProvider.notifier).markChanged(),
   ),
 );

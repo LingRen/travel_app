@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
-import '../../domain/models/ride.dart';
-import '../../domain/models/ride_summary.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
+import '../../domain/models/workout_summary.dart';
 import 'history_providers.dart';
 import 'mini_speed_curve.dart';
 
-/// 历史列表里的一条骑行。见设计文档 10.2。
+/// 历史列表里的一条运动。见设计文档 10.2。
 ///
 /// 做成「日志条目」而不是卡片：卡片把每条记录封成一个独立的圆角块，一屏里
 /// 六张一样的卡读下来分不清主次，也浪费掉左右两侧的联系。改成条目后，
@@ -20,21 +20,21 @@ import 'mini_speed_curve.dart';
 /// 条目内部没有分隔线：条目之间那条由列表画，里面再画一条就成了每行两道线。
 ///
 /// 全条目唯一的颜色来自那条速度缩略图：颜色只表示数据（见 app/theme.dart）。
-class RideCard extends ConsumerWidget {
-  const RideCard({
+class WorkoutCard extends ConsumerWidget {
+  const WorkoutCard({
     required this.ride,
     required this.unit,
     this.onTap,
     super.key,
   });
 
-  final Ride ride;
+  final Workout ride;
   final DistanceUnit unit;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final RideSummary? s = ride.summary;
+    final WorkoutSummary? s = ride.summary;
     final String? title = ride.title?.trim();
     final bool titled = title != null && title.isNotEmpty;
 

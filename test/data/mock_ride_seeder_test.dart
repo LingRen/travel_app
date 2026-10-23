@@ -1,14 +1,14 @@
 import 'package:cycling_app/data/db/database.dart';
-import 'package:cycling_app/data/db/ride_dao.dart';
 import 'package:cycling_app/data/db/settings_dao.dart';
 import 'package:cycling_app/data/db/track_point_dao.dart';
+import 'package:cycling_app/data/db/workout_dao.dart';
 import 'package:cycling_app/data/mock_ride_seeder.dart';
-import 'package:cycling_app/data/ride_repository.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/analysis/constants.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -18,11 +18,11 @@ int get nowMs => DateTime(2026, 9, 24, 12).millisecondsSinceEpoch;
 void main() {
   group('排期', () {
     test('铺两个半月共 16 条，日期不重复', () {
-      final List<MockRidePlan> plan = mockRidePlan(nowMs: nowMs);
+      final List<MockWorkoutPlan> plan = mockWorkoutPlan(nowMs: nowMs);
       expect(plan.length, 16);
 
       final Set<String> stamps = <String>{
-        for (final MockRidePlan p in plan)
+        for (final MockWorkoutPlan p in plan)
           DateTime.fromMillisecondsSinceEpoch(p.startedAtMs)
               .toIso8601String()
               .substring(0, 10),
@@ -31,26 +31,26 @@ void main() {
     });
 
     test('不会铺出未来时间', () {
-      final List<MockRidePlan> plan = mockRidePlan(nowMs: nowMs);
-      for (final MockRidePlan p in plan) {
+      final List<MockWorkoutPlan> plan = mockWorkoutPlan(nowMs: nowMs);
+      for (final MockWorkoutPlan p in plan) {
         expect(p.startedAtMs, lessThan(nowMs));
         expect(p.durationS, greaterThan(0));
       }
     });
 
     test('同一种子两次生成的排期完全一致', () {
-      final List<MockRidePlan> a = mockRidePlan(nowMs: nowMs);
-      final List<MockRidePlan> b = mockRidePlan(nowMs: nowMs);
+      final List<MockWorkoutPlan> a = mockWorkoutPlan(nowMs: nowMs);
+      final List<MockWorkoutPlan> b = mockWorkoutPlan(nowMs: nowMs);
       expect(
-        <int>[for (final MockRidePlan p in a) p.startedAtMs],
-        <int>[for (final MockRidePlan p in b) p.startedAtMs],
+        <int>[for (final MockWorkoutPlan p in a) p.startedAtMs],
+        <int>[for (final MockWorkoutPlan p in b) p.startedAtMs],
       );
     });
 
     test('跨度覆盖到本月的更早日期，年视图才有多个非零月', () {
-      final List<MockRidePlan> plan = mockRidePlan(nowMs: nowMs);
+      final List<MockWorkoutPlan> plan = mockWorkoutPlan(nowMs: nowMs);
       final Set<int> months = <int>{
-        for (final MockRidePlan p in plan)
+        for (final MockWorkoutPlan p in plan)
           DateTime.fromMillisecondsSinceEpoch(p.startedAtMs).month,
       };
       expect(months.length, greaterThanOrEqualTo(2));
@@ -155,7 +155,7 @@ void main() {
 
   group('落库', () {
     late Database db;
-    late RideRepository repo;
+    late WorkoutRepository repo;
 
     setUpAll(() {
       sqfliteFfiInit();
@@ -164,8 +164,8 @@ void main() {
 
     setUp(() async {
       db = await openAppDatabase(path: inMemoryDatabasePath);
-      repo = RideRepository(
-        rides: RideDao(db),
+      repo = WorkoutRepository(
+        workouts: WorkoutDao(db),
         points: TrackPointDao(db),
         settings: SettingsRepository(SettingsDao(db)),
       );
@@ -174,13 +174,13 @@ void main() {
     tearDown(() => db.close());
 
     test('生成 16 条已完成记录，每条都有轨迹点与汇总', () async {
-      final int count = await seedMockRides(repo, nowMs: nowMs);
+      final int count = await seedMockWorkouts(repo, nowMs: nowMs);
       expect(count, 16);
 
-      final List<Ride> rides = await repo.listFinished();
+      final List<Workout> rides = await repo.listFinished();
       expect(rides.length, 16);
-      for (final Ride ride in rides) {
-        expect(ride.status, RideStatus.finished);
+      for (final Workout ride in rides) {
+        expect(ride.status, WorkoutStatus.finished);
         expect(ride.summary, isNotNull);
         expect(ride.summary!.distanceM, greaterThan(0));
         final List<TrackPoint> points = await repo.getPoints(ride.id!);
@@ -189,35 +189,35 @@ void main() {
     });
 
     test('覆盖式生成：连点两次仍是同一批，不堆重复', () async {
-      await seedMockRides(repo, nowMs: nowMs);
-      await seedMockRides(repo, nowMs: nowMs);
+      await seedMockWorkouts(repo, nowMs: nowMs);
+      await seedMockWorkouts(repo, nowMs: nowMs);
 
-      final List<Ride> rides = await repo.listFinished();
+      final List<Workout> rides = await repo.listFinished();
       expect(rides.length, 16);
       // 时间戳也不重复，说明是覆盖而不是在旧数据上又叠了一层。
-      expect(<int>{for (final Ride r in rides) r.startedAtMs}.length, 16);
+      expect(<int>{for (final Workout r in rides) r.startedAtMs}.length, 16);
     });
 
     test('覆盖时不动时间戳不撞排期的记录', () async {
       // 一条「真实」记录：起点落在排期之外（差 12 秒）。
-      final Ride real = await repo.startRide(startedAtMs: nowMs - 12345);
+      final Workout real = await repo.startWorkout(startedAtMs: nowMs - 12345);
       await repo.finishRide(real.id!, endedAtMs: nowMs, durationS: 60);
 
-      await seedMockRides(repo, nowMs: nowMs);
-      await seedMockRides(repo, nowMs: nowMs);
+      await seedMockWorkouts(repo, nowMs: nowMs);
+      await seedMockWorkouts(repo, nowMs: nowMs);
 
-      final List<Ride> rides = await repo.listFinished();
+      final List<Workout> rides = await repo.listFinished();
       expect(rides.length, 17);
-      expect(rides.any((Ride r) => r.id == real.id), isTrue,
+      expect(rides.any((Workout r) => r.id == real.id), isTrue,
           reason: '真实记录被模拟数据的覆盖逻辑误删了');
     });
 
     test('清空会删掉全部记录（含真实记录），返回删除条数', () async {
-      await seedMockRides(repo, nowMs: nowMs);
+      await seedMockWorkouts(repo, nowMs: nowMs);
       // 再塞一条进行中的记录，确认未完成的也一起清掉。
-      await repo.startRide(startedAtMs: nowMs);
+      await repo.startWorkout(startedAtMs: nowMs);
 
-      final int removed = await deleteAllRides(repo);
+      final int removed = await deleteAllWorkouts(repo);
       expect(removed, 17);
       expect(await repo.listFinished(), isEmpty);
       expect(await repo.findUnfinished(), isEmpty);

@@ -4,16 +4,16 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../../app/providers.dart';
 import '../../domain/analysis/trend.dart';
-import '../../domain/models/ride.dart';
+import '../../domain/models/workout.dart';
 
-/// 全部已完成的骑行。统计页在内存里按范围聚合，不每次查库。
+/// 全部已完成的运动。统计页在内存里按范围聚合，不每次查库。
 ///
 /// 个人记录量级（几百到几千条）下这完全够用；真到几万条再考虑下推到 SQL。
-final FutureProvider<List<Ride>> finishedRidesProvider =
-    FutureProvider<List<Ride>>((Ref ref) {
-  // 依赖数据版本号：结束骑行、崩溃结算、删除、恢复备份后自动重查。
+final FutureProvider<List<Workout>> finishedRidesProvider =
+    FutureProvider<List<Workout>>((Ref ref) {
+  // 依赖数据版本号：结束运动、崩溃结算、删除、恢复备份后自动重查。
   ref.watch(rideDataRevisionProvider);
-  return ref.watch(rideRepositoryProvider).listFinished();
+  return ref.watch(workoutRepositoryProvider).listFinished();
 });
 
 /// 当前选中的统计范围。见设计文档 10.4。

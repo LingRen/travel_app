@@ -1,6 +1,6 @@
-import '../models/ride.dart';
-import '../models/ride_status.dart';
-import '../models/ride_summary.dart';
+import '../models/workout.dart';
+import '../models/workout_status.dart';
+import '../models/workout_summary.dart';
 
 /// 统计页的时间范围。见设计文档 10.4。
 enum TrendRange { week, month, year }
@@ -95,16 +95,16 @@ class PersonalBests {
   final PersonalBest? highestPowerW;
 }
 
-/// 按日历范围聚合骑行。
+/// 按日历范围聚合运动。
 ///
 /// 范围是**日历对齐**的：`week` 从本周一 00:00 起 7 天，`month` 从本月 1 日
 /// 00:00 起当月天数天，`year` 从本年 1 月 1 日 00:00 起 12 个月。
-/// 骑行按 `startedAtMs` 落桶，左闭右开。
+/// 运动按 `startedAtMs` 落桶，左闭右开。
 ///
-/// 只统计 `status == finished` 且带汇总的骑行：未结束的骑行没有汇总指标，
+/// 只统计 `status == finished` 且带汇总的运动：未结束的运动没有汇总指标，
 /// 计进去会让累计值凭空变小。
 TrendSummary buildTrend(
-  List<Ride> rides, {
+  List<Workout> rides, {
   required TrendRange range,
   required int nowMs,
 }) {
@@ -121,9 +121,9 @@ TrendSummary buildTrend(
   int powerWeightS = 0;
   int? highestPowerW;
 
-  for (final Ride ride in rides) {
-    if (ride.status != RideStatus.finished) continue;
-    final RideSummary? summary = ride.summary;
+  for (final Workout ride in rides) {
+    if (ride.status != WorkoutStatus.finished) continue;
+    final WorkoutSummary? summary = ride.summary;
     if (summary == null) continue;
 
     final double? ridePower = summary.avgPowerW;
@@ -187,17 +187,17 @@ TrendSummary buildTrend(
 }
 
 /// 五项个人最佳。并列时保留**更早**的那次（先到先得），便于稳定测试。
-PersonalBests personalBests(List<Ride> rides) {
+PersonalBests personalBests(List<Workout> rides) {
   PersonalBest? distance;
   PersonalBest? duration;
   PersonalBest? speed;
   PersonalBest? gain;
   PersonalBest? power;
 
-  for (final Ride ride in rides) {
+  for (final Workout ride in rides) {
     final int? id = ride.id;
-    final RideSummary? summary = ride.summary;
-    if (ride.status != RideStatus.finished) continue;
+    final WorkoutSummary? summary = ride.summary;
+    if (ride.status != WorkoutStatus.finished) continue;
     if (id == null || summary == null) continue;
 
     PersonalBest? better(PersonalBest? current, double value) =>

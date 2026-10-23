@@ -6,7 +6,7 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/trend.dart';
-import '../../domain/models/ride.dart';
+import '../../domain/models/workout.dart';
 import 'personal_bests_card.dart';
 import 'stats_providers.dart';
 import 'trend_chart.dart';
@@ -17,7 +17,7 @@ class StatsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<Ride>> rides = ref.watch(finishedRidesProvider);
+    final AsyncValue<List<Workout>> rides = ref.watch(finishedRidesProvider);
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
             DistanceUnit.kilometer;
@@ -29,7 +29,7 @@ class StatsPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('读取记录失败：$error')),
-        data: (List<Ride> list) {
+        data: (List<Workout> list) {
           final TrendSummary trend = buildTrend(
             list,
             range: range,

@@ -1,8 +1,8 @@
 import 'package:xml/xml.dart';
 
 import '../../domain/analysis/constants.dart';
-import '../../domain/models/ride.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
 
 /// GPX 1.1 命名空间。
 const String kGpxNamespace = 'http://www.topografix.com/GPX/1/1';
@@ -22,7 +22,7 @@ const String kGpxCreator = 'cycling_app';
 /// 没有坐标的点（GPS 丢失时只有心率/踏频）不输出：`trkpt` 的 lat/lon 是必需
 /// 属性。时间间隔超过 [kGpsGapMs] 或时间不前进处拆成新的 `trkseg`，
 /// 否则第三方平台会画出一条横穿隧道的假直线（设计文档 9.3）。
-String buildGpx({required Ride ride, required List<TrackPoint> points}) {
+String buildGpx({required Workout ride, required List<TrackPoint> points}) {
   final String name = _trackName(ride);
   final List<List<TrackPoint>> segments = _splitSegments(
     points.where((TrackPoint p) => p.hasPosition).toList(),
@@ -118,7 +118,7 @@ List<List<TrackPoint>> _splitSegments(List<TrackPoint> located) {
   return segments;
 }
 
-String _trackName(Ride ride) {
+String _trackName(Workout ride) {
   final String title = ride.title?.trim() ?? '';
   if (title.isNotEmpty) return title;
   final DateTime start = DateTime.fromMillisecondsSinceEpoch(ride.startedAtMs);

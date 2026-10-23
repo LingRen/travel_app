@@ -7,16 +7,16 @@ import '../../app/providers.dart';
 import '../../data/ble/ble_platform.dart';
 import '../../data/ble/sensor_monitor.dart';
 import '../../data/location/location_service.dart';
-import '../../data/ride_repository.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
+import '../../data/workout_repository.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/elevation.dart';
 import '../../domain/analysis/geo.dart';
 import '../../domain/models/location_fix.dart';
-import '../../domain/models/ride.dart';
-import '../../domain/models/ride_status.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
+import '../../domain/models/workout_status.dart';
 import '../../domain/recording/recording_session.dart';
 import '../../domain/recording/ride_cue.dart';
 import 'ride_cue_player.dart';
@@ -207,7 +207,7 @@ class RecordController extends Notifier<RecordState> {
     final double weightKg =
         ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg;
 
-    final Ride ride = await ref.read(rideRepositoryProvider).startRide(
+    final Workout ride = await ref.read(workoutRepositoryProvider).startWorkout(
           startedAtMs: _now(),
           hrDeviceName: _monitors[SensorKind.heartRate]?.deviceName,
           cadenceDeviceName: _monitors[SensorKind.cadence]?.deviceName,
@@ -230,8 +230,8 @@ class RecordController extends Notifier<RecordState> {
   Future<void> resumeExisting(int rideId) async {
     if (_session != null) return;
 
-    final RideRepository repo = ref.read(rideRepositoryProvider);
-    final Ride? ride = await repo.getRide(rideId);
+    final WorkoutRepository repo = ref.read(workoutRepositoryProvider);
+    final Workout? ride = await repo.getWorkout(rideId);
     if (ride == null) return;
     final List<TrackPoint> points = await repo.getPoints(rideId);
 
@@ -270,7 +270,7 @@ class RecordController extends Notifier<RecordState> {
     if (session == null || _finished) return;
     session.pause(_now());
     unawaited(_flush(force: true));
-    unawaited(ref.read(rideRepositoryProvider).setStatus(_rideId!, RideStatus.paused));
+    unawaited(ref.read(workoutRepositoryProvider).setStatus(_rideId!, WorkoutStatus.paused));
     _publish();
   }
 
@@ -278,7 +278,7 @@ class RecordController extends Notifier<RecordState> {
     final RecordingSession? session = _session;
     if (session == null || _finished) return;
     session.resume(_now());
-    unawaited(ref.read(rideRepositoryProvider).setStatus(_rideId!, RideStatus.recording));
+    unawaited(ref.read(workoutRepositoryProvider).setStatus(_rideId!, WorkoutStatus.recording));
     _publish();
   }
 
@@ -303,7 +303,7 @@ class RecordController extends Notifier<RecordState> {
     await _persist(remaining);
     await _flush(force: true);
 
-    await ref.read(rideRepositoryProvider).finishRide(
+    await ref.read(workoutRepositoryProvider).finishRide(
           _rideId!,
           endedAtMs: now,
           durationS: session.snapshot.elapsedSeconds,
@@ -502,7 +502,7 @@ class RecordController extends Notifier<RecordState> {
   /// 写库失败先重试一次；连续三次失败才提示用户。见设计文档 11.2。
   Future<void> _persist(List<TrackPoint> points) async {
     if (points.isEmpty) return;
-    final RideRepository repo = ref.read(rideRepositoryProvider);
+    final WorkoutRepository repo = ref.read(workoutRepositoryProvider);
     final int rideId = _rideId!;
 
     for (int attempt = 0; attempt < 2; attempt++) {

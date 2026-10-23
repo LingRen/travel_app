@@ -2,15 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../../app/providers.dart';
-import '../../domain/models/ride.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
 
-/// 已完成的骑行，按开始时间倒序（排序由 `RideDao.listFinished` 保证）。
-final FutureProvider<List<Ride>> historyRidesProvider =
-    FutureProvider<List<Ride>>((Ref ref) {
-  // 依赖数据版本号：结束骑行、崩溃结算、改标题、删除、恢复备份后自动重查。
+/// 已完成的运动，按开始时间倒序（排序由 `WorkoutDao.listFinished` 保证）。
+final FutureProvider<List<Workout>> historyRidesProvider =
+    FutureProvider<List<Workout>>((Ref ref) {
+  // 依赖数据版本号：结束运动、崩溃结算、改标题、删除、恢复备份后自动重查。
   ref.watch(rideDataRevisionProvider);
-  return ref.watch(rideRepositoryProvider).listFinished();
+  return ref.watch(workoutRepositoryProvider).listFinished();
 });
 
 /// 某次骑行的轨迹点，供卡片上的迷你曲线使用。
@@ -20,5 +20,5 @@ final FutureProvider<List<Ride>> historyRidesProvider =
 final FutureProviderFamily<List<TrackPoint>, int> ridePointsProvider =
     FutureProvider.family<List<TrackPoint>, int>((Ref ref, int rideId) {
   ref.watch(rideDataRevisionProvider);
-  return ref.watch(rideRepositoryProvider).getPoints(rideId);
+  return ref.watch(workoutRepositoryProvider).getPoints(rideId);
 });

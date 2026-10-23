@@ -1,7 +1,7 @@
 import 'package:cycling_app/domain/analysis/geo.dart';
 import 'package:cycling_app/domain/analysis/summary.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -18,7 +18,7 @@ void main() {
     ];
     final double segment = haversineMeters(31.23, 121.4700, 31.23, 121.4701);
 
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: points,
       durationS: 4,
       maxHeartRate: 190,
@@ -37,7 +37,7 @@ void main() {
   });
 
   test('GPS 跳变不计入距离', () {
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: <TrackPoint>[_p(0, 121.47, speed: 5.0), _p(1000, 122.47, lat: 32.23, speed: 5.0)],
       durationS: 1,
       maxHeartRate: 190,
@@ -60,7 +60,7 @@ void main() {
       _p(4000, 121.4704, alt: 104, speed: 5),
       _p(5000, 121.4705, alt: 105, speed: 5),
     ];
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: points,
       durationS: 5,
       maxHeartRate: 190,
@@ -78,7 +78,7 @@ void main() {
       _p(1000, 121.4701, alt: 500, speed: 5),
       _p(2000, 121.4702, alt: 500, speed: 5),
     ];
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: points,
       durationS: 2,
       maxHeartRate: 190,
@@ -93,7 +93,7 @@ void main() {
       _p(1000, 121.4701, speed: 5, hr: 120),
       _p(2000, 121.4702, speed: 5, hr: 120),
     ];
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: points,
       durationS: 2,
       maxHeartRate: 200,
@@ -106,7 +106,7 @@ void main() {
   });
 
   test('空轨迹返回全零汇总', () {
-    final RideSummary s = computeSummary(
+    final WorkoutSummary s = computeSummary(
       points: const <TrackPoint>[],
       durationS: 0,
       maxHeartRate: 190,

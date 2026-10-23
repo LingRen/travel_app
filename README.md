@@ -44,7 +44,7 @@ lib/
     stats/      长期统计与趋势
     settings/   设置、传感器配对、导出备份
   domain/       纯逻辑，无 IO 依赖
-    models/     Ride, TrackPoint, RideSummary 等
+    models/     Workout, TrackPoint, WorkoutSummary 等
     analysis/   指标计算、心率区间、速度→颜色映射、趋势聚合
     recording/  记录状态机、轨迹点过滤、落盘缓冲
   data/

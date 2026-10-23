@@ -7,8 +7,8 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../data/export/backup.dart';
 import '../../data/export/backup_store.dart';
-import '../../domain/models/ride.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
 
 /// 备份与恢复区块。见设计文档 10.5 与 12。
 class BackupSection extends ConsumerStatefulWidget {
@@ -75,7 +75,7 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     });
     try {
       final BackupStore store = ref.read(backupStoreProvider);
-      final List<Ride> rides = await store.listRides();
+      final List<Workout> rides = await store.listWorkouts();
       final List<TrackPoint> points = await store.listPoints();
       final Uint8List bytes = buildBackupArchive(
         rides: rides,
@@ -111,7 +111,7 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
       if (!ok) return;
 
       await ref.read(backupStoreProvider).apply(payload, replaceExisting: true);
-      // 恢复走的是 BackupStore，不经过 RideRepository，得在这里手动通知
+      // 恢复走的是 BackupStore，不经过 WorkoutRepository，得在这里手动通知
       // 历史页与统计页重查，否则它们还显示被替换掉的旧数据。
       ref.read(rideDataRevisionProvider.notifier).markChanged();
       _setMessage(

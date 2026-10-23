@@ -1,8 +1,8 @@
 import 'package:cycling_app/data/export/gpx.dart';
 import 'package:cycling_app/domain/analysis/constants.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 
@@ -18,13 +18,13 @@ String localDateName(int startedAtMs) {
   return '骑行 ${start.year}-${two(start.month)}-${two(start.day)}';
 }
 
-const Ride _ride = Ride(
+const Workout _ride = Workout(
   id: 1,
   // 1758384000000 == 2025-09-20T16:00:00Z：UTC 下是 09-20，UTC+8 下是 09-21。
   // 轨迹名取本地日期，因此这里只断言 UTC 时刻，不断言当地日历日。
   startedAtMs: 1758384000000,
   endedAtMs: 1758387600000,
-  status: RideStatus.finished,
+  status: WorkoutStatus.finished,
 );
 
 TrackPoint pt(
@@ -224,10 +224,10 @@ void main() {
   group('GPX 名称', () {
     test('有标题时用标题', () {
       final XmlDocument doc = XmlDocument.parse(buildGpx(
-        ride: const Ride(
+        ride: const Workout(
           id: 1,
           startedAtMs: 1758384000000,
-          status: RideStatus.finished,
+          status: WorkoutStatus.finished,
           title: '周末环湖',
         ),
         points: <TrackPoint>[pt(0)],
@@ -244,10 +244,10 @@ void main() {
     });
 
     test('标题只有空白时视为没有标题，回退到开始日期', () {
-      const Ride blankTitle = Ride(
+      const Workout blankTitle = Workout(
         id: 1,
         startedAtMs: 1758384000000,
-        status: RideStatus.finished,
+        status: WorkoutStatus.finished,
         title: '   ',
       );
       final XmlDocument doc = XmlDocument.parse(
@@ -260,10 +260,10 @@ void main() {
     // 上两条的期望值是按本机时区现算的，因此必须再钉一条与时区无关的断言，
     // 否则实现里换成别的日期来源（比如用 endedAtMs）也照样会绿。
     test('回退的日期跟着 startedAtMs 走', () {
-      const Ride later = Ride(
+      const Workout later = Workout(
         id: 1,
         startedAtMs: 1758384000000 + 24 * 3600 * 1000,
-        status: RideStatus.finished,
+        status: WorkoutStatus.finished,
       );
 
       final String name =
@@ -277,10 +277,10 @@ void main() {
 
     test('标题里的特殊字符被正确转义', () {
       final String gpx = buildGpx(
-        ride: const Ride(
+        ride: const Workout(
           id: 1,
           startedAtMs: 1758384000000,
-          status: RideStatus.finished,
+          status: WorkoutStatus.finished,
           title: 'A & B <c>',
         ),
         points: <TrackPoint>[pt(0)],

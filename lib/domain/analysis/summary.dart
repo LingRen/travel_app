@@ -1,5 +1,5 @@
-import '../models/ride_summary.dart';
 import '../models/track_point.dart';
+import '../models/workout_summary.dart';
 import 'calories.dart';
 import 'constants.dart';
 import 'elevation.dart';
@@ -7,11 +7,11 @@ import 'geo.dart';
 import 'heart_rate.dart';
 import 'speed.dart';
 
-/// 由轨迹点算出一次骑行的全部汇总指标。
+/// 由轨迹点算出一次运动的全部汇总指标。
 ///
 /// [durationS] 由调用方给出：正常结束时用会话累计时长（不含暂停），
 /// 崩溃恢复结算时用「末点时间 − 起始时间」近似。
-RideSummary computeSummary({
+WorkoutSummary computeSummary({
   required List<TrackPoint> points,
   required int durationS,
   required int maxHeartRate,
@@ -45,7 +45,7 @@ RideSummary computeSummary({
 
   final int movingS = moving.movingSeconds.round();
 
-  return RideSummary(
+  return WorkoutSummary(
     distanceM: distanceM,
     durationS: durationS,
     movingS: movingS,

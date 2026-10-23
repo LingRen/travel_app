@@ -1,19 +1,19 @@
 import 'dart:math' as math;
 
-import '../domain/models/ride.dart';
 import '../domain/models/track_point.dart';
-import 'ride_repository.dart';
+import '../domain/models/workout.dart';
+import 'workout_repository.dart';
 
-/// 真机检查界面用的模拟骑行生成器。
+/// 真机检查界面用的模拟运动生成器。
 ///
 /// 只在 debug 构建里、由设置页的「调试」区块手动触发。手头只有一两条真实
 /// 骑行时，历史页只是一个三行列表，统计页的周/月/年三种粒度都撑不起样子，
 /// 排版问题（比如月视图底下日期叠字）根本看不出来。
 ///
-/// 生成逻辑是纯函数（[mockRidePlan] 与 [generateMockPoints]）：种子固定、
+/// 生成逻辑是纯函数（[mockWorkoutPlan] 与 [generateMockPoints]）：种子固定、
 /// nowMs 给定之后输出完全确定，所以能写测试断言，而不是只能靠肉眼比对。
-class MockRidePlan {
-  const MockRidePlan({required this.startedAtMs, required this.durationS});
+class MockWorkoutPlan {
+  const MockWorkoutPlan({required this.startedAtMs, required this.durationS});
 
   final int startedAtMs;
   final int durationS;
@@ -23,7 +23,7 @@ class MockRidePlan {
 /// 形状），上个月与上上个月各留几条（年粒度才有第二、第三个非零月）。
 ///
 /// 日期与时刻都写死，不随机：真机上生成两次应当看到同一批数据。
-List<MockRidePlan> mockRidePlan({required int nowMs, int seed = 20260923}) {
+List<MockWorkoutPlan> mockWorkoutPlan({required int nowMs, int seed = 20260923}) {
   const List<int> dayOffsets = <int>[
     0, 1, 3, 5, 7, 9, 12, 14, 16, 20, 24, 30, 38, 47, 58, 70,
   ];
@@ -35,7 +35,7 @@ List<MockRidePlan> mockRidePlan({required int nowMs, int seed = 20260923}) {
   ];
 
   final DateTime today = DateTime.fromMillisecondsSinceEpoch(nowMs);
-  final List<MockRidePlan> plan = <MockRidePlan>[];
+  final List<MockWorkoutPlan> plan = <MockWorkoutPlan>[];
   for (int i = 0; i < dayOffsets.length; i++) {
     // 负数日号由 DateTime 自己往前推月份，不必手动算上个月有几天。
     final DateTime day = DateTime(
@@ -50,7 +50,7 @@ List<MockRidePlan> mockRidePlan({required int nowMs, int seed = 20260923}) {
     if (startedAtMs > nowMs) {
       startedAtMs -= const Duration(days: 1).inMilliseconds;
     }
-    plan.add(MockRidePlan(
+    plan.add(MockWorkoutPlan(
       startedAtMs: startedAtMs,
       durationS: minutes[i] * 60,
     ));
@@ -159,34 +159,34 @@ List<TrackPoint> generateMockPoints({
 ///
 /// **覆盖式**：写入前先删掉本次排期时间戳命中的既有记录。原来是纯追加，设置页
 /// 上点两次「生成模拟数据」就是两份一模一样的数据，真机上曾经堆到 16 组各 4 份。
-/// 判重只认 `started_at`：排期的时间戳是写死的（见 [mockRidePlan]），真实骑行的
+/// 判重只认 `started_at`：排期的时间戳是写死的（见 [mockWorkoutPlan]），真实骑行的
 /// 起点不可能正好撞上。
-Future<int> seedMockRides(
-  RideRepository repository, {
+Future<int> seedMockWorkouts(
+  WorkoutRepository repository, {
   required int nowMs,
   int seed = 20260923,
 }) async {
-  final List<MockRidePlan> plan = mockRidePlan(nowMs: nowMs, seed: seed);
+  final List<MockWorkoutPlan> plan = mockWorkoutPlan(nowMs: nowMs, seed: seed);
   final Set<int> stamps = <int>{
-    for (final MockRidePlan p in plan) p.startedAtMs,
+    for (final MockWorkoutPlan p in plan) p.startedAtMs,
   };
 
-  final List<Ride> existing = <Ride>[
+  final List<Workout> existing = <Workout>[
     ...await repository.listFinished(),
     ...await repository.findUnfinished(),
   ];
-  for (final Ride ride in existing) {
+  for (final Workout ride in existing) {
     if (stamps.contains(ride.startedAtMs)) {
       await repository.deleteRide(ride.id!);
     }
   }
 
   for (int i = 0; i < plan.length; i++) {
-    final MockRidePlan p = plan[i];
+    final MockWorkoutPlan p = plan[i];
     // 带上功率设备名：这批数据是「模拟一个功率计记下来的骑行」，不是 app 按
     // 速度坡度估算出来的。不带的话详情页会把这些功率标成「估算」（标题按
-    // `Ride.powerDeviceName` 是否为空判断），看排版时反而看不清真实样子。
-    final Ride ride = await repository.startRide(
+    // `Workout.powerDeviceName` 是否为空判断），看排版时反而看不清真实样子。
+    final Workout ride = await repository.startWorkout(
       startedAtMs: p.startedAtMs,
       powerDeviceName: '模拟功率计',
     );
@@ -209,14 +209,14 @@ Future<int> seedMockRides(
   return plan.length;
 }
 
-/// 清空全部骑行记录。模拟数据看够了之后要能一键清场，否则十几条假记录会一直
+/// 清空全部运动记录。模拟数据看够了之后要能一键清场，否则十几条假记录会一直
 /// 混在真实记录里（真实记录也一并删除，界面上有二次确认）。
-Future<int> deleteAllRides(RideRepository repository) async {
-  final List<Ride> rides = <Ride>[
+Future<int> deleteAllWorkouts(WorkoutRepository repository) async {
+  final List<Workout> rides = <Workout>[
     ...await repository.listFinished(),
     ...await repository.findUnfinished(),
   ];
-  for (final Ride ride in rides) {
+  for (final Workout ride in rides) {
     await repository.deleteRide(ride.id!);
   }
   return rides.length;

@@ -8,9 +8,9 @@ import 'package:cycling_app/data/export/backup_io.dart';
 import 'package:cycling_app/data/export/backup_store.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/features/settings/backup_section.dart';
 import 'package:cycling_app/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -60,18 +60,18 @@ class _FakeSensorPairing implements SensorPairingRepository {
 
 /// 内存版备份数据源。
 class _FakeBackupStore implements BackupStore {
-  _FakeBackupStore({this.rides = const <Ride>[]});
+  _FakeBackupStore({this.rides = const <Workout>[]});
 
-  List<Ride> rides;
+  List<Workout> rides;
   List<TrackPoint> points = const <TrackPoint>[];
   BackupPayload? applied;
   bool? appliedReplaceExisting;
-  int listRidesCalls = 0;
+  int listWorkoutsCalls = 0;
   int listPointsCalls = 0;
 
   @override
-  Future<List<Ride>> listRides() async {
-    listRidesCalls++;
+  Future<List<Workout>> listWorkouts() async {
+    listWorkoutsCalls++;
     return rides;
   }
 
@@ -119,13 +119,13 @@ class _FakeBackupIo implements BackupIo {
 }
 
 Uint8List emptyArchive() => buildBackupArchive(
-      rides: const <Ride>[],
+      rides: const <Workout>[],
       points: const <TrackPoint>[],
       exportedAtMs: 0,
     );
 
 Uint8List wrongVersionArchive() => buildBackupArchive(
-      rides: const <Ride>[],
+      rides: const <Workout>[],
       points: const <TrackPoint>[],
       exportedAtMs: 0,
       schemaVersion: kBackupSchemaVersion + 1,
@@ -152,8 +152,8 @@ void main() {
     settings = _FakeSettingsRepository();
     pairing = _FakeSensorPairing();
     store = _FakeBackupStore(
-      rides: const <Ride>[
-        Ride(id: 1, startedAtMs: 1000, status: RideStatus.finished, title: '晨骑'),
+      rides: const <Workout>[
+        Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished, title: '晨骑'),
       ],
     );
     io = _FakeBackupIo();

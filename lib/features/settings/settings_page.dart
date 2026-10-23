@@ -527,8 +527,8 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
       _message = null;
     });
     try {
-      final int count = await seedMockRides(
-        ref.read(rideRepositoryProvider),
+      final int count = await seedMockWorkouts(
+        ref.read(workoutRepositoryProvider),
         nowMs: ref.read(nowProvider)(),
       );
       _setMessage('已生成 $count 条模拟记录，切到历史页看看');
@@ -553,7 +553,7 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
     });
     try {
       final int count =
-          await deleteAllRides(ref.read(rideRepositoryProvider));
+          await deleteAllWorkouts(ref.read(workoutRepositoryProvider));
       _setMessage('已删除 $count 条记录');
     } catch (error) {
       _setMessage('删除失败：$error');

@@ -2,9 +2,9 @@ import 'package:cycling_app/app/app.dart';
 import 'package:cycling_app/app/home_shell.dart';
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/data/db/database.dart';
-import 'package:cycling_app/data/db/ride_dao.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
+import 'package:cycling_app/data/db/workout_dao.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -50,8 +50,8 @@ void main() {
   });
 
   testWidgets('启动时先过 RecoveryGate：有未结束骑行就弹恢复提示', (WidgetTester tester) async {
-    await RideDao(db)
-        .insert(Ride(startedAtMs: 1000, status: RideStatus.recording));
+    await WorkoutDao(db)
+        .insert(Workout(startedAtMs: 1000, status: WorkoutStatus.recording));
 
     await pumpApp(tester);
 

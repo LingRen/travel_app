@@ -11,9 +11,9 @@ import '../../domain/analysis/curve.dart';
 import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/heart_rate.dart';
 import '../../domain/analysis/route_segments.dart';
-import '../../domain/models/ride.dart';
-import '../../domain/models/ride_summary.dart';
 import '../../domain/models/track_point.dart';
+import '../../domain/models/workout.dart';
+import '../../domain/models/workout_summary.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
 import 'gpx_export.dart';
@@ -41,7 +41,7 @@ class DetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<RideDetail> detail = ref.watch(rideDetailProvider(rideId));
+    final AsyncValue<WorkoutDetail> detail = ref.watch(rideDetailProvider(rideId));
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
             DistanceUnit.kilometer;
@@ -52,7 +52,7 @@ class DetailPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('读取记录失败：$error')),
-        data: (RideDetail data) => _DetailBody(detail: data, unit: unit),
+        data: (WorkoutDetail data) => _DetailBody(detail: data, unit: unit),
       ),
     );
   }
@@ -61,12 +61,12 @@ class DetailPage extends ConsumerWidget {
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({required this.detail, required this.unit});
 
-  final RideDetail detail;
+  final WorkoutDetail detail;
   final DistanceUnit unit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final Ride ride = detail.ride;
+    final Workout ride = detail.ride;
     final List<TrackPoint> points = detail.points;
     final int maxHeartRate =
         ref.watch(appSettingsProvider).value?.maxHeartRate ??
@@ -81,7 +81,7 @@ class _DetailBody extends ConsumerWidget {
     final List<CurveSample> power =
         buildCurve(points, metric: CurveMetric.power);
 
-    final RideSummary? s = ride.summary;
+    final WorkoutSummary? s = ride.summary;
     final String speedUnit = speedUnitLabel(unit);
     String speedText(double mps) => '${formatSpeedValue(mps, unit)} $speedUnit';
 
@@ -220,7 +220,7 @@ class _DetailBody extends ConsumerWidget {
   /// 导出失败时给用户一句能看懂的话，而不是把异常栈糊在界面上。
   Future<void> _exportGpx(
     BuildContext context,
-    Ride ride,
+    Workout ride,
     List<TrackPoint> points,
   ) async {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);

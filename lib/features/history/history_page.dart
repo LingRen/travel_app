@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../data/settings_repository.dart';
-import '../../domain/models/ride.dart';
+import '../../domain/models/workout.dart';
 import '../detail/detail_page.dart';
 import 'history_providers.dart';
 import 'ride_card.dart';
@@ -15,7 +15,7 @@ class HistoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<Ride>> rides = ref.watch(historyRidesProvider);
+    final AsyncValue<List<Workout>> rides = ref.watch(historyRidesProvider);
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
             DistanceUnit.kilometer;
@@ -26,7 +26,7 @@ class HistoryPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
             Center(child: Text('读取记录失败：$error')),
-        data: (List<Ride> list) {
+        data: (List<Workout> list) {
           if (list.isEmpty) {
             return const Center(child: Text('还没有骑行记录'));
           }
@@ -40,9 +40,9 @@ class HistoryPage extends ConsumerWidget {
               endIndent: kSpaceL,
             ),
             itemBuilder: (BuildContext context, int index) {
-              final Ride ride = list[index];
+              final Workout ride = list[index];
               final int? id = ride.id;
-              return RideCard(
+              return WorkoutCard(
                 ride: ride,
                 unit: unit,
                 onTap: id == null

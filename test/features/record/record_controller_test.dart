@@ -4,14 +4,15 @@ import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/data/ble/ble_platform.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
-import 'package:cycling_app/data/ride_repository.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/data/workout_repository.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/analysis/route_segments.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
@@ -23,7 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const RideSummary _emptySummary = RideSummary(
+const WorkoutSummary _emptySummary = WorkoutSummary(
   distanceM: 0,
   durationS: 0,
   movingS: 0,
@@ -34,14 +35,14 @@ const RideSummary _emptySummary = RideSummary(
 );
 
 /// 内存版仓储：只记录调用，不做任何 IO。
-class _FakeRideRepository implements RideRepository {
+class _FakeWorkoutRepository implements WorkoutRepository {
   final List<TrackPoint> written = <TrackPoint>[];
-  final List<RideStatus> statuses = <RideStatus>[];
+  final List<WorkoutStatus> statuses = <WorkoutStatus>[];
 
-  int startRideCalls = 0;
+  int startWorkoutCalls = 0;
   int finishCalls = 0;
 
-  /// startRide 收到的参数，供断言设备名与开始时间是否传对。
+  /// startWorkout 收到的参数，供断言设备名与开始时间是否传对。
   int? startedAtMs;
   String? hrDeviceName;
   String? cadenceDeviceName;
@@ -50,22 +51,23 @@ class _FakeRideRepository implements RideRepository {
   /// 大于 0 时 `appendPoints` 抛出异常，每次调用减一。
   int failAppendTimes = 0;
 
-  Ride? existingRide;
+  Workout? existingWorkout;
   List<TrackPoint> existingPoints = <TrackPoint>[];
 
   @override
-  Future<Ride> startRide({
+  Future<Workout> startWorkout({
     required int startedAtMs,
+    ActivityType activityType = ActivityType.cycling,
     String? hrDeviceName,
     String? cadenceDeviceName,
     String? powerDeviceName,
   }) async {
-    startRideCalls++;
+    startWorkoutCalls++;
     this.startedAtMs = startedAtMs;
     this.hrDeviceName = hrDeviceName;
     this.cadenceDeviceName = cadenceDeviceName;
     this.powerDeviceName = powerDeviceName;
-    return Ride(id: 1, startedAtMs: startedAtMs, status: RideStatus.recording);
+    return Workout(id: 1, startedAtMs: startedAtMs, status: WorkoutStatus.recording);
   }
 
   @override
@@ -78,10 +80,10 @@ class _FakeRideRepository implements RideRepository {
   }
 
   @override
-  Future<void> setStatus(int rideId, RideStatus status) async => statuses.add(status);
+  Future<void> setStatus(int rideId, WorkoutStatus status) async => statuses.add(status);
 
   @override
-  Future<RideSummary> finishRide(
+  Future<WorkoutSummary> finishRide(
     int rideId, {
     required int endedAtMs,
     required int durationS,
@@ -91,16 +93,21 @@ class _FakeRideRepository implements RideRepository {
   }
 
   @override
-  Future<RideSummary> settleRide(int rideId) async => _emptySummary;
+  Future<WorkoutSummary> settleRide(int rideId) async => _emptySummary;
 
   @override
-  Future<List<Ride>> findUnfinished() async => <Ride>[];
+  Future<List<Workout>> findUnfinished() async => <Workout>[];
 
   @override
-  Future<List<Ride>> listFinished({int? limit, int? offset}) async => <Ride>[];
+  Future<List<Workout>> listFinished({
+    int? limit,
+    int? offset,
+    ActivityType? activityType,
+  }) async =>
+      <Workout>[];
 
   @override
-  Future<Ride?> getRide(int id) async => existingRide;
+  Future<Workout?> getWorkout(int id) async => existingWorkout;
 
   @override
   Future<List<TrackPoint>> getPoints(int rideId) async => existingPoints;
@@ -116,7 +123,7 @@ class _FakeRideRepository implements RideRepository {
   Future<void> deleteRide(int rideId) async {}
 
   @override
-  void Function()? get onRideDataChanged => null;
+  void Function()? get onWorkoutDataChanged => null;
 }
 
 /// 假的定位服务：readiness 由用例设置，定位点由用例手动推入。
@@ -290,13 +297,13 @@ List<int> _cpsFrame(int watts) => <int>[
     ];
 
 void main() {
-  late _FakeRideRepository repo;
+  late _FakeWorkoutRepository repo;
   late _FakeLocationService location;
   late _FakeRideCuePlayer cuePlayer;
   late int clockMs;
 
   setUp(() {
-    repo = _FakeRideRepository();
+    repo = _FakeWorkoutRepository();
     location = _FakeLocationService();
     cuePlayer = _FakeRideCuePlayer();
     clockMs = 1000;
@@ -317,7 +324,7 @@ void main() {
     final _FakeSensorPairing sensorPairing = pairing ?? _FakeSensorPairing();
     return ProviderContainer(
       overrides: <Override>[
-        rideRepositoryProvider.overrideWithValue(repo),
+        workoutRepositoryProvider.overrideWithValue(repo),
         locationServiceProvider.overrideWithValue(location),
         nowProvider.overrideWithValue(() => clockMs),
         sensorPairingProvider.overrideWithValue(sensorPairing),
@@ -357,7 +364,7 @@ void main() {
 
     expect(container.read(recordControllerProvider).phase, isNull);
     expect(container.read(recordControllerProvider).errorMessage, contains('定位服务'));
-    expect(repo.startRideCalls, 0);
+    expect(repo.startWorkoutCalls, 0);
     container.dispose();
   });
 
@@ -370,7 +377,7 @@ void main() {
     await controller.start();
 
     expect(container.read(recordControllerProvider).errorMessage, contains('系统设置'));
-    expect(repo.startRideCalls, 0);
+    expect(repo.startWorkoutCalls, 0);
     container.dispose();
   });
 
@@ -458,13 +465,13 @@ void main() {
 
     expect(repo.written.length, 3);
     expect(container.read(recordControllerProvider).phase, RecordingPhase.paused);
-    expect(repo.statuses, <RideStatus>[RideStatus.paused]);
+    expect(repo.statuses, <WorkoutStatus>[WorkoutStatus.paused]);
 
     controller.resume();
     await tester.pump();
 
     expect(container.read(recordControllerProvider).phase, RecordingPhase.recording);
-    expect(repo.statuses.last, RideStatus.recording);
+    expect(repo.statuses.last, WorkoutStatus.recording);
     container.dispose();
   });
 
@@ -550,7 +557,7 @@ void main() {
     final ProviderContainer container = makeContainer();
     final RecordController controller =
         container.read(recordControllerProvider.notifier);
-    repo.existingRide = const Ride(id: 7, startedAtMs: 0, status: RideStatus.recording);
+    repo.existingWorkout = const Workout(id: 7, startedAtMs: 0, status: WorkoutStatus.recording);
     repo.existingPoints = const <TrackPoint>[
       TrackPoint(rideId: 7, tMs: 0, lat: 31.0, lon: 121.0),
       TrackPoint(rideId: 7, tMs: 1000, lat: 31.0001, lon: 121.0),
@@ -573,10 +580,10 @@ void main() {
     final RecordController controller =
         container.read(recordControllerProvider.notifier);
     // 一小时前开始、最后落盘点在一小时前的会话；崩溃后 5 分钟才重新打开 App。
-    repo.existingRide = const Ride(
+    repo.existingWorkout = const Workout(
       id: 7,
       startedAtMs: -3599000,
-      status: RideStatus.recording,
+      status: WorkoutStatus.recording,
     );
     repo.existingPoints = const <TrackPoint>[
       TrackPoint(rideId: 7, tMs: -2000, lat: 31.0, lon: 121.0),
@@ -604,7 +611,7 @@ void main() {
     final ProviderContainer container = makeContainer();
     final RecordController controller =
         container.read(recordControllerProvider.notifier);
-    repo.existingRide = const Ride(id: 7, startedAtMs: 0, status: RideStatus.recording);
+    repo.existingWorkout = const Workout(id: 7, startedAtMs: 0, status: WorkoutStatus.recording);
     repo.existingPoints = const <TrackPoint>[
       TrackPoint(rideId: 7, tMs: 0, lat: 31.0, lon: 121.0),
       TrackPoint(rideId: 7, tMs: 1000, lat: 31.0001, lon: 121.0),

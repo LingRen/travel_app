@@ -1,9 +1,9 @@
 import 'package:cycling_app/data/db/database.dart';
-import 'package:cycling_app/data/db/ride_dao.dart';
 import 'package:cycling_app/data/db/track_point_dao.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
+import 'package:cycling_app/data/db/workout_dao.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -20,8 +20,8 @@ void main() {
   setUp(() async {
     db = await openAppDatabase(path: inMemoryDatabasePath);
     dao = TrackPointDao(db);
-    rideId = await RideDao(db).insert(
-      const Ride(startedAtMs: 1000, status: RideStatus.recording),
+    rideId = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 1000, status: WorkoutStatus.recording),
     );
   });
 
@@ -57,42 +57,42 @@ void main() {
   });
 
   test('countByRide 只统计指定骑行的点', () async {
-    final int otherRideId = await RideDao(db).insert(
-      const Ride(startedAtMs: 2000, status: RideStatus.recording),
+    final int otherWorkoutId = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 2000, status: WorkoutStatus.recording),
     );
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 1000, lat: 31.23, lon: 121.46),
       TrackPoint(rideId: rideId, tMs: 2000, lat: 31.23, lon: 121.465),
-      TrackPoint(rideId: otherRideId, tMs: 1000, lat: 31.24, lon: 121.48),
+      TrackPoint(rideId: otherWorkoutId, tMs: 1000, lat: 31.24, lon: 121.48),
     ]);
 
     expect(await dao.countByRide(rideId), 2);
-    expect(await dao.countByRide(otherRideId), 1);
+    expect(await dao.countByRide(otherWorkoutId), 1);
   });
 
   test('deleteByRide 只删除指定骑行的点', () async {
-    final int otherRideId = await RideDao(db).insert(
-      const Ride(startedAtMs: 2000, status: RideStatus.recording),
+    final int otherWorkoutId = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 2000, status: WorkoutStatus.recording),
     );
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 1000, lat: 31.23, lon: 121.46),
       TrackPoint(rideId: rideId, tMs: 2000, lat: 31.23, lon: 121.465),
-      TrackPoint(rideId: otherRideId, tMs: 1000, lat: 31.24, lon: 121.48),
+      TrackPoint(rideId: otherWorkoutId, tMs: 1000, lat: 31.24, lon: 121.48),
     ]);
 
     await dao.deleteByRide(rideId);
 
     expect(await dao.countByRide(rideId), 0);
-    expect(await dao.countByRide(otherRideId), 1);
-    expect((await dao.lastByRide(otherRideId))!.tMs, 1000);
+    expect(await dao.countByRide(otherWorkoutId), 1);
+    expect((await dao.lastByRide(otherWorkoutId))!.tMs, 1000);
   });
 
   test('listAll 按 ride_id 再按 t_ms 正序返回全部点', () async {
-    final int rideA = await RideDao(db).insert(
-      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    final int rideA = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
     );
-    final int rideB = await RideDao(db).insert(
-      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    final int rideB = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
     );
 
     await dao.insertBatch(<TrackPoint>[
@@ -109,8 +109,8 @@ void main() {
   });
 
   test('deleteAll 清空 track_points 表', () async {
-    final int rideId = await RideDao(db).insert(
-      const Ride(startedAtMs: 0, status: RideStatus.finished),
+    final int rideId = await WorkoutDao(db).insert(
+      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
     );
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 0, lat: 1.0, lon: 1.0),

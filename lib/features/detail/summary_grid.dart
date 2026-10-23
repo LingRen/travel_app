@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
-import '../../domain/models/ride.dart';
-import '../../domain/models/ride_summary.dart';
+import '../../domain/models/workout.dart';
+import '../../domain/models/workout_summary.dart';
 
 /// 规格表的一行：量名与读数。
 typedef SpecEntry = (String label, String value);
@@ -22,12 +22,12 @@ typedef SpecEntry = (String label, String value);
 class SummaryGrid extends StatelessWidget {
   const SummaryGrid({required this.ride, required this.unit, super.key});
 
-  final Ride ride;
+  final Workout ride;
   final DistanceUnit unit;
 
   @override
   Widget build(BuildContext context) {
-    final RideSummary? s = ride.summary;
+    final WorkoutSummary? s = ride.summary;
     if (s == null) {
       return const Padding(
         padding: EdgeInsets.all(kSpaceL),

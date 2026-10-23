@@ -4,10 +4,10 @@ import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
 import 'package:cycling_app/domain/analysis/gcj02.dart';
 import 'package:cycling_app/domain/analysis/heart_rate.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/features/detail/curve_chart.dart';
 import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
@@ -27,15 +27,15 @@ const AppSettings _settings = AppSettings(
   mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
 );
 
-Ride rideWith({RideSummary? summary, String? powerDeviceName}) => Ride(
+Workout rideWith({WorkoutSummary? summary, String? powerDeviceName}) => Workout(
       id: 1,
       startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-      status: RideStatus.finished,
+      status: WorkoutStatus.finished,
       title: '晨骑',
       powerDeviceName: powerDeviceName,
       summary: summary ??
-          const RideSummary(
+          const WorkoutSummary(
             distanceM: 25300,
             durationS: 3600,
             movingS: 3400,
@@ -52,7 +52,7 @@ Ride rideWith({RideSummary? summary, String? powerDeviceName}) => Ride(
     );
 
 /// 带功率的汇总，用来核对功率区块的读数与标题。
-const RideSummary _powerSummary = RideSummary(
+const WorkoutSummary _powerSummary = WorkoutSummary(
   distanceM: 25300,
   durationS: 3600,
   movingS: 3400,
@@ -98,7 +98,7 @@ List<TrackPoint> pointsWithHr() => <TrackPoint>[
     ];
 
 Widget wrap({
-  required RideDetail detail,
+  required WorkoutDetail detail,
   AppSettings settings = _settings,
 }) =>
     ProviderScope(
@@ -112,7 +112,7 @@ Widget wrap({
 /// 详情页是 `ListView`，默认 800x600 的测试视口只会懒构建前两屏；
 /// 「三个区块都渲染出来」这类断言必须先把视口调高，否则断言会退化成
 /// 「当前滚动位置恰好构建了哪些区块」。
-Future<void> pumpDetail(WidgetTester tester, {required RideDetail detail}) async {
+Future<void> pumpDetail(WidgetTester tester, {required WorkoutDetail detail}) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -124,7 +124,7 @@ void main() {
   testWidgets('显示汇总指标网格里的距离、时长与爬升', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
     expect(find.text('25.30 km'), findsOneWidget);
@@ -135,7 +135,7 @@ void main() {
   testWidgets('标题显示骑行标题与日期', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
     expect(find.text('晨骑'), findsOneWidget);
@@ -145,7 +145,7 @@ void main() {
   testWidgets('三条曲线区块都渲染出来', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
     expect(find.text('速度'), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
     testWidgets('平均线与格式化口径跟着上方读数走', (WidgetTester tester) async {
       await pumpDetail(
         tester,
-        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
       );
 
       // 顺序与区块一致：速度、心率、踏频。
@@ -185,7 +185,7 @@ void main() {
     testWidgets('带功率的骑行：功率曲线也带上平均线', (WidgetTester tester) async {
       await pumpDetail(
         tester,
-        detail: RideDetail(
+        detail: WorkoutDetail(
           ride: rideWith(summary: _powerSummary),
           points: pointsWithPower(),
         ),
@@ -201,8 +201,8 @@ void main() {
     testWidgets('汇总缺失（进行中的骑行）时不画平均线，曲线照常画', (WidgetTester tester) async {
       await pumpDetail(
         tester,
-        detail: RideDetail(
-          ride: Ride(id: 1, startedAtMs: 1000, status: RideStatus.finished),
+        detail: WorkoutDetail(
+          ride: Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished),
           points: pointsWithHr(),
         ),
       );
@@ -231,7 +231,7 @@ void main() {
 
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: noHr),
+      detail: WorkoutDetail(ride: rideWith(), points: noHr),
     );
 
     expect(find.text('心率'), findsNothing);
@@ -254,7 +254,7 @@ void main() {
 
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: noCadence),
+      detail: WorkoutDetail(ride: rideWith(), points: noCadence),
     );
 
     expect(find.text('踏频'), findsNothing);
@@ -262,12 +262,12 @@ void main() {
   });
 
   // 没接功率计的那次骑行，库里存的功率是按速度、坡度与体重估出来的，和实测
-  // 功率长得一模一样，只有 `Ride.powerDeviceName` 能区分，所以标题必须跟着变。
+  // 功率长得一模一样，只有 `Workout.powerDeviceName` 能区分，所以标题必须跟着变。
   group('功率区块的标题', () {
     testWidgets('没接功率计：标题写明「估算」', (WidgetTester tester) async {
       await pumpDetail(
         tester,
-        detail: RideDetail(
+        detail: WorkoutDetail(
           ride: rideWith(summary: _powerSummary),
           points: pointsWithPower(),
         ),
@@ -283,7 +283,7 @@ void main() {
     testWidgets('接了功率计：标题就是「功率」', (WidgetTester tester) async {
       await pumpDetail(
         tester,
-        detail: RideDetail(
+        detail: WorkoutDetail(
           ride: rideWith(summary: _powerSummary, powerDeviceName: 'ASSIOMA'),
           points: pointsWithPower(),
         ),
@@ -297,7 +297,7 @@ void main() {
   testWidgets('轨迹点为空时显示空数据提示且不崩溃', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: const <TrackPoint>[]),
+      detail: WorkoutDetail(ride: rideWith(), points: const <TrackPoint>[]),
     );
 
     expect(find.text('这次骑行没有轨迹数据'), findsOneWidget);
@@ -310,7 +310,7 @@ void main() {
   testWidgets('轨迹点为空时一个曲线区块都不渲染', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: const <TrackPoint>[]),
+      detail: WorkoutDetail(ride: rideWith(), points: const <TrackPoint>[]),
     );
 
     expect(find.byType(CurveChart), findsNothing);
@@ -323,7 +323,7 @@ void main() {
   testWidgets('心率区间条按区间标出时长占比', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
     // 四个点共 3 秒：心率 120/140/160 分别落在 Z2/Z3/Z4（最大心率 190）。
@@ -339,8 +339,8 @@ void main() {
   testWidgets('汇总缺失（进行中的骑行）时显示提示而不是崩溃', (WidgetTester tester) async {
     await pumpDetail(
       tester,
-      detail: RideDetail(
-        ride: Ride(id: 1, startedAtMs: 1000, status: RideStatus.finished),
+      detail: WorkoutDetail(
+        ride: Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished),
         points: const <TrackPoint>[],
       ),
     );
@@ -351,7 +351,7 @@ void main() {
 
   testWidgets('轨迹点有坐标时渲染地图区块', (WidgetTester tester) async {
     await tester.pumpWidget(wrap(
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     ));
     await tester.pumpAndSettle();
 
@@ -375,7 +375,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(wrap(
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     ));
     await tester.pumpAndSettle();
 
@@ -390,7 +390,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(wrap(
-      detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     ));
     await tester.pumpAndSettle();
 
@@ -411,7 +411,7 @@ void main() {
 
     testWidgets('高德源：轨迹转成 GCJ-02', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(
-        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
       ));
       await tester.pumpAndSettle();
 
@@ -423,7 +423,7 @@ void main() {
 
     testWidgets('OSM 源：轨迹保持 WGS-84 原样', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(
-        detail: RideDetail(ride: rideWith(), points: pointsWithHr()),
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
         settings: const AppSettings(
           maxHeartRate: 190,
           weightKg: 70,
@@ -446,7 +446,7 @@ void main() {
     ];
 
     await tester.pumpWidget(wrap(
-      detail: RideDetail(ride: rideWith(), points: noPosition),
+      detail: WorkoutDetail(ride: rideWith(), points: noPosition),
     ));
     await tester.pumpAndSettle();
 

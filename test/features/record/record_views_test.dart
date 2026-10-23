@@ -4,15 +4,16 @@ import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/location/location_service.dart';
-import 'package:cycling_app/data/ride_repository.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/analysis/constants.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
@@ -25,7 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const RideSummary _emptySummary = RideSummary(
+const WorkoutSummary _emptySummary = WorkoutSummary(
   distanceM: 0,
   durationS: 0,
   movingS: 0,
@@ -36,28 +37,29 @@ const RideSummary _emptySummary = RideSummary(
 );
 
 /// 内存版仓储：记录页测试只关心界面，不关心落盘。
-class _FakeRideRepository implements RideRepository {
-  int startRideCalls = 0;
+class _FakeWorkoutRepository implements WorkoutRepository {
+  int startWorkoutCalls = 0;
 
   @override
-  Future<Ride> startRide({
+  Future<Workout> startWorkout({
     required int startedAtMs,
+    ActivityType activityType = ActivityType.cycling,
     String? hrDeviceName,
     String? cadenceDeviceName,
     String? powerDeviceName,
   }) async {
-    startRideCalls++;
-    return Ride(id: 1, startedAtMs: startedAtMs, status: RideStatus.recording);
+    startWorkoutCalls++;
+    return Workout(id: 1, startedAtMs: startedAtMs, status: WorkoutStatus.recording);
   }
 
   @override
   Future<void> appendPoints(int rideId, List<TrackPoint> points) async {}
 
   @override
-  Future<void> setStatus(int rideId, RideStatus status) async {}
+  Future<void> setStatus(int rideId, WorkoutStatus status) async {}
 
   @override
-  Future<RideSummary> finishRide(
+  Future<WorkoutSummary> finishRide(
     int rideId, {
     required int endedAtMs,
     required int durationS,
@@ -65,16 +67,21 @@ class _FakeRideRepository implements RideRepository {
       _emptySummary;
 
   @override
-  Future<RideSummary> settleRide(int rideId) async => _emptySummary;
+  Future<WorkoutSummary> settleRide(int rideId) async => _emptySummary;
 
   @override
-  Future<List<Ride>> findUnfinished() async => <Ride>[];
+  Future<List<Workout>> findUnfinished() async => <Workout>[];
 
   @override
-  Future<List<Ride>> listFinished({int? limit, int? offset}) async => <Ride>[];
+  Future<List<Workout>> listFinished({
+    int? limit,
+    int? offset,
+    ActivityType? activityType,
+  }) async =>
+      <Workout>[];
 
   @override
-  Future<Ride?> getRide(int id) async => null;
+  Future<Workout?> getWorkout(int id) async => null;
 
   @override
   Future<List<TrackPoint>> getPoints(int rideId) async => <TrackPoint>[];
@@ -89,7 +96,7 @@ class _FakeRideRepository implements RideRepository {
   Future<void> deleteRide(int rideId) async {}
 
   @override
-  void Function()? get onRideDataChanged => null;
+  void Function()? get onWorkoutDataChanged => null;
 }
 
 /// 假的定位服务：readiness 由用例设置，不产生任何定位点。
@@ -692,11 +699,11 @@ void main() {
   });
 
   group('记录页', () {
-    late _FakeRideRepository repo;
+    late _FakeWorkoutRepository repo;
     late _FakeLocationService location;
 
     setUp(() {
-      repo = _FakeRideRepository();
+      repo = _FakeWorkoutRepository();
       location = _FakeLocationService();
     });
 
@@ -706,7 +713,7 @@ void main() {
           appSettingsProvider.overrideWithValue(
             const AsyncValue<AppSettings>.data(_testSettings),
           ),
-          rideRepositoryProvider.overrideWithValue(repo),
+          workoutRepositoryProvider.overrideWithValue(repo),
           locationServiceProvider.overrideWithValue(location),
           nowProvider.overrideWithValue(() => 1000),
           sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
@@ -741,7 +748,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('未获得定位权限，无法记录骑行'), findsOneWidget);
-      expect(repo.startRideCalls, 0, reason: '阻断类错误下不能创建骑行记录');
+      expect(repo.startWorkoutCalls, 0, reason: '阻断类错误下不能创建骑行记录');
       expect(find.text('开始'), findsOneWidget, reason: '仍停在未开始状态');
       // 失败时不该顺手把用户推进记录中：状态条与主按钮都得留在未开始态。
       expect(find.text('未开始'), findsOneWidget);

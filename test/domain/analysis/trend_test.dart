@@ -1,7 +1,7 @@
 import 'package:cycling_app/domain/analysis/trend.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 测试用的固定「现在」：2026-09-24（周四）12:00 本地时间。
@@ -13,11 +13,11 @@ int get nowMs => DateTime(2026, 9, 24, 12).millisecondsSinceEpoch;
 int ms(int y, int m, int d, [int h = 12]) =>
     DateTime(y, m, d, h).millisecondsSinceEpoch;
 
-Ride ride({
+Workout ride({
   int id = 1,
   required int startedAtMs,
-  RideStatus status = RideStatus.finished,
-  RideSummary? summary = const RideSummary(
+  WorkoutStatus status = WorkoutStatus.finished,
+  WorkoutSummary? summary = const WorkoutSummary(
     distanceM: 10000,
     durationS: 1800,
     movingS: 1700,
@@ -28,12 +28,12 @@ Ride ride({
     pointCount: 1800,
   ),
 }) =>
-    Ride(id: id, startedAtMs: startedAtMs, status: status, summary: summary);
+    Workout(id: id, startedAtMs: startedAtMs, status: status, summary: summary);
 
 void main() {
   group('buildTrend 范围与桶结构', () {
     test('week 返回 7 个日桶，首桶是本周一', () {
-      final TrendSummary t = buildTrend(<Ride>[], range: TrendRange.week, nowMs: nowMs);
+      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.week, nowMs: nowMs);
       expect(t.buckets.length, 7);
       expect(t.buckets.first.label, '09-21');
       expect(t.buckets.last.label, '09-27');
@@ -42,21 +42,21 @@ void main() {
     });
 
     test('month 返回当月天数的日桶', () {
-      final TrendSummary t = buildTrend(<Ride>[], range: TrendRange.month, nowMs: nowMs);
+      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.month, nowMs: nowMs);
       expect(t.buckets.length, 30); // 2026-09 有 30 天
       expect(t.buckets.first.label, '09-01');
       expect(t.buckets.last.label, '09-30');
     });
 
     test('year 返回 12 个月桶，标签为 YYYY-MM', () {
-      final TrendSummary t = buildTrend(<Ride>[], range: TrendRange.year, nowMs: nowMs);
+      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.year, nowMs: nowMs);
       expect(t.buckets.length, 12);
       expect(t.buckets.first.label, '2026-01');
       expect(t.buckets.last.label, '2026-12');
     });
 
     test('空输入时累计值全为 0', () {
-      final TrendSummary t = buildTrend(<Ride>[], range: TrendRange.week, nowMs: nowMs);
+      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.week, nowMs: nowMs);
       expect(t.distanceM, 0);
       expect(t.durationS, 0);
       expect(t.elevationGainM, 0);
@@ -67,7 +67,7 @@ void main() {
   group('buildTrend 落桶', () {
     test('骑行落在 startedAtMs 所属的那一天', () {
       final TrendSummary t = buildTrend(
-        <Ride>[ride(id: 1, startedAtMs: ms(2026, 9, 23, 8))],
+        <Workout>[ride(id: 1, startedAtMs: ms(2026, 9, 23, 8))],
         range: TrendRange.week,
         nowMs: nowMs,
       );
@@ -79,7 +79,7 @@ void main() {
 
     test('同一天多条骑行累加', () {
       final TrendSummary t = buildTrend(
-        <Ride>[
+        <Workout>[
           ride(id: 1, startedAtMs: ms(2026, 9, 22, 7)),
           ride(id: 2, startedAtMs: ms(2026, 9, 22, 19)),
         ],
@@ -93,7 +93,7 @@ void main() {
 
     test('范围外的骑行不计入', () {
       final TrendSummary t = buildTrend(
-        <Ride>[ride(id: 1, startedAtMs: ms(2026, 9, 20, 8))], // 上周日
+        <Workout>[ride(id: 1, startedAtMs: ms(2026, 9, 20, 8))], // 上周日
         range: TrendRange.week,
         nowMs: nowMs,
       );
@@ -103,7 +103,7 @@ void main() {
 
     test('桶的右端点属于下一个桶（左闭右开）', () {
       final TrendSummary t = buildTrend(
-        <Ride>[ride(id: 1, startedAtMs: ms(2026, 9, 22, 0))],
+        <Workout>[ride(id: 1, startedAtMs: ms(2026, 9, 22, 0))],
         range: TrendRange.week,
         nowMs: nowMs,
       );
@@ -113,9 +113,9 @@ void main() {
 
     test('未结束的骑行不计入', () {
       final TrendSummary t = buildTrend(
-        <Ride>[
-          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: RideStatus.recording, summary: null),
-          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: RideStatus.paused, summary: null),
+        <Workout>[
+          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: WorkoutStatus.recording, summary: null),
+          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: WorkoutStatus.paused, summary: null),
         ],
         range: TrendRange.week,
         nowMs: nowMs,
@@ -125,7 +125,7 @@ void main() {
 
     test('summary 为 null 的已结束骑行不计入', () {
       final TrendSummary t = buildTrend(
-        <Ride>[ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), summary: null)],
+        <Workout>[ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), summary: null)],
         range: TrendRange.week,
         nowMs: nowMs,
       );
@@ -136,9 +136,9 @@ void main() {
       // 记录中/暂停中的骑行理论上不该有汇总，但模型允许。这里专门覆盖
       // `status != finished` 这一条过滤：否则它会被 summary 判断掩盖而失去区分力。
       final TrendSummary t = buildTrend(
-        <Ride>[
-          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: RideStatus.recording),
-          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: RideStatus.paused),
+        <Workout>[
+          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: WorkoutStatus.recording),
+          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: WorkoutStatus.paused),
         ],
         range: TrendRange.week,
         nowMs: nowMs,
@@ -150,7 +150,7 @@ void main() {
 
     test('year 范围下按月份落桶', () {
       final TrendSummary t = buildTrend(
-        <Ride>[
+        <Workout>[
           ride(id: 1, startedAtMs: ms(2026, 3, 15)),
           ride(id: 2, startedAtMs: ms(2026, 3, 28)),
           ride(id: 3, startedAtMs: ms(2026, 9, 24)),
@@ -166,7 +166,7 @@ void main() {
 
     test('累计值等于各桶之和', () {
       final TrendSummary t = buildTrend(
-        <Ride>[
+        <Workout>[
           ride(id: 1, startedAtMs: ms(2026, 9, 22, 7)),
           ride(id: 2, startedAtMs: ms(2026, 9, 24, 7)),
         ],
@@ -190,11 +190,11 @@ void main() {
 
   group('personalBests', () {
     test('四项最佳各取最大的一条，并带上骑行 id 与开始时间', () {
-      final PersonalBests b = personalBests(<Ride>[
+      final PersonalBests b = personalBests(<Workout>[
         ride(
           id: 1,
           startedAtMs: ms(2026, 9, 1),
-          summary: const RideSummary(
+          summary: const WorkoutSummary(
             distanceM: 30000,
             durationS: 5400,
             movingS: 5200,
@@ -207,7 +207,7 @@ void main() {
         ride(
           id: 2,
           startedAtMs: ms(2026, 9, 2),
-          summary: const RideSummary(
+          summary: const WorkoutSummary(
             distanceM: 15000,
             durationS: 9000,
             movingS: 8000,
@@ -231,7 +231,7 @@ void main() {
     });
 
     test('并列时保留更早的那次', () {
-      final PersonalBests b = personalBests(<Ride>[
+      final PersonalBests b = personalBests(<Workout>[
         ride(id: 1, startedAtMs: ms(2026, 9, 1)),
         ride(id: 2, startedAtMs: ms(2026, 9, 2)),
       ]);
@@ -239,8 +239,8 @@ void main() {
     });
 
     test('没有已结束骑行时四项全为 null', () {
-      final PersonalBests b = personalBests(<Ride>[
-        ride(id: 1, startedAtMs: ms(2026, 9, 1), status: RideStatus.recording, summary: null),
+      final PersonalBests b = personalBests(<Workout>[
+        ride(id: 1, startedAtMs: ms(2026, 9, 1), status: WorkoutStatus.recording, summary: null),
       ]);
       expect(b.longestDistanceM, isNull);
       expect(b.longestDurationS, isNull);
@@ -249,9 +249,9 @@ void main() {
     });
 
     test('跳过没有 id 或没有 summary 的骑行', () {
-      final PersonalBests b = personalBests(<Ride>[
-        const Ride(startedAtMs: 1000, status: RideStatus.finished, summary: null),
-        Ride(id: 9, startedAtMs: 2000, status: RideStatus.finished, summary: null),
+      final PersonalBests b = personalBests(<Workout>[
+        const Workout(startedAtMs: 1000, status: WorkoutStatus.finished, summary: null),
+        Workout(id: 9, startedAtMs: 2000, status: WorkoutStatus.finished, summary: null),
       ]);
       expect(b.longestDistanceM, isNull);
     });
@@ -259,12 +259,12 @@ void main() {
     test('带 summary 但未结束的骑行不参与最佳', () {
       // 未结束但带汇总的骑行距离更大；若丢掉 `status != finished` 过滤，
       // 它会顶掉已结束的那次，从而暴露该过滤失效。
-      final PersonalBests b = personalBests(<Ride>[
+      final PersonalBests b = personalBests(<Workout>[
         ride(
           id: 1,
           startedAtMs: ms(2026, 9, 1),
-          status: RideStatus.recording,
-          summary: const RideSummary(
+          status: WorkoutStatus.recording,
+          summary: const WorkoutSummary(
             distanceM: 50000,
             durationS: 100,
             movingS: 100,
@@ -281,7 +281,7 @@ void main() {
     });
 
     test('空输入返回全 null', () {
-      final PersonalBests b = personalBests(<Ride>[]);
+      final PersonalBests b = personalBests(<Workout>[]);
       expect(b.longestDistanceM, isNull);
       expect(b.mostElevationGainM, isNull);
     });

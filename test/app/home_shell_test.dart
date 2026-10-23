@@ -4,10 +4,10 @@ import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/features/history/history_page.dart';
 import 'package:cycling_app/features/history/history_providers.dart';
 import 'package:cycling_app/features/history/ride_card.dart';
@@ -29,13 +29,13 @@ const AppSettings _testSettings = AppSettings(
 );
 
 /// 一条已结束的骑行：历史页会为它渲染一张卡片，统计页会把它算进累计。
-const Ride _ride = Ride(
+const Workout _ride = Workout(
   id: 1,
   startedAtMs: 1000,
   endedAtMs: 2000,
-  status: RideStatus.finished,
+  status: WorkoutStatus.finished,
   title: '晨骑',
-  summary: RideSummary(
+  summary: WorkoutSummary(
     distanceM: 25300,
     durationS: 3600,
     movingS: 3400,
@@ -74,8 +74,8 @@ void main() {
             appSettingsProvider.overrideWithValue(
               const AsyncValue<AppSettings>.data(_testSettings),
             ),
-            historyRidesProvider.overrideWith((Ref ref) => const <Ride>[_ride]),
-            finishedRidesProvider.overrideWith((Ref ref) => const <Ride>[_ride]),
+            historyRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
+            finishedRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
             // 历史页每张卡片各自 watch 自己那次的轨迹点。
             ridePointsProvider(_ride.id!).overrideWith(
               (Ref ref) => const <TrackPoint>[],
@@ -157,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HistoryPage), findsOneWidget);
-    expect(find.byType(RideCard), findsOneWidget);
+    expect(find.byType(WorkoutCard), findsOneWidget);
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.byType(RecordPage), findsNothing);
     expect(find.text('未开始'), findsNothing);

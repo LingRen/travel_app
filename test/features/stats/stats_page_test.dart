@@ -1,9 +1,9 @@
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/features/stats/personal_bests_card.dart';
 import 'package:cycling_app/features/stats/stats_page.dart';
 import 'package:cycling_app/features/stats/stats_providers.dart';
@@ -24,7 +24,7 @@ const AppSettings _settings = AppSettings(
 /// 固定「现在」：2026-09-24（周四），因此本周是 09-21（周一）到 09-27。
 int get nowMs => DateTime(2026, 9, 24, 12).millisecondsSinceEpoch;
 
-Ride ride(
+Workout ride(
   int id,
   int y,
   int m,
@@ -33,12 +33,12 @@ Ride ride(
   double? avgPowerW,
   int? maxPowerW,
 }) =>
-    Ride(
+    Workout(
       id: id,
       startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
-      status: RideStatus.finished,
-      summary: RideSummary(
+      status: WorkoutStatus.finished,
+      summary: WorkoutSummary(
         distanceM: distanceM,
         durationS: 1800,
         movingS: 1700,
@@ -53,7 +53,7 @@ Ride ride(
     );
 
 Widget wrap({
-  required List<Ride> rides,
+  required List<Workout> rides,
   AppSettings settings = _settings,
 }) =>
     ProviderScope(
@@ -69,7 +69,7 @@ Widget wrap({
 /// 卡片都在下半部分，不调高视口就根本不会被 build，`find.byType` 会假失败。
 Future<void> pumpStats(
   WidgetTester tester, {
-  required List<Ride> rides,
+  required List<Workout> rides,
   AppSettings settings = _settings,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
@@ -95,7 +95,7 @@ String totalsValue(WidgetTester tester, String tile) {
 
 void main() {
   testWidgets('默认显示本周累计距离、时长与爬升', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 9, 22),
       ride(2, 2026, 9, 24),
     ]);
@@ -107,7 +107,7 @@ void main() {
   });
 
   testWidgets('范围外的骑行不计入累计', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 9, 20), // 上周日，不在 09-21..09-27 内
     ]);
 
@@ -118,7 +118,7 @@ void main() {
   });
 
   testWidgets('切到「年」后累计包含全年的骑行', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 3, 15),
       ride(2, 2026, 9, 24),
     ]);
@@ -131,7 +131,7 @@ void main() {
   });
 
   testWidgets('切到「月」后累计包含整月的骑行', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 9, 2),
       ride(2, 2026, 9, 24),
     ]);
@@ -144,7 +144,7 @@ void main() {
   });
 
   testWidgets('渲染趋势折线', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+    await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
     expect(find.byType(TrendChart), findsOneWidget);
     final TrendChart chart = tester.widget<TrendChart>(find.byType(TrendChart));
@@ -163,7 +163,7 @@ void main() {
   });
 
   testWidgets('触摸读数保留两位小数，并标出日期与单位', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 12500)]);
+    await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 12500)]);
 
     final LineChartData data =
         tester.widget<LineChart>(find.byType(LineChart)).data;
@@ -183,7 +183,7 @@ void main() {
   testWidgets('切到英里后累计、爬升与趋势图纵轴都换算', (WidgetTester tester) async {
     await pumpStats(
       tester,
-      rides: <Ride>[ride(1, 2026, 9, 22)],
+      rides: <Workout>[ride(1, 2026, 9, 22)],
       settings: const AppSettings(
         maxHeartRate: 190,
         weightKg: 70,
@@ -206,7 +206,7 @@ void main() {
   });
 
   testWidgets('渲染个人最佳卡片，四项都显示', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 9, 22, distanceM: 30000),
       ride(2, 2026, 9, 24, distanceM: 10000),
     ]);
@@ -238,7 +238,7 @@ void main() {
   });
 
   testWidgets('个人最佳跨范围统计，不受周月年切换影响', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Ride>[
+    await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 3, 15, distanceM: 40000),
       ride(2, 2026, 9, 24, distanceM: 10000),
     ]);
@@ -252,7 +252,7 @@ void main() {
   });
 
   testWidgets('没有任何记录时不崩溃', (WidgetTester tester) async {
-    await pumpStats(tester, rides: const <Ride>[]);
+    await pumpStats(tester, rides: const <Workout>[]);
 
     expect(totalsValue(tester, 'distance'), '0 m');
     expect(totalsValue(tester, 'gain'), '0 m');
@@ -263,7 +263,7 @@ void main() {
 
   group('功率', () {
     testWidgets('累计矩阵里的平均功率按移动时长加权', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[
+      await pumpStats(tester, rides: <Workout>[
         ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300),
         ride(2, 2026, 9, 24, avgPowerW: 180, maxPowerW: 420),
       ]);
@@ -274,7 +274,7 @@ void main() {
     });
 
     testWidgets('范围外的骑行功率不计入累计', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[
+      await pumpStats(tester, rides: <Workout>[
         ride(1, 2026, 9, 20, avgPowerW: 400, maxPowerW: 900), // 上周日，范围外
         ride(2, 2026, 9, 24, avgPowerW: 150, maxPowerW: 300),
       ]);
@@ -284,14 +284,14 @@ void main() {
     });
 
     testWidgets('没有功率数据时累计矩阵显示破折号而不是 0 W', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
       expect(totalsValue(tester, 'avg-power'), '—');
       expect(totalsValue(tester, 'max-power'), '—');
     });
 
     testWidgets('个人最佳里的最高功率取单次峰值最大的一次', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[
+      await pumpStats(tester, rides: <Workout>[
         ride(1, 2026, 9, 22, avgPowerW: 260, maxPowerW: 380),
         ride(2, 2026, 9, 24, avgPowerW: 140, maxPowerW: 520),
       ]);
@@ -317,7 +317,7 @@ void main() {
     testWidgets('刻度标签不重复', (WidgetTester tester) async {
       // 单次 2 km → 轴上最大 2*1.2 = 2.4，正是真机上出现 `0/1/1/2/2` 的量级
       // （旧实现没给 interval，fl_chart 自己算出 0.5 的步长）。
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 2000)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 2000)]);
 
       final LineChartData data =
           tester.widget<LineChart>(find.byType(LineChart)).data;
@@ -340,7 +340,7 @@ void main() {
     // 小数步长也要满足：轴顶不能落在步长序列之外（真机上曾出现末尾补一个
     // `1.7`，看着像刻度算错了）。
     testWidgets('轴顶落在步长序列上', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22, distanceM: 1400)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 1400)]);
 
       final LineChartData data =
           tester.widget<LineChart>(find.byType(LineChart)).data;
@@ -386,7 +386,7 @@ void main() {
     // 真机上月视图底下日期叠成一团，早先的做法是隔几个跳一个；跳过之后
     // 剩下的日期对不上自己关心的那天，等于没标。现在改成竖排 + 全部列出。
     testWidgets('周视图把 7 个日期全部列出来', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
       for (int d = 21; d <= 27; d++) {
         final String label = '09-$d';
@@ -395,7 +395,7 @@ void main() {
     });
 
     testWidgets('月视图把整月 30 个日期全部列出来且不溢出', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
       await tester.tap(find.text('月'));
       await tester.pumpAndSettle();
 
@@ -408,7 +408,7 @@ void main() {
     });
 
     testWidgets('年视图把 12 个月份全部列出来', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
       await tester.tap(find.text('年'));
       await tester.pumpAndSettle();
 
@@ -420,7 +420,7 @@ void main() {
     });
 
     testWidgets('日期标签竖排，避免相邻日期横向叠在一起', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Ride>[ride(1, 2026, 9, 22)]);
+      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
       // fl_chart 自己也会在图表外层套一个 `RotatedBox`（`quarterTurns` 为 0），
       // 所以不能只数「有没有 RotatedBox」，要看其中有没有真的转 90° 的那个。

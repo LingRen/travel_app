@@ -4,16 +4,19 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../../domain/models/ride.dart';
 import '../../domain/models/track_point.dart';
-import '../db/ride_dao.dart';
+import '../../domain/models/workout.dart';
 import '../db/track_point_dao.dart';
+import '../db/workout_dao.dart';
 
 /// 备份文件的 schema 版本。见设计文档 12。
-const int kBackupSchemaVersion = 1;
+///
+/// v1 → v2：`rides` 改名 `workouts`，新增 `activity_type` 列。v1 归档缺这一列，
+/// 读取时由 `Workout.fromDbMap` 对 null 回退为骑行，老备份无需迁移即可恢复。
+const int kBackupSchemaVersion = 2;
 
 const String _manifestName = 'manifest.json';
-const String _ridesName = 'rides.json';
+const String _ridesName = 'workouts.json';
 const String _pointsName = 'track_points.jsonl';
 
 /// 归档里的 manifest.json。
@@ -54,7 +57,7 @@ class BackupPayload {
   });
 
   final BackupManifest manifest;
-  final List<Ride> rides;
+  final List<Workout> rides;
   final List<TrackPoint> points;
 }
 
@@ -85,7 +88,7 @@ class BackupVersionException implements Exception {
 ///
 /// [schemaVersion] 只给测试用来造出「版本不匹配」的归档，正常调用不要传。
 Uint8List buildBackupArchive({
-  required List<Ride> rides,
+  required List<Workout> rides,
   required List<TrackPoint> points,
   required int exportedAtMs,
   int schemaVersion = kBackupSchemaVersion,
@@ -102,7 +105,7 @@ Uint8List buildBackupArchive({
     ..add(ArchiveFile.string(
       _ridesName,
       jsonEncode(<Map<String, Object?>>[
-        for (final Ride r in rides) r.toDbMap(),
+        for (final Workout r in rides) r.toDbMap(),
       ]),
     ))
     ..add(ArchiveFile.string(
@@ -115,9 +118,10 @@ Uint8List buildBackupArchive({
 
 /// 解开归档并校验版本。
 ///
-/// 版本号必须**完全相等**：更高版本说明归档来自更新的 App，旧版代码不认识
-/// 新增字段，写下去会静默丢数据，因此明确拒绝（设计文档 12）。
-/// 目前只有 v1，不存在「更旧需要迁移」的情况——等真的出现 v2 再补迁移分支。
+/// 版本低于 1 或高于当前版本时明确拒绝：更高版本说明归档来自更新的 App，
+/// 旧版代码不认识新增字段，写下去会静默丢数据（设计文档 12）；低于 1 的格式
+/// 不在支持范围内。v1 归档（缺 `activity_type` 列）仍受支持，读取时由
+/// `Workout.fromDbMap` 对 null 回退为骑行，无需迁移。
 BackupPayload parseBackupArchive(Uint8List bytes) {
   final Archive archive = ZipDecoder().decodeBytes(bytes);
 
@@ -135,7 +139,8 @@ BackupPayload parseBackupArchive(Uint8List bytes) {
     throw BackupFormatException('$_manifestName 无法解析：$error');
   }
 
-  if (manifest.schemaVersion != kBackupSchemaVersion) {
+  if (manifest.schemaVersion < 1 ||
+      manifest.schemaVersion > kBackupSchemaVersion) {
     throw BackupVersionException(
       found: manifest.schemaVersion,
       expected: kBackupSchemaVersion,
@@ -149,14 +154,18 @@ BackupPayload parseBackupArchive(Uint8List bytes) {
   );
 }
 
-List<Ride> _decodeRides(Archive archive) {
-  final ArchiveFile? file = archive.findFile(_ridesName);
+List<Workout> _decodeRides(Archive archive) {
+  // v2 起归档里的条目名改为 workouts.json；v1 归档还是 rides.json，读取时
+  // 两个名字都认，否则老备份文件在改名后直接无法恢复。
+  final ArchiveFile? file =
+      archive.findFile(_ridesName) ?? archive.findFile('rides.json');
   if (file == null) throw BackupFormatException('归档里没有 $_ridesName');
   try {
-    final List<Object?> raw = jsonDecode(utf8.decode(file.content)) as List<Object?>;
-    return <Ride>[
+    final List<Object?> raw =
+        jsonDecode(utf8.decode(file.content)) as List<Object?>;
+    return <Workout>[
       for (final Object? row in raw)
-        Ride.fromDbMap(row as Map<String, Object?>),
+        Workout.fromDbMap(row as Map<String, Object?>),
     ];
   } catch (error) {
     throw BackupFormatException('$_ridesName 无法解析：$error');
@@ -190,17 +199,17 @@ Future<void> applyBackup(
   bool replaceExisting = true,
 }) async {
   await db.transaction((Transaction txn) async {
-    final RideDao rides = RideDao(txn);
+    final WorkoutDao workouts = WorkoutDao(txn);
     final TrackPointDao points = TrackPointDao(txn);
 
     if (replaceExisting) {
-      // 先删点再删骑行：track_points.ride_id 有外键约束。
+      // 先删点再删运动：track_points.ride_id 有外键约束。
       await points.deleteAll();
-      await rides.deleteAll();
+      await workouts.deleteAll();
     }
 
-    for (final Ride ride in payload.rides) {
-      await rides.insertWithId(ride);
+    for (final Workout ride in payload.rides) {
+      await workouts.insertWithId(ride);
     }
     await points.insertBatch(payload.points);
   });

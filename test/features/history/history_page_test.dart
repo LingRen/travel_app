@@ -2,10 +2,10 @@ import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/domain/analysis/curve.dart';
-import 'package:cycling_app/domain/models/ride.dart';
-import 'package:cycling_app/domain/models/ride_status.dart';
-import 'package:cycling_app/domain/models/ride_summary.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
+import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/history/history_page.dart';
@@ -24,7 +24,7 @@ const AppSettings _settings = AppSettings(
   mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
 );
 
-const RideSummary _summary = RideSummary(
+const WorkoutSummary _summary = WorkoutSummary(
   distanceM: 25300,
   durationS: 3600,
   movingS: 3400,
@@ -35,11 +35,11 @@ const RideSummary _summary = RideSummary(
   pointCount: 4,
 );
 
-Ride ride(int id, {String? title, int? startedAtMs, RideSummary? summary}) => Ride(
+Workout ride(int id, {String? title, int? startedAtMs, WorkoutSummary? summary}) => Workout(
       id: id,
       startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-      status: RideStatus.finished,
+      status: WorkoutStatus.finished,
       title: title,
       summary: summary ?? _summary,
     );
@@ -56,21 +56,21 @@ List<TrackPoint> points() => <TrackPoint>[
     ];
 
 /// 点卡片进入详情页时要用的假详情：标题为空，因此 AppBar 会退回 `骑行详情`。
-RideDetail detailFor(int id) => RideDetail(
-      ride: Ride(
+WorkoutDetail detailFor(int id) => WorkoutDetail(
+      ride: Workout(
         id: id,
         startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
         endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-        status: RideStatus.finished,
+        status: WorkoutStatus.finished,
       ),
       points: const <TrackPoint>[],
     );
 
 Widget wrap({
-  required List<Ride> rides,
+  required List<Workout> rides,
   List<TrackPoint>? ridePoints,
   AppSettings settings = _settings,
-  RideDetail? detail,
+  WorkoutDetail? detail,
 }) =>
     ProviderScope(
       overrides: <Override>[
@@ -78,7 +78,7 @@ Widget wrap({
         appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
         // id 为 null 的记录根本不会查询轨迹点（`_MiniCurve` 直接返回占位），
         // 这里也跳过，否则 `r.id!` 会在建 ProviderScope 时就抛。
-        for (final Ride r in rides)
+        for (final Workout r in rides)
           if (r.id != null)
             ridePointsProvider(r.id!).overrideWith(
               (Ref ref) => ridePoints ?? const <TrackPoint>[],
@@ -94,10 +94,10 @@ Widget wrap({
 /// 「当前视口恰好构建了哪几张卡」。
 Future<void> pumpHistory(
   WidgetTester tester, {
-  required List<Ride> rides,
+  required List<Workout> rides,
   List<TrackPoint>? ridePoints,
   AppSettings settings = _settings,
-  RideDetail? detail,
+  WorkoutDetail? detail,
 }) async {
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -113,29 +113,29 @@ Future<void> pumpHistory(
 
 void main() {
   testWidgets('没有记录时显示空态提示', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: const <Ride>[]);
+    await pumpHistory(tester, rides: const <Workout>[]);
 
     expect(find.text('还没有骑行记录'), findsOneWidget);
-    expect(find.byType(RideCard), findsNothing);
+    expect(find.byType(WorkoutCard), findsNothing);
   });
 
   testWidgets('每条记录一张卡片，按传入顺序渲染', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[
+      rides: <Workout>[
         ride(2, title: '第二次', startedAtMs: DateTime(2026, 9, 22, 8).millisecondsSinceEpoch),
         ride(1, title: '第一次'),
       ],
       ridePoints: points(),
     );
 
-    expect(find.byType(RideCard), findsNWidgets(2));
+    expect(find.byType(WorkoutCard), findsNWidgets(2));
     expect(find.text('第二次'), findsOneWidget);
     expect(find.text('第一次'), findsOneWidget);
   });
 
   testWidgets('卡片显示日期、距离、时长、均速与爬升', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: <Ride>[ride(1)], ridePoints: points());
+    await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
 
     expect(find.text('2026-09-21 08:00'), findsOneWidget);
     expect(find.text('25.30 km'), findsOneWidget);
@@ -150,10 +150,10 @@ void main() {
   testWidgets('配了功率计时卡片多一项功率读数', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[
+      rides: <Workout>[
         ride(
           1,
-          summary: const RideSummary(
+          summary: const WorkoutSummary(
             distanceM: 25300,
             durationS: 3600,
             movingS: 3400,
@@ -182,10 +182,10 @@ void main() {
   testWidgets('四项读数按 4:4:5:3 分成四列，且跨条目对齐', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[
+      rides: <Workout>[
         ride(
           1,
-          summary: const RideSummary(
+          summary: const WorkoutSummary(
             distanceM: 25300,
             durationS: 3600,
             movingS: 3400,
@@ -199,7 +199,7 @@ void main() {
         ),
         ride(
           2,
-          summary: const RideSummary(
+          summary: const WorkoutSummary(
             distanceM: 10000,
             durationS: 1800,
             movingS: 1700,
@@ -244,7 +244,7 @@ void main() {
   });
 
   testWidgets('卡片里渲染迷你速度曲线', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: <Ride>[ride(1)], ridePoints: points());
+    await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
 
     expect(find.byType(MiniSpeedCurve), findsOneWidget);
   });
@@ -253,13 +253,13 @@ void main() {
   // 区分力为零。改成同时钉住「有/无标题」两个渲染分支：
   // 无标题时只有一行日期；有标题时标题与日期各一行（日期不会重复出现）。
   testWidgets('无标题时只渲染一行日期', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: <Ride>[ride(1)], ridePoints: points());
+    await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
 
     expect(find.text('2026-09-21 08:00'), findsOneWidget);
   });
 
   testWidgets('有标题时标题与日期各渲染一行', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: <Ride>[ride(1, title: '晨骑')], ridePoints: points());
+    await pumpHistory(tester, rides: <Workout>[ride(1, title: '晨骑')], ridePoints: points());
 
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.text('2026-09-21 08:00'), findsOneWidget);
@@ -268,7 +268,7 @@ void main() {
   testWidgets('英里单位下按英里显示距离', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[ride(1)],
+      rides: <Workout>[ride(1)],
       ridePoints: points(),
       settings: const AppSettings(
         maxHeartRate: 190,
@@ -286,12 +286,12 @@ void main() {
     // `rideRepositoryProvider` → `databaseProvider`，测试里没有数据库而抛异常。
     await pumpHistory(
       tester,
-      rides: <Ride>[ride(1)],
+      rides: <Workout>[ride(1)],
       ridePoints: points(),
       detail: detailFor(1),
     );
 
-    await tester.tap(find.byType(RideCard).first);
+    await tester.tap(find.byType(WorkoutCard).first);
     await tester.pumpAndSettle();
 
     expect(find.byType(DetailPage), findsOneWidget);
@@ -302,12 +302,12 @@ void main() {
   testWidgets('没有汇总指标的记录不崩溃，卡片显示占位', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[
-        const Ride(id: 1, startedAtMs: 1000, status: RideStatus.finished),
+      rides: <Workout>[
+        const Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished),
       ],
     );
 
-    expect(find.byType(RideCard), findsOneWidget);
+    expect(find.byType(WorkoutCard), findsOneWidget);
     expect(find.text('这条记录还没有汇总指标'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -318,12 +318,12 @@ void main() {
   testWidgets('没有 id 的记录不查询轨迹点也不崩溃', (WidgetTester tester) async {
     await pumpHistory(
       tester,
-      rides: <Ride>[
-        const Ride(startedAtMs: 1000, status: RideStatus.finished),
+      rides: <Workout>[
+        const Workout(startedAtMs: 1000, status: WorkoutStatus.finished),
       ],
     );
 
-    expect(find.byType(RideCard), findsOneWidget);
+    expect(find.byType(WorkoutCard), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
