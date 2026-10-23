@@ -1,5 +1,6 @@
 import 'package:cycling_app/data/db/database.dart';
 import 'package:cycling_app/data/db/workout_dao.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
@@ -50,6 +51,25 @@ void main() {
 
     final List<Workout> rides = await dao.listFinished();
     expect(rides.map((Workout r) => r.startedAtMs).toList(), <int>[3000, 1000]);
+  });
+
+  test('listFinished 按类型筛选只返回该类型记录', () async {
+    // 插两条 cycling + 一条 running，均为 finished。
+    await dao.insert(const Workout(startedAtMs: 1000, status: WorkoutStatus.finished));
+    await dao.insert(const Workout(startedAtMs: 2000, status: WorkoutStatus.finished));
+    await dao.insert(const Workout(
+      startedAtMs: 3000,
+      status: WorkoutStatus.finished,
+      activityType: ActivityType.running,
+    ));
+
+    final List<Workout> running = await dao.listFinished(activityType: ActivityType.running);
+    expect(running.length, 1);
+    expect(running.single.activityType, ActivityType.running);
+
+    // null 返回全部。
+    final List<Workout> all = await dao.listFinished();
+    expect(all.length, 3);
   });
 
   test('markFinished 写入结束时间与全部汇总列', () async {
