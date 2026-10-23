@@ -34,6 +34,11 @@ abstract class LocationPlatform {
   Future<bool> openLocationSettings();
 
   Stream<Position> positionStream({required LocationSettings locationSettings});
+
+  /// 一次性定位请求。
+  Future<Position> getCurrentPosition({
+    required LocationSettings locationSettings,
+  });
 }
 
 /// 生产实现：转发到 geolocator 的静态 API。
@@ -60,6 +65,12 @@ class GeolocatorLocationPlatform implements LocationPlatform {
   @override
   Stream<Position> positionStream({required LocationSettings locationSettings}) =>
       Geolocator.getPositionStream(locationSettings: locationSettings);
+
+  @override
+  Future<Position> getCurrentPosition({
+    required LocationSettings locationSettings,
+  }) =>
+      Geolocator.getCurrentPosition(locationSettings: locationSettings);
 }
 
 /// 把 geolocator 的定位结果翻译成 domain 层的 [LocationFix]。
@@ -107,6 +118,26 @@ LocationSettings buildLocationSettings({required bool isAndroid}) {
   );
 }
 
+/// 粗略定位（开始记录时点亮地图）用的设置。
+///
+/// Android 上**强制走系统 LocationManager**，不用 GMS 的 FLP：国内设备上 FLP
+/// 常常等不到网络定位——K40 实测这次请求 8 秒超时，而同一环境下系统定位服务
+/// 2 秒内就上报了 WiFi 位置（logcat: NetworkLocationManager 2045ms 返回）。
+/// 中精度会落到 `QUALITY_BALANCED_POWER`，只求街区级，不求精准。
+LocationSettings buildPreviewSettings({required bool isAndroid}) {
+  if (isAndroid) {
+    return AndroidSettings(
+      accuracy: LocationAccuracy.medium,
+      forceLocationManager: true,
+      timeLimit: const Duration(seconds: 8),
+    );
+  }
+  return const LocationSettings(
+    accuracy: LocationAccuracy.medium,
+    timeLimit: Duration(seconds: 8),
+  );
+}
+
 /// 定位采集。只负责权限校验与字段翻译，不含任何业务判断。
 class LocationService {
   const LocationService({this._platform = const GeolocatorLocationPlatform()});
@@ -145,4 +176,22 @@ class LocationService {
         locationSettings: buildLocationSettings(isAndroid: Platform.isAndroid),
       )
       .map(toLocationFix);
+
+  /// 开始记录时先要的一次粗略定位，用来在 GPS 锁星前把地图点亮。
+  ///
+  /// 高精度 GPS 冷启动或室内可能几十秒甚至几分钟都拿不到点（真机实测 K40
+  /// 在室内 5 分钟无点），这段时间界面只能停在「等待定位…」。这里用中精度
+  /// 一次性请求（Android 走 PRIORITY_BALANCED，主要靠 WiFi/基站），几百毫秒
+  /// 到几秒就能返回大致位置；真实轨迹仍然只取 [fixes] 的高精度点，两者互不
+  /// 影响。超时或失败一律返回 null：预览定位不该拖住记录开始。
+  Future<LocationFix?> quickPreviewFix() async {
+    try {
+      final Position position = await _platform.getCurrentPosition(
+        locationSettings: buildPreviewSettings(isAndroid: Platform.isAndroid),
+      );
+      return toLocationFix(position);
+    } catch (_) {
+      return null;
+    }
+  }
 }

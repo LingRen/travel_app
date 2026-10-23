@@ -106,6 +106,9 @@ class _FakeLocationService implements LocationService {
   Stream<LocationFix> fixes() => _fixes.stream;
 
   @override
+  Future<LocationFix?> quickPreviewFix() async => null;
+
+  @override
   Future<bool> openAppSettings() async => true;
 
   @override
@@ -603,6 +606,27 @@ void main() {
       expect(find.byType(FlutterMap), findsNothing);
     });
 
+    testWidgets('只有粗略定位时也把地图画出来，并标出圆点', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+        previewFix: const LocationFix(tMs: 900, lat: 30.0, lon: 120.0),
+      ))));
+      // 首帧先按 initialCameraFit 定相机，图层在下一帧才铺开。
+      await tester.pump();
+
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.text('等待定位…'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(MarkerLayer),
+          matching: find.byType(Container),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('有定位点时地图真的把轨迹画出来', (WidgetTester tester) async {
       // 两点之间要够远，才不会被抽稀规则丢掉（见 kLiveTrackMinDistanceM）。
       final List<TrackPoint> track = <TrackPoint>[
@@ -615,6 +639,22 @@ void main() {
         phase: RecordingPhase.recording,
         elapsedMs: 3000,
         liveTrack: track,
+      ))));
+
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.text('等待定位…'), findsNothing);
+    });
+
+    testWidgets('只有一个真实点（还画不出线）时地图不能退回占位', (WidgetTester tester) async {
+      // 粗略定位刚被第一个真实点顶掉的那一小会儿：没有折线，但地图必须留着，
+      // 否则屏幕会「亮一下又黑回去」。
+      await tester.pumpWidget(wrap(handlebar(RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+        liveTrack: <TrackPoint>[
+          const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        ],
       ))));
 
       expect(find.byType(FlutterMap), findsOneWidget);

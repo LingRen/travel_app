@@ -40,6 +40,7 @@ class RecordState {
     this.errorMessage,
     this.liveTrack = const <TrackPoint>[],
     this.liveTrackBreaks = const <int>{},
+    this.previewFix,
     this.currentAltitudeM,
     this.elevationGainM = 0,
     this.lastCue,
@@ -83,6 +84,12 @@ class RecordState {
   /// 缩略图**不能**自己按时间差判断点：抽稀后相邻两点本来就常常隔十几秒，
   /// 按 [kGpsGapMs] 卡会把连续轨迹切碎。真实丢失由采集侧标记后传下来。
   final Set<int> liveTrackBreaks;
+
+  /// 开始记录时先拿到的一次粗略定位，用来在 GPS 锁星前点亮地图。
+  ///
+  /// 只进界面、不落盘：它不是轨迹点，第一个真实定位点到达时清空
+  /// （见 [_loadPreviewFix] 与 [_onFix]）。
+  final LocationFix? previewFix;
 
   /// 最近一次可信定位的海拔（米）。没有高程数据时为 null，界面显示 `--`。
   final double? currentAltitudeM;
@@ -144,6 +151,10 @@ class RecordController extends Notifier<RecordState> {
   int? _rideId;
   bool _finished = false;
   int _lastFixMs = 0;
+
+  /// 见 [RecordState.previewFix]。
+  LocationFix? _previewFix;
+
   int _writeFailures = 0;
   String? _error;
   Future<void>? _pendingWrite;
@@ -182,6 +193,9 @@ class RecordController extends Notifier<RecordState> {
       _publish();
       return;
     }
+
+    // 不 await：粗略定位只是「先把地图点亮」，慢一点也不能拖住记录开始。
+    unawaited(_loadPreviewFix());
 
     // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
     // 这样 rides 的三个 *_device_name 才有值。
@@ -273,6 +287,7 @@ class RecordController extends Notifier<RecordState> {
     final RecordingSession? session = _session;
     if (session == null || _finished) return;
     _finished = true;
+    _previewFix = null;
 
     _ticker?.cancel();
     _ticker = null;
@@ -304,6 +319,7 @@ class RecordController extends Notifier<RecordState> {
     _error = null;
     _writeFailures = 0;
     _lastFixMs = 0;
+    _previewFix = null;
     _lastBackgroundFlushMs = 0;
     _lastCue = null;
     _cueSeq = 0;
@@ -352,6 +368,16 @@ class RecordController extends Notifier<RecordState> {
     _publish();
   }
 
+  /// 请求一次粗略定位并推到界面，只为在 GPS 锁星前点亮地图。
+  ///
+  /// 真实定位点一到就作废：有真点之后粗略位置只会是干扰。
+  Future<void> _loadPreviewFix() async {
+    final LocationFix? fix = await _location.quickPreviewFix();
+    if (fix == null || _lastFixMs != 0 || _finished) return;
+    _previewFix = fix;
+    _publish();
+  }
+
   void _startStreams() {
     _fixSub = _location.fixes().listen(_onFix, onError: (Object _) {});
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -360,6 +386,7 @@ class RecordController extends Notifier<RecordState> {
   void _onFix(LocationFix fix) {
     final RecordingSession? session = _session;
     if (session == null) return;
+    _previewFix = null;
     _lastFixMs = fix.tMs;
     session.ingestFix(fix);
     // 实时 UI 按 1Hz 刷新（见设计文档 6.2），因此这里不 publish，
@@ -518,6 +545,7 @@ class RecordController extends Notifier<RecordState> {
       // 直接透传引用，不拷贝：见 RecordState.liveTrack 的说明。
       liveTrack: session?.liveTrack ?? const <TrackPoint>[],
       liveTrackBreaks: session?.liveBreakIndexes ?? const <int>{},
+      previewFix: _previewFix,
       currentAltitudeM: snap?.currentAltitudeM,
       elevationGainM: snap?.elevationGainM ?? 0,
       lastCue: _lastCue,

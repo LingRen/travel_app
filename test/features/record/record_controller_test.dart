@@ -138,6 +138,16 @@ class _FakeLocationService implements LocationService {
   @override
   Future<bool> openLocationSettings() async => true;
 
+  /// 开始记录时的粗略定位；null 表示这次拿不到（超时/室内无 WiFi 定位）。
+  LocationFix? previewFix;
+  int quickPreviewCalls = 0;
+
+  @override
+  Future<LocationFix?> quickPreviewFix() async {
+    quickPreviewCalls++;
+    return previewFix;
+  }
+
   void emit(LocationFix fix) => _fixes.add(fix);
 }
 
@@ -376,6 +386,43 @@ void main() {
     expect(state.rideId, 1);
     expect(state.errorMessage, isNull);
     expect(repo.statuses, isEmpty);
+    container.dispose();
+  });
+
+  testWidgets('开始后先展示粗略定位，第一个真实点到达即清除', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    location.previewFix = const LocationFix(tMs: 900, lat: 31.2, lon: 121.4);
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+
+    await controller.start();
+    await tester.pump();
+
+    final RecordState preview = container.read(recordControllerProvider);
+    expect(preview.phase, RecordingPhase.recording);
+    expect(preview.previewFix?.lat, 31.2);
+    // 粗略定位只进界面，不落盘、不进轨迹。
+    expect(preview.liveTrack, isEmpty);
+    expect(repo.written, isEmpty);
+
+    await rideOneSecond(tester, lat: 31.0);
+
+    expect(container.read(recordControllerProvider).previewFix, isNull);
+    container.dispose();
+  });
+
+  testWidgets('拿不到粗略定位时开始记录照常进行', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+
+    await controller.start();
+    await tester.pump();
+
+    final RecordState state = container.read(recordControllerProvider);
+    expect(state.phase, RecordingPhase.recording);
+    expect(state.previewFix, isNull);
+    expect(location.quickPreviewCalls, 1);
     container.dispose();
   });
 

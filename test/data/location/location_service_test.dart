@@ -70,6 +70,22 @@ class FakeLocationPlatform implements LocationPlatform {
     capturedSettings = locationSettings;
     return controller.stream;
   }
+
+  /// 一次性定位的结果；null 表示抛错（模拟超时/无可用位置）。
+  Position? currentPosition;
+  LocationSettings? capturedCurrentSettings;
+  int getCurrentPositionCalls = 0;
+
+  @override
+  Future<Position> getCurrentPosition({
+    required LocationSettings locationSettings,
+  }) async {
+    getCurrentPositionCalls++;
+    capturedCurrentSettings = locationSettings;
+    final Position? position = currentPosition;
+    if (position == null) throw TimeoutException('定位超时');
+    return position;
+  }
 }
 
 /// 构造一个字段互不相同的假定位结果，便于发现映射错位。
@@ -281,6 +297,42 @@ void main() {
       expect(settings, isNotNull);
       expect(settings!.accuracy, LocationAccuracy.best);
       expect(settings.distanceFilter, 0);
+    });
+  });
+
+  group('quickPreviewFix', () {
+    test('用中精度一次性请求，并把 Position 翻译成 LocationFix', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform()
+        ..currentPosition = fakePosition(latitude: 30.6, longitude: 104.0, tMs: 5000);
+      final LocationService service = LocationService(platform: platform);
+
+      final LocationFix? fix = await service.quickPreviewFix();
+
+      expect(fix, isNotNull);
+      expect(fix!.lat, 30.6);
+      expect(fix.lon, 104.0);
+      expect(fix.tMs, 5000);
+
+      final LocationSettings? settings = platform.capturedCurrentSettings;
+      expect(settings!.accuracy, LocationAccuracy.medium);
+      expect(settings.timeLimit, const Duration(seconds: 8));
+    });
+
+    test('Android 的粗略定位强制走系统 LocationManager，绕开 GMS FLP', () {
+      final LocationSettings settings = buildPreviewSettings(isAndroid: true);
+
+      expect(settings, isA<AndroidSettings>());
+      expect(settings.accuracy, LocationAccuracy.medium);
+      expect(settings.timeLimit, const Duration(seconds: 8));
+      expect((settings as AndroidSettings).forceLocationManager, isTrue);
+    });
+
+    test('拿不到位置（超时）时返回 null，不向外抛', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform();
+      final LocationService service = LocationService(platform: platform);
+
+      expect(await service.quickPreviewFix(), isNull);
+      expect(platform.getCurrentPositionCalls, 1);
     });
   });
 
