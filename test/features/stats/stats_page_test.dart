@@ -1,6 +1,7 @@
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
@@ -32,12 +33,14 @@ Workout ride(
   double distanceM = 10000,
   double? avgPowerW,
   int? maxPowerW,
+  ActivityType activityType = ActivityType.cycling,
 }) =>
     Workout(
       id: id,
       startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
       status: WorkoutStatus.finished,
+      activityType: activityType,
       summary: WorkoutSummary(
         distanceM: distanceM,
         durationS: 1800,
@@ -58,7 +61,15 @@ Widget wrap({
 }) =>
     ProviderScope(
       overrides: <Override>[
-        finishedRidesProvider.overrideWith((Ref ref) => rides),
+        // 与真实 provider 同口径：筛选只过滤类型，null（全部）时原样返回。
+        finishedRidesProvider.overrideWith((Ref ref) {
+          final ActivityType? filter = ref.watch(statsFilterProvider);
+          return filter == null
+              ? rides
+              : rides
+                    .where((Workout r) => r.activityType == filter)
+                    .toList();
+        }),
         nowProvider.overrideWithValue(() => nowMs),
         appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
       ],
@@ -283,11 +294,15 @@ void main() {
       expect(totalsValue(tester, 'max-power'), '300 W');
     });
 
-    testWidgets('没有功率数据时累计矩阵显示破折号而不是 0 W', (WidgetTester tester) async {
+    testWidgets('没有功率数据时隐藏功率行而不是摆 0 W', (WidgetTester tester) async {
       await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
-      expect(totalsValue(tester, 'avg-power'), '—');
-      expect(totalsValue(tester, 'max-power'), '—');
+      // 「全部」里没有任何有功率的记录 → 功率行整行隐藏，不摆 0 W / 破折号。
+      expect(find.byKey(const Key('totals-avg-power')), findsNothing);
+      expect(find.byKey(const Key('totals-max-power')), findsNothing);
+      expect(find.text('平均功率'), findsNothing);
+      expect(find.text('最高功率'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('个人最佳里的最高功率取单次峰值最大的一次', (WidgetTester tester) async {
@@ -308,6 +323,58 @@ void main() {
           tester.widget<PersonalBestsCard>(card);
       expect(widget.bests.highestPowerW!.rideId, 2);
       expect(widget.bests.highestPowerW!.value, 520);
+    });
+  });
+
+  group('类型筛选', () {
+    testWidgets('筛选只统计选中类型的距离与次数，选「全部」恢复', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Workout>[
+        ride(1, 2026, 9, 22, distanceM: 10000), // 骑行
+        ride(2, 2026, 9, 23, activityType: ActivityType.running, distanceM: 5000),
+        ride(3, 2026, 9, 24, activityType: ActivityType.running, distanceM: 3000),
+      ]);
+      expect(totalsValue(tester, 'distance'), '18.00 km');
+      expect(totalsValue(tester, 'count'), '3');
+
+      await tester.tap(find.text('跑步'));
+      await tester.pumpAndSettle();
+
+      expect(totalsValue(tester, 'distance'), '8.00 km');
+      expect(totalsValue(tester, 'count'), '2');
+
+      await tester.tap(find.text('全部'));
+      await tester.pumpAndSettle();
+
+      expect(totalsValue(tester, 'distance'), '18.00 km');
+      expect(totalsValue(tester, 'count'), '3');
+    });
+
+    testWidgets('选「跑步」隐藏功率行，「全部」里有功率记录时显示', (WidgetTester tester) async {
+      await pumpStats(tester, rides: <Workout>[
+        ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300), // 骑行，有功率
+        ride(2, 2026, 9, 23, activityType: ActivityType.running, distanceM: 5000),
+      ]);
+
+      // 「全部」里存在有功率的记录 → 功率行显示。
+      expect(find.byKey(const Key('totals-avg-power')), findsOneWidget);
+      expect(find.byKey(const Key('totals-max-power')), findsOneWidget);
+
+      await tester.tap(find.text('跑步'));
+      await tester.pumpAndSettle();
+
+      // 跑步不支持功率 → 功率行整行隐藏。
+      expect(find.text('平均功率'), findsNothing);
+      expect(find.text('最高功率'), findsNothing);
+      expect(find.byKey(const Key('totals-avg-power')), findsNothing);
+      expect(find.byKey(const Key('totals-max-power')), findsNothing);
+
+      await tester.tap(find.text('全部'));
+      await tester.pumpAndSettle();
+
+      // 个人最佳卡片里有功率记录时也有一行「最高功率」，这里用 tile 的 Key
+      // 钉住累计矩阵里那一格，避免两个「最高功率」互相干扰。
+      expect(find.byKey(const Key('totals-avg-power')), findsOneWidget);
+      expect(find.byKey(const Key('totals-max-power')), findsOneWidget);
     });
   });
 

@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/trend.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/models/workout.dart';
 import 'personal_bests_card.dart';
 import 'stats_providers.dart';
@@ -22,6 +23,7 @@ class StatsPage extends ConsumerWidget {
         ref.watch(appSettingsProvider).value?.distanceUnit ??
             DistanceUnit.kilometer;
     final TrendRange range = ref.watch(trendRangeProvider);
+    final ActivityType? filter = ref.watch(statsFilterProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('统计')),
@@ -38,6 +40,25 @@ class StatsPage extends ConsumerWidget {
 
           return ListView(
             children: <Widget>[
+              // 类型筛选条。null = 全部。选中态读写 `statsFilterProvider`，
+              // 列表 provider 跟着它重查。
+              Padding(
+                padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+                child: SegmentedButton<ActivityType?>(
+                  segments: <ButtonSegment<ActivityType?>>[
+                    const ButtonSegment<ActivityType?>(
+                      value: null,
+                      label: Text('全部'),
+                    ),
+                    for (final ActivityType t in ActivityType.values)
+                      ButtonSegment<ActivityType?>(value: t, label: Text(t.label)),
+                  ],
+                  selected: <ActivityType?>{filter},
+                  onSelectionChanged: (Set<ActivityType?> selected) =>
+                      ref.read(statsFilterProvider.notifier).state = selected.first,
+                  showSelectedIcon: false,
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
                 child: SegmentedButton<TrendRange>(
@@ -51,7 +72,13 @@ class StatsPage extends ConsumerWidget {
                       ref.read(trendRangeProvider.notifier).state = selected.first,
                 ),
               ),
-              _Totals(trend: trend, unit: unit),
+              _Totals(
+                trend: trend,
+                unit: unit,
+                showPowerRow: filter == null
+                    ? list.any((Workout w) => w.summary?.avgPowerW != null)
+                    : filter.supportsPower,
+              ),
               const Divider(height: 1, indent: kSpaceL, endIndent: kSpaceL),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -89,10 +116,18 @@ class StatsPage extends ConsumerWidget {
 /// 这里刻意不上强调色——琥珀色留给「当前值」与「最佳值」，累计值是历史汇总，
 /// 用主文本色就够；一屏全是橙色数字的话，强调色就不强调任何东西了。
 class _Totals extends StatelessWidget {
-  const _Totals({required this.trend, required this.unit});
+  const _Totals({
+    required this.trend,
+    required this.unit,
+    required this.showPowerRow,
+  });
 
   final TrendSummary trend;
   final DistanceUnit unit;
+
+  /// 功率行是否显示：当前类型支持功率（或「全部」里存在有功率的记录）时显示。
+  /// 跑步/健走/徒步没有功率概念，隐藏整行而不是摆 0 W / 破折号。
+  final bool showPowerRow;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -124,23 +159,26 @@ class _Totals extends StatelessWidget {
                 _tile('totals-count', '次数', '${trend.rideCount}'),
               ],
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: kSpaceM),
-              child: Divider(height: 1),
-            ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                // 没配功率计时两格都是 `—`，不摆 0 W：那会让人以为真的踩不出功率。
-                _tile('totals-avg-power', '平均功率', formatPower(trend.avgPowerW)),
-                const SizedBox(width: kSpaceXl),
-                _tile(
-                  'totals-max-power',
-                  '最高功率',
-                  formatPower(trend.maxPowerW?.toDouble()),
-                ),
-              ],
-            ),
+            // 功率行隐藏时上方的分隔线一起隐藏，界面不留孤立的 Divider。
+            if (showPowerRow) ...<Widget>[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: kSpaceM),
+                child: Divider(height: 1),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  // 没配功率计时两格都是 `—`，不摆 0 W：那会让人以为真的踩不出功率。
+                  _tile('totals-avg-power', '平均功率', formatPower(trend.avgPowerW)),
+                  const SizedBox(width: kSpaceXl),
+                  _tile(
+                    'totals-max-power',
+                    '最高功率',
+                    formatPower(trend.maxPowerW?.toDouble()),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       );
