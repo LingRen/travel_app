@@ -274,12 +274,14 @@ _FakeCharacteristic _cpsCharacteristic() =>
 class _FakeRideCuePlayer implements RideCuePlayer {
   final List<List<RideCue>> spokenBatches = <List<RideCue>>[];
   final List<DistanceUnit> spokenUnits = <DistanceUnit>[];
+  final List<ActivityType> spokenTypes = <ActivityType>[];
   int disposeCalls = 0;
 
   @override
-  Future<void> speak(List<RideCue> cues, DistanceUnit unit) async {
+  Future<void> speak(List<RideCue> cues, DistanceUnit unit, ActivityType type) async {
     spokenBatches.add(cues);
     spokenUnits.add(unit);
+    spokenTypes.add(type);
   }
 
   @override

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/settings_repository.dart';
 import '../../data/tts/tts_service.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/recording/ride_cue.dart';
 import 'ride_cue_text.dart';
 
@@ -11,7 +12,7 @@ import 'ride_cue_text.dart';
 /// widget 测试里。控制器只负责「判定出该提示了」，怎么念、念不念得出来归这一层。
 abstract class RideCuePlayer {
   /// 播报一批提示（可能多条，按顺序念）。
-  Future<void> speak(List<RideCue> cues, DistanceUnit unit);
+  Future<void> speak(List<RideCue> cues, DistanceUnit unit, ActivityType type);
 
   Future<void> dispose();
 }
@@ -27,10 +28,10 @@ class TtsRideCuePlayer implements RideCuePlayer {
   final TtsService _tts;
 
   @override
-  Future<void> speak(List<RideCue> cues, DistanceUnit unit) async {
+  Future<void> speak(List<RideCue> cues, DistanceUnit unit, ActivityType type) async {
     for (final RideCue cue in cues) {
       try {
-        await _tts.speak(rideCueSpeechText(cue, unit));
+        await _tts.speak(rideCueSpeechText(cue, unit, type));
       } catch (_) {
         // 语音是尽力而为：设备没装 TTS 引擎、引擎被系统回收、或语言包缺失，
         // 都在这里静默跳过。屏内横幅照常提示，记录本身更不受影响。

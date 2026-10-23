@@ -198,7 +198,7 @@ class RecordController extends Notifier<RecordState> {
     unawaited(_loadPreviewFix());
 
     // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
-    // 这样 rides 的三个 *_device_name 才有值。
+    // 这样 workouts 的三个 *_device_name 才有值。
     await _autoConnectPairedSensors().timeout(_kAutoConnectBudget, onTimeout: () {});
 
     // 估算功率要用体重。只在这里取一次：骑行中途改设置不该让已经记下的读数变样。
@@ -248,6 +248,7 @@ class RecordController extends Notifier<RecordState> {
     _session = RecordingSession(
       rideId: rideId,
       startedAtMs: ride.startedAtMs,
+      activityType: ride.activityType,
       weightKg:
           ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg,
       initialElapsedMs: elapsedMs,
@@ -425,7 +426,7 @@ class RecordController extends Notifier<RecordState> {
     if (cues.isEmpty) return;
     _cueSeq++;
     _lastCue = cues.last;
-    unawaited(_cuePlayer.speak(cues, _distanceUnit));
+    unawaited(_cuePlayer.speak(cues, _distanceUnit, session.activityType));
   }
 
   /// 提示播报用的单位。设置读不出来时按公里（与界面同一套兜底）。

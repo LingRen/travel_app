@@ -1,4 +1,5 @@
 import '../analysis/constants.dart';
+import '../models/activity_type.dart';
 import 'ride_cue.dart';
 
 /// 从每秒的实时读数里判定「该提示了」的纯逻辑。见设计文档 10.1。
@@ -26,10 +27,16 @@ class CueDetector {
   /// 这是能取到的最接近的口径。
   ///
   /// 速度档不播种（速度是瞬时量，本来就没有「历史最高档」可以落盘）。
-  CueDetector({double initialDistanceM = 0, int initialElapsedMs = 0})
-      : _lapKm = initialDistanceM ~/ kCueLapM,
+  CueDetector({
+    double initialDistanceM = 0,
+    int initialElapsedMs = 0,
+    this.activityType = ActivityType.cycling,
+  })  : _lapKm = initialDistanceM ~/ kCueLapM,
         _tensKm = initialDistanceM ~/ kCueDistanceTierM,
         _lapStartElapsedMs = initialElapsedMs;
+
+  /// 本次运动的类型。决定速度跨档提示是否启用（只有骑行有「跨速档」概念）。
+  final ActivityType activityType;
 
   /// 已播报过的整公里数。
   int _lapKm;
@@ -49,6 +56,7 @@ class CueDetector {
     required double distanceM,
     required int elapsedMs,
     required double speedMps,
+    required ActivityType activityType,
   }) {
     final List<RideCue> cues = <RideCue>[];
 
@@ -76,10 +84,13 @@ class CueDetector {
 
     // 速度跨档：只认向上的新高档。报的是这一拍的实际速度，不是档位下沿（见
     // [SpeedCue]）——屏幕上的大数字就是实际速度，两个数必须对得上。
-    final int tier = (speedMps * 3.6) ~/ kCueSpeedTierKmh;
-    if (tier > _speedTierKmh) {
-      _speedTierKmh = tier;
-      cues.add(SpeedCue(speedMps * 3.6));
+    // 只有骑行有「跨速档」概念，跑步/健走/徒步按配速走，不播这类提示。
+    if (activityType.supportsSpeedTierCue) {
+      final int tier = (speedMps * 3.6) ~/ kCueSpeedTierKmh;
+      if (tier > _speedTierKmh) {
+        _speedTierKmh = tier;
+        cues.add(SpeedCue(speedMps * 3.6));
+      }
     }
 
     return cues;

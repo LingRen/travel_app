@@ -1,14 +1,16 @@
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/recording/ride_cue.dart';
 
 /// 提示条上显示的一行文案。见设计文档 10.1。
 ///
 /// 比语音文案短：屏幕上一眼要读完，不把「第 2 公里」写成「已经骑了 2 公里」。
-String rideCueBannerText(RideCue cue, DistanceUnit unit) => switch (cue) {
+String rideCueBannerText(RideCue cue, DistanceUnit unit, ActivityType type) =>
+    switch (cue) {
       LapCue c =>
         '第 ${c.lapKm} 公里 · 均速 ${formatSpeedValue(c.avgSpeedMps, unit)} ${speedUnitLabel(unit)} · 耗时 ${formatDuration(c.durationS)}',
-      DistanceCue c => '已骑行 ${c.km} 公里',
+      DistanceCue c => '${_distanceVerb(type)} ${c.km} 公里',
       SpeedCue c =>
         '速度 ${formatSpeedValue(c.kmh / 3.6, unit)} ${speedUnitLabel(unit)}',
     };
@@ -17,12 +19,21 @@ String rideCueBannerText(RideCue cue, DistanceUnit unit) => switch (cue) {
 ///
 /// 与提示条刻意不同：单位要念全（「km/h」会被 TTS 念成一串字母），时长要念成
 /// 「2分47秒」而不是「02:47」（后者会被读成「零二四七」）。
-String rideCueSpeechText(RideCue cue, DistanceUnit unit) => switch (cue) {
+String rideCueSpeechText(RideCue cue, DistanceUnit unit, ActivityType type) =>
+    switch (cue) {
       LapCue c =>
         '第${c.lapKm}公里，均速${formatSpeedValue(c.avgSpeedMps, unit)}${_spokenSpeedUnit(unit)}，耗时${_spokenDuration(c.durationS)}',
-      DistanceCue c => '已骑行${c.km}公里',
+      DistanceCue c => '${_distanceVerb(type)} ${c.km} 公里',
       SpeedCue c =>
         '速度${formatSpeedValue(c.kmh / 3.6, unit)}${_spokenSpeedUnit(unit)}',
+    };
+
+/// 距离里程碑文案里的动词，按运动类型适配。
+String _distanceVerb(ActivityType type) => switch (type) {
+      ActivityType.cycling => '已骑行',
+      ActivityType.running => '已跑',
+      ActivityType.walking => '已走',
+      ActivityType.hiking => '已徒步',
     };
 
 /// 速度单位的念法。

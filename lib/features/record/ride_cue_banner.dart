@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../../data/settings_repository.dart';
+import '../../domain/models/activity_type.dart';
 import '../../domain/recording/ride_cue.dart';
 import 'ride_cue_text.dart';
 
@@ -22,6 +23,7 @@ class RideCueBanner extends StatefulWidget {
     required this.cue,
     required this.seq,
     required this.unit,
+    this.activityType = ActivityType.cycling,
     this.duration = const Duration(seconds: 5),
     super.key,
   });
@@ -34,6 +36,9 @@ class RideCueBanner extends StatefulWidget {
   final int seq;
 
   final DistanceUnit unit;
+
+  /// 本次运动的类型，提示文案按它适配动词（「已骑行 / 已跑 / …」）。
+  final ActivityType activityType;
 
   /// 展示多久后收回。
   final Duration duration;
@@ -109,7 +114,7 @@ class _RideCueBannerState extends State<RideCueBanner> {
           const SizedBox(width: kSpaceM),
           Flexible(
             child: Text(
-              rideCueBannerText(cue, widget.unit),
+              rideCueBannerText(cue, widget.unit, widget.activityType),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

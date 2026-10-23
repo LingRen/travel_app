@@ -14,7 +14,7 @@ class PairedSensor {
 
 /// 已配对传感器的持久化。见设计文档 10.5 的「传感器配对管理」。
 ///
-/// 存 `settings` 表而不是 `rides` 表：这是「用户配置」，与某一次骑行无关。
+/// 存 `settings` 表而不是 `workouts` 表：这是「用户配置」，与某一次骑行无关。
 class SensorPairingRepository {
   SensorPairingRepository(this._dao);
 

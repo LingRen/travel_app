@@ -1,4 +1,5 @@
 import 'package:cycling_app/domain/analysis/elevation.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
@@ -487,6 +488,29 @@ void main() {
       s.tick(1000);
 
       expect(s.takeCues(), isEmpty);
+    });
+  });
+
+  group('RecordingSession 按运动类型开关', () {
+    test('跑步会话不估算功率、忽略踏频与功率采样', () {
+      final RecordingSession s = RecordingSession(
+        rideId: 1,
+        startedAtMs: 0,
+        activityType: ActivityType.running,
+        weightKg: 70,
+      );
+      s.ingestCadence(90);
+      s.ingestPower(250);
+      s.ingestFix(LocationFix(
+        tMs: 1000,
+        lat: 31.2304,
+        lon: 121.4737,
+        speedMps: 2.78,
+        altitudeM: 10,
+      ));
+      s.tick(1000);
+      expect(s.snapshot.power, isNull);
+      expect(s.snapshot.cadence, isNull);
     });
   });
 }

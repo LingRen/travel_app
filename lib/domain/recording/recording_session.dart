@@ -1,6 +1,7 @@
 import '../analysis/constants.dart';
 import '../analysis/geo.dart';
 import '../analysis/power.dart';
+import '../models/activity_type.dart';
 import '../models/location_fix.dart';
 import '../models/track_point.dart';
 import 'cue_detector.dart';
@@ -75,6 +76,7 @@ class RecordingSession {
     TrackPoint? lastWritten,
     int? resumedAtMs,
     this.weightKg = kDefaultRiderWeightKg,
+    this.activityType = ActivityType.cycling,
     List<TrackPoint> recentTrack = const <TrackPoint>[],
   })  : _elapsedMs = initialElapsedMs,
         _distanceM = initialDistanceM,
@@ -82,6 +84,7 @@ class RecordingSession {
         _cueDetector = CueDetector(
           initialDistanceM: initialDistanceM,
           initialElapsedMs: initialElapsedMs,
+          activityType: activityType,
         ),
         _lastWritten = lastWritten,
         _lastTickMs = resumedAtMs ?? startedAtMs,
@@ -104,6 +107,9 @@ class RecordingSession {
 
   /// 估算功率用的体重（公斤，含车重）。调用方从设置里取。
   final double weightKg;
+
+  /// 本次运动的类型。决定功率估算、踏频采样与速度跨档提示是否启用。
+  final ActivityType activityType;
 
   final WriteBuffer _buffer = WriteBuffer();
 
@@ -265,6 +271,7 @@ class RecordingSession {
   ///
   /// 接了功率计时不调用：实测值更准，没有理由用估算值覆盖它。
   int? _estimatePower() {
+    if (!activityType.supportsPower) return null;
     if (_power != null) return null;
 
     final double? grade = fitGrade(
@@ -323,10 +330,16 @@ class RecordingSession {
   void ingestHeartRate(int bpm) => _hr = bpm;
 
   /// 接收一次踏频采样（RPM）。
-  void ingestCadence(double rpm) => _cadence = rpm;
+  void ingestCadence(double rpm) {
+    if (!activityType.supportsCadence) return;
+    _cadence = rpm;
+  }
 
   /// 接收一次功率采样（瓦）。
-  void ingestPower(int watts) => _power = watts;
+  void ingestPower(int watts) {
+    if (!activityType.supportsPower) return;
+    _power = watts;
+  }
 
   /// 由控制器以 1Hz 调用，推进时长、衰减速度、补写纯传感器点。
   void tick(int nowMs) {
@@ -347,6 +360,7 @@ class RecordingSession {
       distanceM: _distanceM,
       elapsedMs: _elapsedMs,
       speedMps: _currentSpeedMps,
+      activityType: activityType,
     ));
   }
 

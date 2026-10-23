@@ -1,3 +1,4 @@
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/recording/cue_detector.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,8 +11,14 @@ void main() {
     double distanceM = 0,
     int elapsedMs = 0,
     double speedMps = 0,
+    ActivityType activityType = ActivityType.cycling,
   }) =>
-      d.update(distanceM: distanceM, elapsedMs: elapsedMs, speedMps: speedMps);
+      d.update(
+        distanceM: distanceM,
+        elapsedMs: elapsedMs,
+        speedMps: speedMps,
+        activityType: activityType,
+      );
 
   group('整公里提示', () {
     test('跨过 1 公里时报出该公里的耗时与均速', () {
@@ -184,6 +191,20 @@ void main() {
         step(d, distanceM: 20000, elapsedMs: 2000).whereType<DistanceCue>().single.km,
         20,
       );
+    });
+  });
+
+  group('按运动类型开关', () {
+    test('跑步会话没有速度跨档提示，但保留距离里程碑', () {
+      final CueDetector d = CueDetector(activityType: ActivityType.running);
+      final List<RideCue> cues = d.update(
+        distanceM: 1500,
+        elapsedMs: 300000,
+        speedMps: 12, // 远超过 10km/h 档
+        activityType: ActivityType.running,
+      );
+      expect(cues.whereType<SpeedCue>(), isEmpty);
+      expect(cues.whereType<LapCue>().length, 1);
     });
   });
 }
