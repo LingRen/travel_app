@@ -226,7 +226,7 @@ class HandlebarView extends StatelessWidget {
                           const SizedBox(width: kSpaceS),
                           Text(
                             usePace
-                                ? (unit == DistanceUnit.mile ? '/mi' : '/km')
+                                ? paceUnitLabel(unit)
                                 : speedUnitLabel(unit),
                             style: _hud(kLabelTextStyle),
                           ),

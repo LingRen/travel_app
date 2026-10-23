@@ -28,6 +28,10 @@ String formatSpeedValue(double mps, DistanceUnit unit) => unit == DistanceUnit.m
 String speedUnitLabel(DistanceUnit unit) =>
     unit == DistanceUnit.mile ? 'mph' : 'km/h';
 
+/// 配速单位尾缀。与 [speedUnitLabel] 并列；跑步/健走/徒步主读数的单位标签。
+String paceUnitLabel(DistanceUnit unit) =>
+    unit == DistanceUnit.mile ? '/mi' : '/km';
+
 /// 距离单位标签，用于图表标题这类不跟具体数值走的地方。
 String distanceUnitLabel(DistanceUnit unit) =>
     unit == DistanceUnit.mile ? 'mi' : 'km';

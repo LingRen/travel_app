@@ -190,6 +190,10 @@ class RecordController extends Notifier<RecordState> {
     if (_session != null) return;
     _error = null;
 
+    // 快照选中类型：start() 全程（等待权限/连传感器）都用这一刻的类型，
+    // 期间用户点 chip 不再影响本次落库——「开始」按钮显示什么，落库就是什么。
+    final ActivityType type = _selectedActivityType;
+
     final LocationReadiness readiness = await _location.checkReadiness();
     if (readiness != LocationReadiness.ready) {
       _error = switch (readiness) {
@@ -217,7 +221,7 @@ class RecordController extends Notifier<RecordState> {
 
     final Workout ride = await ref.read(workoutRepositoryProvider).startWorkout(
           startedAtMs: _now(),
-          activityType: _selectedActivityType,
+          activityType: type,
           hrDeviceName: _monitors[SensorKind.heartRate]?.deviceName,
           cadenceDeviceName: _monitors[SensorKind.cadence]?.deviceName,
           powerDeviceName: _monitors[SensorKind.power]?.deviceName,
@@ -226,7 +230,7 @@ class RecordController extends Notifier<RecordState> {
     _session = RecordingSession(
       rideId: ride.id!,
       startedAtMs: ride.startedAtMs,
-      activityType: _selectedActivityType,
+      activityType: type,
       weightKg: weightKg,
     );
     _startStreams();
