@@ -28,7 +28,7 @@ class HrZoneBar extends StatelessWidget {
     if (breakdown.totalSeconds <= 0) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: kSpaceL),
-        child: Text('这次骑行没有心率数据', style: kMutedTextStyle),
+        child: Text('没有心率数据', style: kMutedTextStyle),
       );
     }
 

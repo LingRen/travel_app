@@ -736,6 +736,22 @@ void main() {
       expect(find.byTooltip('心率已连接，点击更换设备'), findsOneWidget);
     });
 
+    testWidgets('配速类型速度为 0 时主读数用占位符，不是两条杠',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(selectedActivityType: ActivityType.running),
+        selectedActivityType: ActivityType.running,
+      )));
+
+      // 120dp 下 `--` 的两条连字符会渲染成两条白粗杠，看着像坏了，不像「还没有
+      // 配速」。占位符照 `5'30"` 的形状留空，并降到次要色。
+      final Text reading =
+          tester.widget<Text>(find.byKey(const Key('handlebar-speed')));
+      expect(reading.data, "--'--\"");
+      expect(reading.style?.color, kAppTextMuted);
+      expect(find.text('/km'), findsOneWidget);
+    });
+
     testWidgets('跑步类型下横幅说「已跑」而不是「已骑」', (WidgetTester tester) async {
       await tester.pumpWidget(wrap(handlebar(
         const RecordState(
@@ -795,11 +811,14 @@ void main() {
       location = _FakeLocationService();
     });
 
-    Future<void> pumpRecordPage(WidgetTester tester) async {
+    Future<void> pumpRecordPage(
+      WidgetTester tester, {
+      AppSettings settings = _testSettings,
+    }) async {
       await tester.pumpWidget(ProviderScope(
         overrides: <Override>[
           appSettingsProvider.overrideWithValue(
-            const AsyncValue<AppSettings>.data(_testSettings),
+            AsyncValue<AppSettings>.data(settings),
           ),
           workoutRepositoryProvider.overrideWithValue(repo),
           locationServiceProvider.overrideWithValue(location),
@@ -828,6 +847,18 @@ void main() {
       expect(find.text('结束'), findsNothing);
     });
 
+    // 类型只活在内存里时：选好徒步 → 切走被系统回收 → 回来再点开始，落库的
+    // 会是默认的骑行。这条钉住「冷启动沿用上次选中类型」。
+    testWidgets('冷启动沿用上次选中的运动类型', (WidgetTester tester) async {
+      await pumpRecordPage(
+        tester,
+        settings: _testSettings.copyWith(lastActivityType: ActivityType.hiking),
+      );
+
+      expect(find.text('开始徒步'), findsOneWidget);
+      expect(find.text('开始骑行'), findsNothing);
+    });
+
     testWidgets('定位权限被拒时把阻断类错误显示在界面上', (WidgetTester tester) async {
       location.readiness = LocationReadiness.permissionDenied;
       await pumpRecordPage(tester);
@@ -835,7 +866,7 @@ void main() {
       await tester.tap(find.text('开始骑行'));
       await tester.pump();
 
-      expect(find.text('未获得定位权限，无法记录骑行'), findsOneWidget);
+      expect(find.text('未获得定位权限，无法开始记录'), findsOneWidget);
       expect(repo.startWorkoutCalls, 0, reason: '阻断类错误下不能创建骑行记录');
       expect(find.text('开始骑行'), findsOneWidget, reason: '仍停在未开始状态');
       // 失败时不该顺手把用户推进记录中：状态条与主按钮都得留在未开始态。
@@ -863,6 +894,27 @@ void main() {
       );
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
       expect(find.byKey(const Key('live-route-map')), findsOneWidget);
+    });
+
+    // 结束确认弹窗原来写死「结束本次骑行？」，选了跑步/健走/徒步后也照样
+    // 说「骑行」，看起来就像类型没生效。
+    testWidgets('结束确认弹窗跟着所选运动类型', (WidgetTester tester) async {
+      await pumpRecordPage(tester);
+
+      await tester.tap(find.text('跑步'));
+      await tester.pump();
+      await tester.tap(find.text('开始跑步'));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('结束'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('结束本次跑步？'), findsOneWidget);
+      expect(find.text('结束本次骑行？'), findsNothing);
+
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
     });
   });
 }

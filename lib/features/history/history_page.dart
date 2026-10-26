@@ -54,7 +54,7 @@ class HistoryPage extends ConsumerWidget {
                 if (list.isEmpty) {
                   return Center(
                     child: Text(
-                      filter == null ? '还没有骑行记录' : '还没有${filter.label}记录',
+                      filter == null ? '还没有运动记录' : '还没有${filter.label}记录',
                     ),
                   );
                 }

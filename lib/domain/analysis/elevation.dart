@@ -50,19 +50,29 @@ bool _isImplausibleJump(TrackPoint from, TrackPoint to, double deltaAlt) {
 
 /// 对可空高程序列做中值滤波，窗口以当前点为中心。
 ///
-/// 越界处复制最邻近的边界值（等价于把序列两端向外延展），而不是把窗口
-/// 截短：截短会把线性升降在两端压平（例如 100…106 的匀速爬坡滤波后只剩
-/// 4 米落差），导致爬升被系统性少算。
+/// 序列开头的窗口向右延展到 [i] + half，缺少的左侧用首值补齐（等价于向外
+/// 复制最近的边界值）；序列末尾则**截短**窗口，不去复制尾值。两侧都复制会
+/// 让一个落在末尾的高程尖刺在窗口里重复出现七八次，直接变成中值——结算时
+/// 最后一个点上的尖刺就会白送几米爬升。开头不需要截短：截短会把匀速爬坡的
+/// 起点抬高，反而少算爬升。
+///
 /// 窗口内只统计非空值；窗口内全为空时输出 null。
+///
+/// 序列比窗口还短时按「不超过序列长度的最大奇数」收窄窗口：否则窗口里大半
+/// 是首尾复制出来的值，一条只有十几个点的短轨迹会被整段抹平。
 List<double?> medianFilterElevation(List<double?> values, int window) {
   assert(window.isOdd && window > 0, '窗口必须为正奇数');
-  final int half = window ~/ 2;
+  final int effective = math.min(
+    window,
+    values.length.isOdd ? values.length : values.length - 1,
+  );
+  final int half = math.max(0, effective ~/ 2);
   final List<double?> out = List<double?>.filled(values.length, null);
   for (int i = 0; i < values.length; i++) {
     final List<double> buf = <double>[];
-    for (int j = i - half; j <= i + half; j++) {
-      final int k = math.min(values.length - 1, math.max(0, j));
-      final double? v = values[k];
+    final int hi = math.min(values.length - 1, i + half);
+    for (int j = i - half; j <= hi; j++) {
+      final double? v = values[math.max(0, j)];
       if (v != null) buf.add(v);
     }
     if (buf.isEmpty) continue;
@@ -74,14 +84,34 @@ List<double?> medianFilterElevation(List<double?> values, int window) {
   return out;
 }
 
+/// 取序列末尾最多 [window] 个值的中值；序列为空时返回 null。
+///
+/// 实时路径专用：结算可以取当前点前后的样点做中值，实时只看得到过去，因此
+/// 用尾部窗口近似。窗口 [kElevationFilterWindow] 与结算一致，保证骑行中与
+/// 结算后两个读数不会差一个量级。
+double? trailingMedian(List<double> values, int window) {
+  if (values.isEmpty) return null;
+  final int start = math.max(0, values.length - window);
+  final List<double> buf = values.sublist(start)..sort();
+  return buf[buf.length ~/ 2];
+}
+
 /// 累加单次上升超过 [thresholdM] 的区段，得到总爬升（米）。
 ///
 /// 用「滞回」方式实现：小幅波动不推进基准点，因此缓慢但持续的爬坡会被
 /// 正确累加，而上下抖动不会；下降超过阈值时才把基准点下移。
-double elevationGainMeters(List<double?> filtered, double thresholdM) {
+///
+/// [startIndex] 之前的样点只用来定基准（等价于直接跳过）：[elevationGainOf]
+/// 用它实现「前 [kElevationWarmupMs] 不累计」的沉降期。
+double elevationGainMeters(
+  List<double?> filtered,
+  double thresholdM, {
+  int startIndex = 0,
+}) {
   double gain = 0;
   double? baseline;
-  for (final double? v in filtered) {
+  for (int i = startIndex; i < filtered.length; i++) {
+    final double? v = filtered[i];
     if (v == null) continue;
     if (baseline == null) {
       baseline = v;
@@ -103,10 +133,22 @@ double elevationGainMeters(List<double?> filtered, double thresholdM) {
 /// 「剔除不可信点 → 中值滤波 → 滞回累加」这三步是一条固定口径，汇总（`summary.dart`）
 /// 与崩溃恢复（`RecordController.resumeExisting`）都必须走同一条，否则同一趟骑行
 /// 在结算前后会给出两个爬升数。见设计文档 8.1。
-double elevationGainOf(List<TrackPoint> points) => elevationGainMeters(
-      medianFilterElevation(
-        plausibleElevationSeries(points),
-        kElevationFilterWindow,
-      ),
-      kElevationGainThresholdM,
-    );
+double elevationGainOf(List<TrackPoint> points) {
+  if (points.isEmpty) return 0;
+  final List<double?> filtered = medianFilterElevation(
+    plausibleElevationSeries(points),
+    kElevationFilterWindow,
+  );
+  // 前 kElevationWarmupMs 只定基准不累计：冷启动高程收敛与真实爬坡同形，
+  // 不沉降就会把收敛段整段算成起步爬升。
+  final int warmupEndMs = points.first.tMs + kElevationWarmupMs;
+  int startIndex = 0;
+  while (startIndex < points.length && points[startIndex].tMs < warmupEndMs) {
+    startIndex++;
+  }
+  return elevationGainMeters(
+    filtered,
+    kElevationGainThresholdM,
+    startIndex: startIndex,
+  );
+}

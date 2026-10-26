@@ -19,7 +19,7 @@ class CyclingApp extends ConsumerWidget {
     final ThemeAccent accent =
         ref.watch(appSettingsProvider).value?.accent ?? ThemeAccent.sky;
     return MaterialApp(
-      title: '骑行记录',
+      title: '运动记录',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(accent),
       home: const RecoveryGate(child: HomeShell()),

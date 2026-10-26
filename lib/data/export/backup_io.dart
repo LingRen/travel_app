@@ -32,7 +32,7 @@ class FileBackupIo implements BackupIo {
       ShareParams(
         files: <XFile>[XFile(file.path, mimeType: 'application/zip')],
         subject: fileName,
-        text: '骑行记录备份',
+        text: '运动记录备份',
       ),
     );
   }

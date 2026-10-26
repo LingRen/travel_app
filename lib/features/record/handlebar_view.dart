@@ -111,6 +111,10 @@ class HandlebarView extends StatelessWidget {
     final double? altitudeM = state.currentAltitudeM;
     // 跑步/健走/徒步的主读数用配速，骑行用速度。
     final bool usePace = selectedActivityType.usesPace;
+    // 配速没有「停着」可言：速度为 0 时 [formatPace] 返回 `--`，而 120dp 下两个
+    // 连字符就是两条白粗杠，看着像渲染坏了。改用与 `5'30"` 同构的占位符并降到
+    // 次要色，一眼能认出「还没有配速」。
+    final bool pacePlaceholder = usePace && state.currentSpeedMps <= 0;
 
     return Stack(
       fit: StackFit.expand,
@@ -217,10 +221,17 @@ class HandlebarView extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             usePace
-                                ? formatPace(state.currentSpeedMps, unit)
+                                ? (pacePlaceholder
+                                    ? _kPacePlaceholder
+                                    : formatPace(state.currentSpeedMps, unit))
                                 : formatSpeedValue(state.currentSpeedMps, unit),
                             key: const Key('handlebar-speed'),
-                            style: _hud(kInstrumentTextStyle),
+                            style: _hud(
+                              pacePlaceholder
+                                  ? kInstrumentTextStyle
+                                      .copyWith(color: kAppTextMuted)
+                                  : kInstrumentTextStyle,
+                            ),
                           ),
                           const SizedBox(width: kSpaceS),
                           Text(
@@ -425,6 +436,13 @@ const List<Shadow> _kHudShadows = <Shadow>[
   Shadow(color: Color(0xF2000000), blurRadius: 2),
   Shadow(color: Color(0xB3000000), blurRadius: 8),
 ];
+
+/// 还没有配速时的主读数占位符。
+///
+/// 不用 `--`：那是 [formatPace] 的返回值，在 120dp 下两个连字符就是两条白粗杠，
+/// 看不出是「暂无读数」。这里照 `5'30"` 的形状留空，配合次要色一眼可辨。历史卡片
+/// 里的「配速 --」保持原样——那里字号只有 13，两条短杠不会再像色块。
+const String _kPacePlaceholder = "--'--\"";
 
 /// 给压在地图上的文字套投影。所有浮层文字都要过这一道，否则换一张浅色底图
 /// 就会读不出来。按钮不用：它们自带底色或描边，本来就不依赖投影。

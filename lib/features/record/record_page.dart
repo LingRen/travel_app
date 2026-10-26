@@ -82,7 +82,7 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('结束本次骑行？'),
+        title: Text('结束本次${ref.read(recordControllerProvider).selectedActivityType.label}？'),
         content: const Text('结束后会保存记录并结算指标，无法再继续记录。'),
         actions: <Widget>[
           OutlinedButton(

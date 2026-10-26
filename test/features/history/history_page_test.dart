@@ -132,7 +132,7 @@ void main() {
   testWidgets('没有记录时显示空态提示', (WidgetTester tester) async {
     await pumpHistory(tester, rides: const <Workout>[]);
 
-    expect(find.text('还没有骑行记录'), findsOneWidget);
+    expect(find.text('还没有运动记录'), findsOneWidget);
     expect(find.byType(WorkoutCard), findsNothing);
   });
 
@@ -203,7 +203,7 @@ void main() {
   testWidgets('空态文案随筛选类型变化', (WidgetTester tester) async {
     await pumpHistory(tester, rides: const <Workout>[]);
 
-    expect(find.text('还没有骑行记录'), findsOneWidget);
+    expect(find.text('还没有运动记录'), findsOneWidget);
 
     await tester.tap(find.text('跑步'));
     await tester.pumpAndSettle();

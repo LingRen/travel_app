@@ -99,9 +99,9 @@ LocationSettings buildLocationSettings({required bool isAndroid}) {
       // 前台服务通知：Android 10+ 后台持续定位必需，与 Task 2 声明的
       // com.baseflow.geolocator.GeolocatorService 配套。
       foregroundNotificationConfig: const ForegroundNotificationConfig(
-        notificationTitle: '骑行记录中',
+        notificationTitle: '运动记录中',
         notificationText: '正在记录轨迹与心率',
-        notificationChannelName: '骑行记录',
+        notificationChannelName: '运动记录',
         enableWakeLock: true,
         setOngoing: true,
       ),

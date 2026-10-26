@@ -352,7 +352,7 @@ void main() {
       final ForegroundNotificationConfig? config =
           android.foregroundNotificationConfig;
       expect(config, isNotNull);
-      expect(config!.notificationTitle, '骑行记录中');
+      expect(config!.notificationTitle, '运动记录中');
       expect(config.setOngoing, isTrue);
       expect(config.enableWakeLock, isTrue);
     });

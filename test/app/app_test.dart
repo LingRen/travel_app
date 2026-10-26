@@ -40,7 +40,7 @@ void main() {
     await pumpApp(tester);
 
     final MaterialApp app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    expect(app.title, '骑行记录');
+    expect(app.title, '运动记录');
     expect(app.theme!.brightness, Brightness.dark);
     expect(app.debugShowCheckedModeBanner, isFalse);
 

@@ -52,7 +52,7 @@ class DetailPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(
           detail.value?.ride.title ??
-              '${detail.value?.ride.activityType.label ?? '骑行'}详情',
+              '${detail.value?.ride.activityType.label ?? '运动'}详情',
         ),
       ),
       body: detail.when(
@@ -180,9 +180,9 @@ class _DetailBody extends ConsumerWidget {
           ),
         SummaryGrid(ride: ride, unit: unit),
         if (points.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(kSpaceL),
-            child: Text('这次骑行没有轨迹数据', style: kMutedTextStyle),
+          Padding(
+            padding: const EdgeInsets.all(kSpaceL),
+            child: Text('这次${ride.activityType.label}没有轨迹数据', style: kMutedTextStyle),
           ),
         // 每项指标自成一组：标题 → 该项的读数 → 该项的曲线。原来所有读数挤在
         // 顶部一张规格表里、所有曲线排在下面，读「心率多少、心率怎么变的」

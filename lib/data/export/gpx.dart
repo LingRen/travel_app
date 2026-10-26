@@ -122,7 +122,7 @@ String _trackName(Workout ride) {
   final String title = ride.title?.trim() ?? '';
   if (title.isNotEmpty) return title;
   final DateTime start = DateTime.fromMillisecondsSinceEpoch(ride.startedAtMs);
-  return '骑行 ${start.year}-${_two(start.month)}-${_two(start.day)}';
+  return '${ride.activityType.label} ${start.year}-${_two(start.month)}-${_two(start.day)}';
 }
 
 String _isoUtc(int epochMs) =>

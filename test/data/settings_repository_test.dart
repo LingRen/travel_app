@@ -1,6 +1,7 @@
 import 'package:cycling_app/data/db/database.dart';
 import 'package:cycling_app/data/db/settings_dao.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -83,5 +84,37 @@ void main() {
     // 老库里可能存着 'amber'：那一组已随「轨迹跟随主题色」一起移除。
     await SettingsDao(db).setString('accent_theme', 'amber');
     expect((await repo.load()).accent, ThemeAccent.sky);
+  });
+
+  group('上次选中的运动类型', () {
+    test('首次读取是骑行', () async {
+      expect((await repo.load()).lastActivityType, ActivityType.cycling);
+    });
+
+    test('保存后可读回', () async {
+      await repo.saveLastActivityType(ActivityType.hiking);
+      expect((await repo.load()).lastActivityType, ActivityType.hiking);
+    });
+
+    test('存储值未知时回退到骑行', () async {
+      await SettingsDao(db).setString('last_activity_type', 'swimming');
+      expect((await repo.load()).lastActivityType, ActivityType.cycling);
+    });
+
+    // 设置页保存是整份写回，手里那份 AppSettings 可能是记录页换类型之前的
+    // 旧快照。若 save() 也写这个键，用户刚选的徒步会被悄悄改回旧值。
+    test('整份保存不会覆盖已存的运动类型', () async {
+      await repo.saveLastActivityType(ActivityType.running);
+      await repo.save(
+        const AppSettings(
+          maxHeartRate: 185,
+          weightKg: 72.5,
+          distanceUnit: DistanceUnit.mile,
+          mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
+          lastActivityType: ActivityType.cycling,
+        ),
+      );
+      expect((await repo.load()).lastActivityType, ActivityType.running);
+    });
   });
 }

@@ -171,6 +171,9 @@ class RecordController extends Notifier<RecordState> {
   /// 选中的运动类型。未开始态由 chip 行修改；开始记录时冻结落库。
   ActivityType _selectedActivityType = ActivityType.cycling;
 
+  /// 本次运行里用户是否亲手挑过类型。挑过之后设置再读出来也不覆盖他的选择。
+  bool _typeTouched = false;
+
   /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
   bool _foreground = true;
 
@@ -186,7 +189,27 @@ class RecordController extends Notifier<RecordState> {
   @override
   RecordState build() {
     ref.onDispose(_teardown);
-    return const RecordState();
+
+    // 冷启动沿用上次选中的类型。类型只活在内存里时，用户选好徒步、切走被系统
+    // 回收、回来直接点开始，落库的就是默认的骑行——事后只能手改库。
+    _selectedActivityType =
+        ref.read(appSettingsProvider).value?.lastActivityType ??
+            ActivityType.cycling;
+    // 设置是异步读的：首帧可能还没到位，等它出来再补上（用户已亲手挑过则不动）。
+    ref.listen<AsyncValue<AppSettings>>(
+      appSettingsProvider,
+      (AsyncValue<AppSettings>? _, AsyncValue<AppSettings> next) =>
+          _restoreSelectedType(next.value),
+    );
+
+    return RecordState(selectedActivityType: _selectedActivityType);
+  }
+
+  /// 设置读出来之后，用上次保存的类型补齐当前选择。
+  void _restoreSelectedType(AppSettings? settings) {
+    if (settings == null || _session != null || _typeTouched) return;
+    _selectedActivityType = settings.lastActivityType;
+    _publish();
   }
 
   /// 开始一次新记录。定位权限或定位服务不满足时直接返回并给出提示。
@@ -204,7 +227,7 @@ class RecordController extends Notifier<RecordState> {
     if (readiness != LocationReadiness.ready) {
       _error = switch (readiness) {
         LocationReadiness.serviceDisabled => '系统定位服务未开启，请先打开定位',
-        LocationReadiness.permissionDenied => '未获得定位权限，无法记录骑行',
+        LocationReadiness.permissionDenied => '未获得定位权限，无法开始记录',
         LocationReadiness.permissionDeniedForever => '定位权限已被永久拒绝，请到系统设置中开启',
         LocationReadiness.ready => null,
       };
@@ -362,8 +385,25 @@ class RecordController extends Notifier<RecordState> {
   /// 未开始时切换运动类型。记录中不可切换：类型在开始那一刻已经冻结落库。
   void selectActivityType(ActivityType type) {
     if (_session != null) return; // 记录中不可切换
+    _typeTouched = true;
+    if (_selectedActivityType == type) return;
     _selectedActivityType = type;
+    _persistSelectedType(type);
     _publish();
+  }
+
+  /// 记住这次选择，下次冷启动沿用。
+  ///
+  /// 写库失败（磁盘满、库被占用）不该妨碍这次记录：吞掉异常，只是下次启动
+  /// 回到默认类型，不会让用户点一下 chip 就报错。
+  void _persistSelectedType(ActivityType type) {
+    unawaited(() async {
+      try {
+        await ref.read(settingsRepositoryProvider).saveLastActivityType(type);
+      } catch (_) {
+        // 见方法注释。
+      }
+    }());
   }
 
   /// 连接一个传感器。失败不阻断骑行，[SensorMonitor] 会自动退避重连。
@@ -432,8 +472,12 @@ class RecordController extends Notifier<RecordState> {
     _previewFix = null;
     _lastFixMs = fix.tMs;
     session.ingestFix(fix);
-    // 实时 UI 按 1Hz 刷新（见设计文档 6.2），因此这里不 publish，
-    // 由 _onTick 统一推送，避免每秒几十次重建。
+    // 定位点一到就把读数推上界面，而不是等下一个 1Hz 节拍。
+    //
+    // 原来这里只落盘不 publish，速度因此最多要晚 1 秒才显示——再加上定位本身
+    // 的解算与上报延迟，主观上就是「速度慢半拍、不跟脚」。定位点通常本来就是
+    // 1Hz，跟着数据推送带来的重建量几乎没变；后台照旧不推送（见 _onTick）。
+    if (_foreground && !_finished) _publish();
     unawaited(_flush());
   }
 

@@ -1,6 +1,7 @@
 import 'dart:ui' show Color;
 
 import '../domain/analysis/constants.dart';
+import '../domain/models/activity_type.dart';
 import 'db/settings_dao.dart';
 
 /// 可选主题色。语义恒为「正在发生 / 可交互 / 已选中」，只是色相交给用户挑。
@@ -78,6 +79,7 @@ class AppSettings {
     required this.distanceUnit,
     required this.mapTileUrlTemplate,
     this.accent = ThemeAccent.sky,
+    this.lastActivityType = ActivityType.cycling,
   });
 
   final int maxHeartRate;
@@ -88,12 +90,17 @@ class AppSettings {
   /// 主题强调色。缺省为天青。
   final ThemeAccent accent;
 
+  /// 上次在记录页选中的运动类型。下次冷启动沿用，避免选好类型后进程被回收、
+  /// 再打开又悄悄变回骑行（类型落库错了，事后只能手改库）。
+  final ActivityType lastActivityType;
+
   AppSettings copyWith({
     int? maxHeartRate,
     double? weightKg,
     DistanceUnit? distanceUnit,
     String? mapTileUrlTemplate,
     ThemeAccent? accent,
+    ActivityType? lastActivityType,
   }) =>
       AppSettings(
         maxHeartRate: maxHeartRate ?? this.maxHeartRate,
@@ -101,6 +108,7 @@ class AppSettings {
         distanceUnit: distanceUnit ?? this.distanceUnit,
         mapTileUrlTemplate: mapTileUrlTemplate ?? this.mapTileUrlTemplate,
         accent: accent ?? this.accent,
+        lastActivityType: lastActivityType ?? this.lastActivityType,
       );
 }
 
@@ -126,6 +134,7 @@ class SettingsRepository {
       distanceUnit: DistanceUnit.fromDb(raw['distance_unit']),
       mapTileUrlTemplate: tileUrl.isEmpty ? kDefaultMapTileUrlTemplate : tileUrl,
       accent: ThemeAccent.fromDb(raw['accent_theme']),
+      lastActivityType: ActivityType.fromDb(raw['last_activity_type']),
     );
   }
 
@@ -135,5 +144,13 @@ class SettingsRepository {
     await _dao.setString('distance_unit', settings.distanceUnit.dbValue);
     await _dao.setString('map_tile_url', settings.mapTileUrlTemplate);
     await _dao.setString('accent_theme', settings.accent.dbValue);
+    // last_activity_type 不在这里写：设置页整份保存时手里那份 AppSettings
+    // 可能是旧快照（用户在记录页刚换过类型），整份写回会把它覆盖掉。
+    // 该字段只由 [saveLastActivityType] 写入。
+  }
+
+  /// 记住记录页这次选中的运动类型，下次冷启动沿用。
+  Future<void> saveLastActivityType(ActivityType type) async {
+    await _dao.setString('last_activity_type', type.dbValue);
   }
 }

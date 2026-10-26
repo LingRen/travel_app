@@ -44,7 +44,7 @@ class RouteMap extends StatelessWidget {
     if (all.isEmpty) {
       return SizedBox(
         height: height,
-        child: const Center(child: Text('这次骑行没有可显示的轨迹')),
+        child: const Center(child: Text('没有可显示的轨迹')),
       );
     }
 

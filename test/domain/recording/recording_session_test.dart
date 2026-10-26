@@ -385,31 +385,52 @@ void main() {
       expect(s.snapshot.elevationGainM, 0);
     });
 
-    test('累计爬升只加超过阈值的上升', () {
+    test('沉降期只校准基准，之后的爬升才累加', () {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
-      s.ingestFix(fixAt(0, altitudeM: 100));
-      // 升 0.5 米在阈值内，属于高程噪声抖动，不推进基准也不计入。
-      s.ingestFix(fixAt(1000, lat: 31.0001, altitudeM: 100.5));
+      // 前 60 秒稳定在 100 米：冷启动高程已收敛，这一段不该产生任何爬升。
+      for (int i = 0; i <= 60; i++) {
+        s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.00009, altitudeM: 100));
+      }
       expect(s.snapshot.elevationGainM, 0);
 
-      // 再升 0.6 米，距基准累计 1.1 米跨过阈值：整段计入，而不是只计入溢出的
-      // 0.1 米——滞回的目的是让缓坡能累积，不是把缓坡切碎。
-      s.ingestFix(fixAt(2000, lat: 31.0002, altitudeM: 101.1));
-      expect(s.snapshot.elevationGainM, closeTo(1.1, 1e-9));
+      // 之后每秒升 0.1 米、共 100 秒：真实爬升 10 米。中值窗口有约 7 秒滞后，
+      // 所以最后读数比理论值略小。
+      for (int i = 61; i <= 160; i++) {
+        s.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + i * 0.00009,
+          altitudeM: 100 + (i - 60) * 0.1,
+        ));
+      }
+      expect(s.snapshot.elevationGainM, closeTo(9.2, 1.0));
     });
 
     test('下降不增加爬升，下降超过阈值后基准随之下移', () {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
-      // 每步约 44 米水平位移，让 10 米的变化落在合理坡度内（10 / 44 ≈ 0.23）；
-      // 换成 11 米一步的话坡度接近 1，会被判成高程跳变而剔掉。步长 5 秒是必须的：
-      // 44 米走 1 秒等于 44 m/s，超过合理速度上限，位移本身会被当成跳变丢掉。
-      s.ingestFix(fixAt(0, altitudeM: 100));
-      s.ingestFix(fixAt(5000, lat: 31.0004, altitudeM: 90));
+      for (int i = 0; i <= 60; i++) {
+        s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.00009, altitudeM: 100));
+      }
+      // 40 秒下降 8 米：下降本身不计爬升。
+      for (int i = 61; i <= 100; i++) {
+        s.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + i * 0.00009,
+          altitudeM: 100 - (i - 60) * 0.2,
+        ));
+      }
       expect(s.snapshot.elevationGainM, 0, reason: '下降不计入爬升');
 
-      // 基准已经下移到 90：从 90 爬回 100 是真实的 10 米爬升，不是「回到原点」。
-      s.ingestFix(fixAt(10000, lat: 31.0008, altitudeM: 100));
-      expect(s.snapshot.elevationGainM, closeTo(10, 1e-9));
+      // 再爬回来 12 米：基准已经随下降下移，这一段是真实爬升，不是「回到
+      // 原点」。滞回只在跨过 3 米阈值时结算，下降段最后不足 3 米的尾巴没有
+      // 推进基准，所以累计值是 6 而不是 9。
+      for (int i = 101; i <= 160; i++) {
+        s.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + i * 0.00009,
+          altitudeM: 92 + (i - 100) * 0.2,
+        ));
+      }
+      expect(s.snapshot.elevationGainM, closeTo(6, 1));
     });
 
     test('高程跳变不计入爬升，也不污染基准', () {
@@ -421,36 +442,53 @@ void main() {
       expect(s.snapshot.currentAltitudeM, 100, reason: '不可信的高程不进读数');
       expect(s.snapshot.elevationGainM, 0);
 
-      // 关键：跳变点没有推进基准。若推进了，下一个真实高程会被当成大幅下降。
+      // 关键：跳变点没有推进基准。若推进了，后面的真实高程会以 160 为起点，
+      // 整段都会被判成下降。
       s.ingestFix(fixAt(2000, lat: 31.0002, altitudeM: 102));
       expect(s.snapshot.currentAltitudeM, 102);
-      expect(s.snapshot.elevationGainM, closeTo(2, 1e-9));
+      for (int i = 3; i <= 60; i++) {
+        s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.00009, altitudeM: 102));
+      }
+      expect(s.snapshot.elevationGainM, 0, reason: '沉降期内不累计');
+
+      // 之后升 12 米：以 102 为基准，而不是跳变值 160。跨过 3 / 6 / 9 三档，
+      // 累计 9 米，剩下不到 3 米的尾巴不计。
+      for (int i = 61; i <= 120; i++) {
+        s.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + i * 0.00009,
+          altitudeM: 102 + (i - 60) * 0.2,
+        ));
+      }
+      expect(s.snapshot.elevationGainM, closeTo(9, 1));
     });
 
     test('与结算口径一致：一条缓坡在实时读数与结算值上给出同一个爬升', () {
-      // 结算走「剔除跳变 → 中值滤波 → 滞回累加」，实时不做中值滤波。对一条单调
-      // 缓坡来说中值滤波不改变数值，因此两者必须一致——这一条守的是「同一趟骑行
-      // 在结算前后不能出现两个爬升数」。取 4.8 而不是全程 5.4 米，是因为滞回基准
-      // 只在跨过阈值时推进：最后那 0.6 米还没够到一个新基准，两侧都不计。
-      const int steps = 10;
+      // 实时用尾部中值窗口、结算用居中窗口，两者窗口长度一致，对一条单调缓坡
+      // 只差窗口边缘的几个点。这一条守的是「同一趟骑行在结算前后不能出现两个
+      // 爬升数」。
+      const int steps = 200;
       final List<TrackPoint> points = <TrackPoint>[];
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
 
       for (int i = 0; i < steps; i++) {
-        final double alt = 100 + i * 0.6;
-        // 44 米一步、5 秒一步 ≈ 8.9 m/s，落在合理速度内。
-        s.ingestFix(fixAt(i * 5000, lat: 31.0 + i * 0.0004, altitudeM: alt));
+        final double alt = i < 60 ? 100.0 : 100 + (i - 60) * 0.1;
+        final double lat = 31.0 + i * 0.00009;
+        s.ingestFix(fixAt(i * 1000, lat: lat, altitudeM: alt));
         points.add(TrackPoint(
           rideId: 1,
-          tMs: i * 5000,
-          lat: 31.0 + i * 0.0004,
+          tMs: i * 1000,
+          lat: lat,
           lon: 121.0,
           altitudeM: alt,
         ));
       }
 
-      expect(s.snapshot.elevationGainM, closeTo(4.8, 1e-9));
-      expect(s.snapshot.elevationGainM, closeTo(elevationGainOf(points), 1e-9));
+      expect(s.snapshot.elevationGainM, greaterThan(8));
+      expect(
+        s.snapshot.elevationGainM,
+        closeTo(elevationGainOf(points), 1.0),
+      );
     });
   });
 

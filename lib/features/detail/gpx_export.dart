@@ -28,7 +28,7 @@ class GpxExporter {
       ShareParams(
         files: <XFile>[XFile(file.path, mimeType: 'application/gpx+xml')],
         subject: ride.title?.trim().isNotEmpty == true ? ride.title : fileName,
-        text: '骑行轨迹 GPX',
+        text: '${ride.activityType.label}轨迹 GPX',
       ),
     );
     return file.path;

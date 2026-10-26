@@ -1,4 +1,5 @@
 import '../analysis/constants.dart';
+import '../analysis/elevation.dart';
 import '../analysis/geo.dart';
 import '../analysis/power.dart';
 import '../models/activity_type.dart';
@@ -141,6 +142,11 @@ class RecordingSession {
   /// 上一个可信高程点，作为爬升累加的基准。跳变点**不**更新它——否则一个飞掉的
   /// 高程值会被当成新基准，后面再也判不出异常。
   double? _lastPlausibleAltM;
+
+  /// 最近 [kElevationFilterWindow] 个可信高程。实时爬升对这一窗口取中值再做
+  /// 滞回累加，与结算的「中值滤波 → 滞回」同一口径；不做平滑只靠 1~3 米的
+  /// 滞回，会把 GPS 高程噪声整段算成爬升。
+  final List<double> _altWindow = <double>[];
 
   /// 提示判据。见设计文档 10.1，逻辑在 `cue_detector.dart`。
   ///
@@ -288,13 +294,13 @@ class RecordingSession {
 
   /// 更新实时海拔与累计爬升。
   ///
-  /// 口径刻意与结算时的 `elevationGainOf` 对齐（见设计文档 8.1）：都是
-  /// 「剔除不可信的高程点 → 滞回累加超过 [kElevationGainThresholdM] 的上升」。
-  /// 差别只有一个——结算先用 5 点中值滤波，实时读数不做滤波（滤波窗口要有未来
-  /// 样点，实时给不出），因此骑行中的爬升读数会比结算值略毛一点，量级一致。
+  /// 口径与结算时的 `elevationGainOf` 对齐（见设计文档 8.1）：都是
+  /// 「剔除不可信的高程点 → 中值滤波 → 滞回累加超过 [kElevationGainThresholdM]
+  /// 的上升」，并且同样有 [kElevationWarmupMs] 的沉降期。差别只有一处——结算
+  /// 的中值窗口以当前点为中心，实时拿不到未来样点，改用尾部窗口。
   ///
   /// 滞回是拿当前值与**基准**比，而不是与上一个点比：缓坡每步只升 0.6 米，
-  /// 逐步比较永远够不到 1 米的阈值，几十公里的爬坡会被整段丢掉。
+  /// 逐步比较永远够不到阈值，几十公里的爬坡会被整段丢掉。
   ///
   /// [segmentM] 是与上一个定位点之间的水平位移，用来判跳变是否物理上成立。
   void _trackElevation(LocationFix fix, double segmentM) {
@@ -312,17 +318,31 @@ class RecordingSession {
     _lastPlausibleAltM = altitude;
     _currentAltitudeM = altitude;
 
-    final double? baseline = _elevationBaselineM;
-    if (baseline == null) {
-      _elevationBaselineM = altitude;
+    _altWindow.add(altitude);
+    if (_altWindow.length > kElevationFilterWindow) {
+      _altWindow.removeAt(0);
+    }
+    final double? smoothed = trailingMedian(_altWindow, kElevationFilterWindow);
+    if (smoothed == null) return;
+
+    // 沉降期只把基准跟到最新的平滑值，不累计：冷启动时高程本身在收敛，
+    // 这段平移不是爬坡。
+    if (fix.tMs - startedAtMs < kElevationWarmupMs) {
+      _elevationBaselineM = smoothed;
       return;
     }
-    final double delta = altitude - baseline;
+
+    final double? baseline = _elevationBaselineM;
+    if (baseline == null) {
+      _elevationBaselineM = smoothed;
+      return;
+    }
+    final double delta = smoothed - baseline;
     if (delta >= kElevationGainThresholdM) {
       _elevationGainM += delta;
-      _elevationBaselineM = altitude;
+      _elevationBaselineM = smoothed;
     } else if (delta <= -kElevationGainThresholdM) {
-      _elevationBaselineM = altitude;
+      _elevationBaselineM = smoothed;
     }
   }
 

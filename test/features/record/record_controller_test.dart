@@ -1042,6 +1042,30 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('定位点到达立即刷新速度读数，不等 1 秒节拍', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    await rideOneSecond(tester, lat: 31.0, speedMps: 6.0);
+    expect(container.read(recordControllerProvider).currentSpeedMps, 6.0);
+
+    // 只过 200 毫秒：1Hz 节拍还没到，但定位点已经来了。数值必须马上变——
+    // 原来这里要等下一拍，加上定位解算本身的延迟，体感就是「速度慢半拍」。
+    clockMs += 200;
+    location.emit(LocationFix(
+      tMs: clockMs,
+      lat: 31.0001,
+      lon: 121.0,
+      speedMps: 9.5,
+    ));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(container.read(recordControllerProvider).currentSpeedMps, 9.5);
+    container.dispose();
+  });
+
   testWidgets('熄屏进后台时照常播报，但不重建界面状态', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller =

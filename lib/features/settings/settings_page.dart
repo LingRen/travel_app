@@ -478,7 +478,7 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
           child: Text(
-            '铺 $_seedCount 条模拟骑行，跨最近两个半月，'
+            '铺 $_seedCount 条模拟记录，跨最近两个半月，'
             '用来检查历史页、统计页的排版与曲线。',
             style: kMutedTextStyle.copyWith(fontSize: 12),
           ),
@@ -516,7 +516,7 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
   Future<void> _seed() async {
     final bool ok = await _confirm(
       title: '生成 $_seedCount 条模拟记录？',
-      body: '会在最近两个半月里铺一批假骑行，走的是和真实记录一样的写入路径。'
+      body: '会在最近两个半月里铺一批假记录，走的是和真实记录一样的写入路径。'
           '上次生成的模拟记录会被覆盖成同一批（不会越点越多），真实记录不动。',
       action: '生成',
     );
@@ -542,7 +542,7 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
   Future<void> _clear() async {
     final bool ok = await _confirm(
       title: '清空全部记录？',
-      body: '会删除全部骑行记录，包括真实记录和模拟记录。这一步无法撤销。',
+      body: '会删除全部运动记录，包括真实记录和模拟记录。这一步无法撤销。',
       action: '清空',
     );
     if (!ok) return;

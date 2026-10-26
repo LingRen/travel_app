@@ -8,6 +8,7 @@ import 'package:cycling_app/data/export/backup_io.dart';
 import 'package:cycling_app/data/export/backup_store.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
@@ -37,6 +38,12 @@ class _FakeSettingsRepository implements SettingsRepository {
   Future<void> save(AppSettings settings) async {
     saved = settings;
     saveCalls++;
+  }
+
+  /// 记录页换类型时写回的「上次选择」。设置页自己不写这个键。
+  @override
+  Future<void> saveLastActivityType(ActivityType type) async {
+    saved = saved.copyWith(lastActivityType: type);
   }
 }
 

@@ -47,26 +47,32 @@ void main() {
   });
 
   test('爬升经过滤波后累加，最高速经过平滑后取峰值', () {
-    // 高程 100→101→110→103→104→105：第 3 点是一个高程尖刺。
-    // 中值滤波（窗口 5）滤掉尖刺后为 100,101,103,104,105,105，累加得 5 米；
-    // 若不滤波直接用原始高程，则爬升为 12 米。尖刺使「滤波生效」这一断言
-    // 真正具备区分能力（严格单调的序列滤波前后完全相同）。
-    // 速度 30 的尖刺在窗口 5 的滑动平均下被摊薄，峰值必然小于 30。
-    final List<TrackPoint> points = <TrackPoint>[
-      _p(0, 121.4700, alt: 100, speed: 5),
-      _p(1000, 121.4701, alt: 101, speed: 5),
-      _p(2000, 121.4702, alt: 110, speed: 30),
-      _p(3000, 121.4703, alt: 103, speed: 5),
-      _p(4000, 121.4704, alt: 104, speed: 5),
-      _p(5000, 121.4705, alt: 105, speed: 5),
-    ];
+    // 5 分钟轨迹，2 秒一个点：前 60 秒在 100 米平路，之后 4 分钟线性爬升 30 米。
+    // 第 20 个点（平路中段）插一个 6 米的高程尖刺，中值滤波（窗口 15）应把它
+    // 抹掉；只靠滞回阈值的话这个尖刺会白送 6 米爬升——1 Hz 采样下这类噪声
+    // 每几分钟就有一个，正是真机上「平路爬升几百米」的来源。
+    // 速度 30 的尖刺在滑动平均下被摊薄，峰值必然小于 30。
+    final List<TrackPoint> points = <TrackPoint>[];
+    for (int i = 0; i < 150; i++) {
+      final double t = i * 2.0;
+      double alt = t < 60 ? 100 : 100 + (t - 60) * (30 / 240);
+      if (i == 20) alt = 106;
+      points.add(_p(
+        i * 2000,
+        121.4700 + i * 0.00013,
+        alt: alt,
+        speed: i == 30 ? 30 : 5,
+      ));
+    }
     final WorkoutSummary s = computeSummary(
       points: points,
-      durationS: 5,
+      durationS: 300,
       maxHeartRate: 190,
       weightKg: 70,
     );
-    expect(s.elevationGainM, closeTo(5, 1e-9));
+    // 沉降期从 60 秒起算，之后实际爬升 30 米；中值窗口边缘与滞回留白使
+    // 读数略小于 30。
+    expect(s.elevationGainM, closeTo(29, 2));
     expect(s.maxSpeedMps! < 30, isTrue);
   });
 

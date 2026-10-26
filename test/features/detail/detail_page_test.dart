@@ -535,7 +535,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(RouteMap), findsOneWidget);
-    expect(find.text('这次骑行没有可显示的轨迹'), findsOneWidget);
+    expect(find.text('没有可显示的轨迹'), findsOneWidget);
   });
 
   group('曲线断点分段', () {
