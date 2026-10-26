@@ -6,8 +6,9 @@ import '../data/settings_repository.dart';
 // 颜色
 //
 // 冷调沥青石墨。饱和度在这个 app 里是稀缺资源：屏幕上唯一允许带颜色的东西
-// 是数据本身——速度色带（黄→橙→深红，见 domain/analysis/color_scale.dart）
-// 与心率区间色（见 features/detail/hr_zone_bar.dart）。装饰一律不上色，
+// 是数据本身（心率区间色，见 features/detail/hr_zone_bar.dart）与主题强调色。
+// 速度色带（黄→橙→深红）已随地图轨迹一起改成跟随主题色——地图上的黄白路面
+// 会把浅黄轨迹吃掉，颜色分档那点信息不值得让整条轨迹看不见。装饰一律不上色，
 // 所以分区靠细线而不靠色块与阴影。
 //
 // 强调色（[ThemeAccent]，定义在设置层）只承担一个语义：**正在发生**
@@ -60,8 +61,8 @@ extension AppPaletteContext on BuildContext {
   AppPalette get palette => Theme.of(this).extension<AppPalette>()!;
 }
 
-/// 淡金：降级提示（GPS 弱、传感器断开）。与琥珀的区别在于语义是「在提醒你」
-/// 而不是「在等你操作」，同屏出现时靠明度差（13:1 vs 10:1）区分。
+/// 淡金：降级提示（GPS 弱、传感器断开）。与主题色的区别在于语义是「在提醒你」
+/// 而不是「在等你操作」，同屏出现时靠语义与明度差区分。
 const Color kAppWarning = Color(0xFFFFD166);
 
 /// 危险：结束记录、解除配对、清空数据。
@@ -69,6 +70,26 @@ const Color kAppDanger = Color(0xFFFF5A4E);
 
 /// 危险色上的墨色。
 const Color kAppOnDanger = Color(0xFF1A0806);
+
+// ─────────────────────────────────────────────────────────────────────────
+// 地图轨迹
+// ─────────────────────────────────────────────────────────────────────────
+
+/// 轨迹线的描边色。
+///
+/// 轨迹现在用主题色绘制，但主题色是用户挑的、底图明度也不可控：浅色主题色落在
+/// 高德底图的黄白路面上会糊成一片（真机反馈「地图上轨迹线条看不清」）。深色描边
+/// 把线从底图上剥出来，与 HUD 文字加投影是同一个思路。
+///
+/// 不是数据色，所以不参与「颜色只表示数据」的约束：它只提高对比度，不表达任何量。
+const Color kRouteCasing = Color(0xCC0B0E12);
+
+/// 轨迹线宽。骑行界面是整页地图，4pt 骑行中扫一眼就滑过去了。
+const double kRouteStrokeWidth = 5;
+
+/// 轨迹描边宽（整圈，两侧各占一半）。3pt 即两侧各 1.5pt，浅色路面与深色
+/// 路面都立得住，又不会把 25 米间隔的相邻轨迹段连成一条粗带。
+const double kRouteCasingWidth = 3;
 
 // ─────────────────────────────────────────────────────────────────────────
 // 字体
@@ -194,7 +215,7 @@ const double kRadiusControl = 10;
 /// 1 像素结构线。用 [BorderSide] 而不是 [Divider] 的地方都该用它。
 const BorderSide kHairline = BorderSide(color: kAppHairline, width: 1);
 
-ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.amber]) {
+ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.sky]) {
   final Color accentColor = accent.color;
   final ColorScheme scheme = ColorScheme.fromSeed(
     seedColor: accentColor,

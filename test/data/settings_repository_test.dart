@@ -56,8 +56,8 @@ void main() {
     expect((await repo.load()).maxHeartRate, 190);
   });
 
-  test('首次读取的主题色是琥珀', () async {
-    expect((await repo.load()).accent, ThemeAccent.amber);
+  test('首次读取的主题色是天青', () async {
+    expect((await repo.load()).accent, ThemeAccent.sky);
   });
 
   test('保存后可读回主题色', () async {
@@ -74,8 +74,14 @@ void main() {
     expect((await repo.load()).accent, ThemeAccent.sky);
   });
 
-  test('存储的主题色未知时回退到琥珀', () async {
+  test('存储的主题色未知时回退到天青', () async {
     await SettingsDao(db).setString('accent_theme', 'no-such-theme');
-    expect((await repo.load()).accent, ThemeAccent.amber);
+    expect((await repo.load()).accent, ThemeAccent.sky);
+  });
+
+  test('存储的主题色是已下线的琥珀时回退到天青', () async {
+    // 老库里可能存着 'amber'：那一组已随「轨迹跟随主题色」一起移除。
+    await SettingsDao(db).setString('accent_theme', 'amber');
+    expect((await repo.load()).accent, ThemeAccent.sky);
   });
 }

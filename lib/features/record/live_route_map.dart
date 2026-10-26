@@ -65,8 +65,16 @@ class LiveRouteMap extends StatefulWidget {
 class _LiveRouteMapState extends State<LiveRouteMap> {
   final MapController _controller = MapController();
 
-  /// 折线缓存。只在轨迹点换了对象时重算。
+  /// 折线缓存。只在轨迹点换了对象、或主题色变了时重算。
   List<Polyline<Object>> _polylines = const <Polyline<Object>>[];
+
+  /// [_polylines] 是用哪个主题色画的。主题色在设置页随时可换，缓存的折线要跟着
+  /// 作废——它不在 widget 参数里（来自 `context.palette`），`didUpdateWidget`
+  /// 看不出这个变化。
+  Color? _polylinesAccent;
+
+  /// 最近一次分段的顶点组。主题色变化时只需重挂颜色，不必重跑分段。
+  List<RouteSegment> _segments = const <RouteSegment>[];
 
   /// 与 [_polylines] 同源的顶点（已按瓦片源做过坐标转换），用来算取景范围。
   List<LatLng> _vertices = const <LatLng>[];
@@ -161,24 +169,17 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
   }
 
   void _rebuild(List<TrackPoint> points) {
-    final List<RouteSegment> segments = buildRouteSegments(
+    _segments = buildRouteSegments(
       points,
       toGcj02: isGcj02TileSource(widget.tileUrlTemplate),
       // 抽稀过的点不能按时间差断开，断点由采集侧标好传进来。
       breakBefore: widget.breakIndexes,
     );
-    _polylines = <Polyline<Object>>[
-      for (final RouteSegment s in segments)
-        Polyline<Object>(
-          points: <LatLng>[
-            for (final RouteVertex v in s.vertices) LatLng(v.lat, v.lon),
-          ],
-          strokeWidth: 4,
-          color: Color(s.colorArgb),
-        ),
-    ];
+    // 折线要等 build 里拿到主题色才能挂颜色，先把缓存作废。
+    _polylines = const <Polyline<Object>>[];
+    _polylinesAccent = null;
     _vertices = <LatLng>[
-      for (final RouteSegment s in segments)
+      for (final RouteSegment s in _segments)
         for (final RouteVertex v in s.vertices) LatLng(v.lat, v.lon),
     ];
     // 段组至少要两个点才成立（`buildRouteSegments` 的规则），只有一个点时就
@@ -192,6 +193,26 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
         _vertices = <LatLng>[_toMap(p.lat!, p.lon!)];
       }
     }
+  }
+
+  /// 按当前主题色产出折线。缓存命中时不重建——每秒一次的状态刷新会走到这里，
+  /// 新对象会逼 `flutter_map` 重走一遍投影。
+  List<Polyline<Object>> _polylinesWith(Color accent) {
+    if (_polylinesAccent == accent) return _polylines;
+    _polylinesAccent = accent;
+    return _polylines = <Polyline<Object>>[
+      for (final RouteSegment s in _segments)
+        Polyline<Object>(
+          points: <LatLng>[
+            for (final RouteVertex v in s.vertices) LatLng(v.lat, v.lon),
+          ],
+          strokeWidth: kRouteStrokeWidth,
+          color: accent,
+          // 描边让轨迹在黄白路面与深色底图上都立得住，见 [kRouteCasing]。
+          borderStrokeWidth: kRouteCasingWidth,
+          borderColor: kRouteCasing,
+        ),
+    ];
   }
 
   void _scheduleSyncCamera() {
@@ -252,7 +273,7 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
             subdomains: widget.subdomains,
             userAgentPackageName: 'com.ling.cycling_app',
           ),
-          PolylineLayer<Object>(polylines: _polylines),
+          PolylineLayer<Object>(polylines: _polylinesWith(context.palette.accent)),
           if (_markerPoint != null)
             MarkerLayer(
               markers: <Marker>[

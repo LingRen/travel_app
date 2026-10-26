@@ -261,28 +261,6 @@ void main() {
         expect(curFirst.lon, prevLast.lon);
       }
     });
-
-    test('快的那一段颜色与慢的那一段不同', () {
-      final List<RouteSegment> slow = buildRouteSegments(<TrackPoint>[
-        pt(0, speed: 1),
-        pt(1000, lat: 31.0001, speed: 1),
-      ]);
-      final List<RouteSegment> fast = buildRouteSegments(<TrackPoint>[
-        pt(0, speed: 14),
-        pt(1000, lat: 31.0001, speed: 14),
-      ]);
-
-      expect(slow.single.colorArgb, isNot(fast.single.colorArgb));
-    });
-
-    test('没有速度时按 0 处理，不抛错', () {
-      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
-        pt(0),
-        pt(1000, lat: 31.0001),
-      ]);
-
-      expect(segs.single.colorArgb, isNotNull);
-    });
   });
 
   // 实时轨迹缩略图（设计文档 9.4）喂进来的是抽稀过的点：相邻两点隔 15 秒是

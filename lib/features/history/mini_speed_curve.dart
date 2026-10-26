@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/analysis/color_scale.dart';
+import '../../app/theme.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/curve.dart';
 import '../../domain/models/track_point.dart';
 
 /// 卡片上的迷你速度曲线缩略图。见设计文档 10.2。
 ///
-/// 用 [CustomPaint] 而不是图表库：列表里每张卡片一个图表，自绘便宜得多，
-/// 而且能直接复用 [segmentColorArgb]，与详情页曲线、地图轨迹视觉一致。
+/// 用 [CustomPaint] 而不是图表库：列表里每张卡片一个图表，自绘便宜得多。
+/// 颜色跟随主题色，与详情页曲线、地图轨迹一致——原来按速度给每段上色，浅黄端
+/// 在浅色底上根本读不出来，那点分档信息不值得让整条曲线模糊掉。
 class MiniSpeedCurve extends StatelessWidget {
   const MiniSpeedCurve({required this.points, super.key});
 
@@ -33,7 +34,7 @@ class MiniSpeedCurve extends StatelessWidget {
       width: double.infinity,
       child: CustomPaint(
         size: Size.infinite,
-        painter: _MiniSpeedPainter(samples),
+        painter: _MiniSpeedPainter(samples, context.palette.accent),
       ),
     );
   }
@@ -64,9 +65,12 @@ List<(int, int)> drawnMiniCurveSegments(List<CurveSample> samples) {
 }
 
 class _MiniSpeedPainter extends CustomPainter {
-  _MiniSpeedPainter(this.samples);
+  _MiniSpeedPainter(this.samples, this.color);
 
   final List<CurveSample> samples;
+
+  /// 曲线色：主题强调色，由 [MiniSpeedCurve] 从 `context.palette` 取。
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -82,7 +86,8 @@ class _MiniSpeedPainter extends CustomPainter {
     final Paint paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..color = color;
 
     canvas.clipRect(Offset.zero & size);
 
@@ -94,9 +99,6 @@ class _MiniSpeedPainter extends CustomPainter {
       maxX: maxX,
       maxY: maxY * kCurveTopHeadroom,
     )) {
-      final CurveSample a = samples[arc.fromIndex];
-      final CurveSample b = samples[arc.toIndex];
-      paint.color = Color(segmentColorArgb(a.y, b.y));
       canvas.drawPath(
         Path()
           ..moveTo(_px(arc.from, size).dx, _px(arc.from, size).dy)
@@ -118,5 +120,6 @@ class _MiniSpeedPainter extends CustomPainter {
       Offset(p.x * size.width, size.height - p.y * size.height);
 
   @override
-  bool shouldRepaint(_MiniSpeedPainter old) => !identical(old.samples, samples);
+  bool shouldRepaint(_MiniSpeedPainter old) =>
+      !identical(old.samples, samples) || old.color != color;
 }

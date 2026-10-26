@@ -39,7 +39,7 @@ class _RecoveryGateState extends ConsumerState<RecoveryGate> {
         title: const Text('检测到未结束的骑行'),
         content: Text('开始于 ${_formatTime(ride.startedAtMs)}，是否继续？'),
         actions: <Widget>[
-          // 「继续」是主操作（琥珀实心），「结算保存」是收尾操作，走中性描边，
+          // 「继续」是主操作（强调色实心），「结算保存」是收尾操作，走中性描边，
           // 别让两个强调色按钮在同一个对话框里互相争。
           OutlinedButton(
             onPressed: () => Navigator.of(context).pop(false),

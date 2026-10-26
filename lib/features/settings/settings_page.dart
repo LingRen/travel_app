@@ -193,7 +193,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           mapTileUrlTemplate: tileUrl,
           // 主题色不在这几个输入框里，保存时必须带上当前值，否则会被重置回默认。
           accent: ref.read(appSettingsProvider).value?.accent ??
-              ThemeAccent.amber,
+              ThemeAccent.sky,
         ));
     ref.invalidate(appSettingsProvider);
     if (!mounted) return;
@@ -233,7 +233,7 @@ class _AppearanceSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeAccent current =
-        ref.watch(appSettingsProvider).value?.accent ?? ThemeAccent.amber;
+        ref.watch(appSettingsProvider).value?.accent ?? ThemeAccent.sky;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[

@@ -401,18 +401,18 @@ void main() {
       // 名称写出来，色觉障碍用户与不知道色名的用户都能分辨。
       expect(find.text(accent.label), findsOneWidget);
     }
-    // 默认是琥珀，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
+    // 默认是天青，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
     // 分段也带对勾，所以必须限定在圆点内部去找）。
     expect(
       find.descendant(
-        of: find.byKey(const Key('accent-amber')),
+        of: find.byKey(const Key('accent-sky')),
         matching: find.byIcon(Icons.check),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('accent-sky')),
+        of: find.byKey(const Key('accent-mint')),
         matching: find.byIcon(Icons.check),
       ),
       findsNothing,
@@ -422,11 +422,12 @@ void main() {
   testWidgets('点选主题色圆点即存即生效，不需要点保存', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    await tester.tap(find.byKey(const Key('accent-sky')));
+    // 默认是天青，这里点另一组，确保验证的是「切换」而不是「点已选中的那颗」。
+    await tester.tap(find.byKey(const Key('accent-mint')));
     await tester.pumpAndSettle();
 
     expect(settings.saveCalls, 1);
-    expect(settings.saved.accent, ThemeAccent.sky);
+    expect(settings.saved.accent, ThemeAccent.mint);
     // 其余设置项不能被这次点选改动。
     expect(settings.saved.maxHeartRate, _settings.maxHeartRate);
     expect(settings.saved.weightKg, _settings.weightKg);

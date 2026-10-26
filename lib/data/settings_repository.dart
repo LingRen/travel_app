@@ -9,15 +9,15 @@ import 'db/settings_dao.dart';
 /// 它放在这里（而不是 app 的主题文件）是为了让数据层不反向依赖 UI 层——主题色
 /// 的定义属于「有哪些值可选」，怎么渲染属于 UI 层。
 ///
-/// 每组色相都必须能和**数据色**（速度色带、心率区间色）与**安全色**（警告、危险）
-/// 区分开：色相相差 ≥30°，或相对亮度比 ≥1.30。详情页上心率曲线用主题色绘制、
-/// 心率区间条用区间色，两者同屏，撞色就读不出来。该约束由
-/// `test/app/theme_test.dart` 的门禁守住。
+/// 每组色相都必须能和**数据色**（心率区间色）与**安全色**（警告、危险）区分开：
+/// 色相相差 ≥30°，或相对亮度比 ≥1.30。详情页上心率曲线用主题色绘制、心率区间条
+/// 用区间色，两者同屏，撞色就读不出来。该约束由 `test/app/theme_test.dart` 的
+/// 门禁守住。
 ///
-/// 例外是 [ThemeAccent.amber]：它是历史默认色，本身就落在暖色带（速度色带中段、
-/// 心率区间「暖身」段）上，靠亮度与语义区分，是既定取舍，故门禁对其单独放行。
+/// 曾经有第四组暖色（琥珀）作为默认色：它落在心率「暖身」段上，只能靠亮度与
+/// 语义区分，靠门禁豁免放行。轨迹与速度曲线改为跟随主题色之后，暖色与地图黄白
+/// 路面对撞的问题凸显出来，于是整组移除，默认改为天青。
 enum ThemeAccent {
-  amber('amber', '琥珀', Color(0xFFFFA92B)),
   mint('mint', '薄荷', Color(0xFF33D69F)),
   // 比初版 #38BDF8 更亮：初版与心率区间蓝（#64B5F6）色相仅差 8°、亮度几乎相同，
   // 详情页上心率曲线（主题色）与区间条会撞色。提亮后亮度比 1.33，可区分。
@@ -37,7 +37,7 @@ enum ThemeAccent {
 
   static ThemeAccent fromDb(String? value) => ThemeAccent.values.firstWhere(
         (ThemeAccent a) => a.dbValue == value,
-        orElse: () => ThemeAccent.amber,
+        orElse: () => ThemeAccent.sky,
       );
 }
 
@@ -77,7 +77,7 @@ class AppSettings {
     required this.weightKg,
     required this.distanceUnit,
     required this.mapTileUrlTemplate,
-    this.accent = ThemeAccent.amber,
+    this.accent = ThemeAccent.sky,
   });
 
   final int maxHeartRate;
@@ -85,7 +85,7 @@ class AppSettings {
   final DistanceUnit distanceUnit;
   final String mapTileUrlTemplate;
 
-  /// 主题强调色。缺省为琥珀，与历史行为一致。
+  /// 主题强调色。缺省为天青。
   final ThemeAccent accent;
 
   AppSettings copyWith({

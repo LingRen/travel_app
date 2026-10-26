@@ -4,7 +4,6 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/ble/sensor_monitor.dart';
 import '../../data/settings_repository.dart';
-import '../../domain/analysis/color_scale.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/models/activity_type.dart';
 import 'live_route_map.dart';
@@ -18,7 +17,7 @@ import 'ride_cue_banner.dart';
 /// `drawnMiniCurveSegments` 的既有做法。
 double speedScaleFraction(
   double speedMps, {
-  double maxMps = kColorScaleMaxSpeedMps,
+  double maxMps = kSpeedScaleMaxMps,
 }) =>
     maxMps <= 0 ? 0 : (speedMps / maxMps).clamp(0.0, 1.0);
 
@@ -41,7 +40,7 @@ double speedScaleFraction(
 ///   - 浮层不铺底色，只有文字带一圈投影，外加读数带背后的一层渐变暗底；
 ///     地图要真的看得见，压暗只发生在字周围那两条带里；
 ///   - 全页可点区域都撑到 40 高以上，戴手套也按得中；
-///   - 除数据色带外一律不上色（见 app/theme.dart 的颜色说明）。
+///   - 除主题色与心率区间色外一律不上色（见 app/theme.dart 的颜色说明）。
 ///
 /// **地图不吃手势**（`InteractiveFlag.none`，见 [LiveRouteMap]）：骑行中戴手套
 /// 误触不该把视野拖走，地图只做被动跟随轨迹。
@@ -458,7 +457,7 @@ class _StatusStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 状态灯：实心琥珀＝采集中，空心＝未开始或已暂停。灯本身承担状态语义，
+    // 状态灯：实心强调色＝采集中，空心＝未开始或已暂停。灯本身承担状态语义，
     // 旁边三个字只是给第一次用的人看的。
     final bool collecting = !idle && !paused;
     return Row(
@@ -581,8 +580,7 @@ class _SensorLamp extends StatelessWidget {
 
 /// 速度刻度尺。参照物是码表的横条速度指示：轨道 + 刻度 + 游标填充。
 ///
-/// 填充色直接取 [speedColorArgb]，与地图轨迹、详情曲线、列表缩略图同一套
-/// 映射——同一个速度在 app 里永远同一个颜色。
+/// 填充色取主题强调色，与地图轨迹、详情曲线、列表缩略图一致。
 class _SpeedScale extends StatelessWidget {
   const _SpeedScale({required this.speedMps});
 
@@ -594,14 +592,19 @@ class _SpeedScale extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
         height: height,
         width: double.infinity,
-        child: CustomPaint(painter: _SpeedScalePainter(speedMps)),
+        child: CustomPaint(
+          painter: _SpeedScalePainter(speedMps, context.palette.accent),
+        ),
       );
 }
 
 class _SpeedScalePainter extends CustomPainter {
-  _SpeedScalePainter(this.speedMps);
+  _SpeedScalePainter(this.speedMps, this.color);
 
   final double speedMps;
+
+  /// 填充色：主题强调色。
+  final Color color;
 
   /// 刻度条数。11 条即每 10% 一格，对应满量程的 1/10。
   static const int tickCount = 11;
@@ -630,7 +633,7 @@ class _SpeedScalePainter extends CustomPainter {
           Rect.fromLTWH(0, trackY, filled, trackHeight),
           const Radius.circular(kRadiusLine),
         ),
-        Paint()..color = Color(speedColorArgb(speedMps)),
+        Paint()..color = color,
       );
     }
 
@@ -655,7 +658,8 @@ class _SpeedScalePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SpeedScalePainter old) => old.speedMps != speedMps;
+  bool shouldRepaint(_SpeedScalePainter old) =>
+      old.speedMps != speedMps || old.color != color;
 }
 
 /// 一行等宽格，用竖细线分隔——不用卡片、不用底色块。

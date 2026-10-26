@@ -655,6 +655,16 @@ void main() {
 
       expect(find.byType(FlutterMap), findsOneWidget);
       expect(find.text('等待定位…'), findsNothing);
+
+      // 与详情页同一口径：实时轨迹也要带深色描边，否则低速段（浅黄）会糊进
+      // 高德底图里 —— 骑行界面还是整页地图，这一点比详情页更致命。
+      final Polyline<Object> line = tester
+          .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+          .polylines
+          .first;
+      expect(line.strokeWidth, kRouteStrokeWidth);
+      expect(line.borderStrokeWidth, kRouteCasingWidth);
+      expect(line.borderColor, kRouteCasing);
     });
 
     testWidgets('只有一个真实点（还画不出线）时地图不能退回占位', (WidgetTester tester) async {
@@ -771,8 +781,8 @@ void main() {
       expect(speedScaleFraction(6, maxMps: -1), 0);
     });
 
-    test('默认量程等于数据色带的满速，满速时刚好满格', () {
-      expect(speedScaleFraction(kColorScaleMaxSpeedMps), 1);
+    test('默认量程等于速度刻度尺的满量程，满速时刚好满格', () {
+      expect(speedScaleFraction(kSpeedScaleMaxMps), 1);
     });
   });
 

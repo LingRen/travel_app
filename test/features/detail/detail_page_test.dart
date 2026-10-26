@@ -399,6 +399,17 @@ void main() {
     expect(find.byType(RouteMap), findsOneWidget);
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.byType(PolylineLayer), findsOneWidget);
+
+    // 轨迹必须自带深色描边：慢速端是浅黄，与高德底图的黄白路面对撞，真机上
+    // 整段轨迹会糊进路面（「地图上轨迹线条看不清」）。只断言图层存在的话，
+    // 把描边去掉这条用例仍然通过。
+    final Polyline<Object> line = tester
+        .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+        .polylines
+        .first;
+    expect(line.strokeWidth, kRouteStrokeWidth);
+    expect(line.borderStrokeWidth, kRouteCasingWidth);
+    expect(line.borderColor, kRouteCasing);
   });
 
   // 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还

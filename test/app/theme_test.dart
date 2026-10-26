@@ -1,6 +1,5 @@
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/settings_repository.dart';
-import 'package:cycling_app/domain/analysis/color_scale.dart';
 import 'package:cycling_app/features/detail/hr_zone_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,13 +20,9 @@ double _hueDistance(Color a, Color b) {
   return d > 180 ? 360 - d : d;
 }
 
-/// 数据色：速度色带（黄→橙→深红）与心率区间色。屏幕上的颜色只表示数据本身。
-List<Color> _dataColors() => <Color>[
-      Color(kSpeedColorSlow),
-      Color(kSpeedColorMid),
-      Color(kSpeedColorFast),
-      ...HrZoneBar.zoneColors,
-    ];
+/// 数据色：心率区间色。屏幕上的颜色只表示数据本身；轨迹与各条曲线已改为
+/// 跟随主题色，不再另设色带。
+List<Color> _dataColors() => <Color>[...HrZoneBar.zoneColors];
 
 /// 安全色：警告与危险。它们是「出事了」的信号，不能被读成「正在发生」。
 List<Color> _safetyColors() => <Color>[kAppWarning, kAppDanger];
@@ -60,14 +55,11 @@ void main() {
   });
 
   test('主题色与数据色、安全色都区分得开', () {
-    // 详情页同屏出现：心率曲线用主题色绘制，心率区间条用区间色，缩略图用速度色带。
-    // 主题色若和数据色撞在一起，读图的人会把曲线当成某段区间、或某个速度档。
+    // 详情页同屏出现：各条曲线用主题色绘制，心率区间条用区间色。
+    // 主题色若和区间色撞在一起，读图的人会把曲线当成某段区间。
     final List<Color> others = <Color>[..._dataColors(), ..._safetyColors()];
 
     for (final ThemeAccent accent in ThemeAccent.values) {
-      // 琥珀是历史默认色，本就落在暖色带（速度色带中段、心率「暖身」段）上，靠
-      // 亮度与语义区分，是既定取舍——豁免理由见 ThemeAccent 的文档注释。
-      if (accent == ThemeAccent.amber) continue;
       for (final Color other in others) {
         final double hue = _hueDistance(accent.color, other);
         final double ratio = _contrastRatio(accent.color, other);
@@ -81,15 +73,6 @@ void main() {
     }
   });
 
-  test('琥珀虽被豁免，也不与危险色撞色', () {
-    // 豁免不等于放任：暖色带里至少要避开危险色（红），否则「正在发生」会被读成
-    // 「出错」。琥珀与危险色差 32°，这条把「至少这么开」钉住。
-    expect(
-      _hueDistance(ThemeAccent.amber.color, kAppDanger),
-      greaterThanOrEqualTo(30),
-    );
-  });
-
   test('主题色被写进 ColorScheme.primary 与 AppPalette 扩展', () {
     for (final ThemeAccent accent in ThemeAccent.values) {
       final ThemeData theme = buildAppTheme(accent);
@@ -100,15 +83,17 @@ void main() {
     }
   });
 
-  test('默认主题色是琥珀', () {
-    expect(buildAppTheme().colorScheme.primary, ThemeAccent.amber.color);
-    expect(buildAppTheme().extension<AppPalette>()!.accent, ThemeAccent.amber.color);
+  test('默认主题色是天青', () {
+    expect(buildAppTheme().colorScheme.primary, ThemeAccent.sky.color);
+    expect(buildAppTheme().extension<AppPalette>()!.accent, ThemeAccent.sky.color);
   });
 
-  test('ThemeAccent.fromDb 认已知值，未知值回退琥珀', () {
-    expect(ThemeAccent.fromDb('sky'), ThemeAccent.sky);
+  test('ThemeAccent.fromDb 认已知值，未知值与已下线的琥珀都回退天青', () {
+    expect(ThemeAccent.fromDb('mint'), ThemeAccent.mint);
     expect(ThemeAccent.fromDb('violet'), ThemeAccent.violet);
-    expect(ThemeAccent.fromDb(null), ThemeAccent.amber);
-    expect(ThemeAccent.fromDb('no-such-theme'), ThemeAccent.amber);
+    expect(ThemeAccent.fromDb(null), ThemeAccent.sky);
+    expect(ThemeAccent.fromDb('no-such-theme'), ThemeAccent.sky);
+    // 琥珀已从选项里移除；老库里存着的 'amber' 读出来落到默认色。
+    expect(ThemeAccent.fromDb('amber'), ThemeAccent.sky);
   });
 }

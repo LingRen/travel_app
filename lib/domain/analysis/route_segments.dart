@@ -1,5 +1,4 @@
 import '../models/track_point.dart';
-import 'color_scale.dart';
 import 'constants.dart';
 import 'gcj02.dart';
 import 'geo.dart';
@@ -12,14 +11,14 @@ class RouteVertex {
   final double lon;
 }
 
-/// 地图折线的一段：一组顶点 + 一个颜色。
+/// 地图折线的一段：一组顶点。
+///
+/// 不再带颜色：轨迹统一用主题色绘制（见 `app/theme.dart` 的颜色说明），分段只剩
+/// 「哪里必须断开」这一个职责。
 class RouteSegment {
-  const RouteSegment({required this.vertices, required this.colorArgb});
+  const RouteSegment({required this.vertices});
 
   final List<RouteVertex> vertices;
-
-  /// 0xAARRGGBB。
-  final int colorArgb;
 }
 
 /// 把轨迹点整理成地图可用的分段折线。见设计文档 9.2 与 9.3。
@@ -35,10 +34,10 @@ class RouteSegment {
 /// - 隐含速度超过 [kMaxPlausibleSpeedMps]（GPS 跳变）
 ///
 /// [maxVerticesPerSegment] 是对设计文档 9.2「按相邻两点平均速度分段着色」的
-/// 工程取舍：字面做法会为每个点对生成一条 `Polyline`，一小时骑行 3000+ 个点
-/// 就是 3000+ 条，`flutter_map` 会卡。这里把连续点分组，每组一条 `Polyline`、
-/// 一个颜色（取该组平均速度）。断点一定会断开，不受分组影响。
-/// 相邻两段共享一个顶点，折线才连得上。
+/// 工程取舍：那条规则原本要为每个点对生成一条 `Polyline`，一小时骑行 3000+ 个点
+/// 就是 3000+ 条，`flutter_map` 会卡。现在轨迹统一用主题色，分段只为「断点」与
+/// 「单条折线的顶点数上限」而存在，但仍保留分组：一条折线几千个顶点同样会拖慢
+/// 投影。断点一定会断开，不受分组影响。相邻两段共享一个顶点，折线才连得上。
 ///
 /// [breakBefore] 给出「第 i 个点与上一个点之间必须断开」的下标集合（下标对
 /// [points] 的顺序，不是过滤掉无坐标点之后的下标）。给了它就不再按时间间隔判
@@ -47,7 +46,6 @@ class RouteSegment {
 List<RouteSegment> buildRouteSegments(
   List<TrackPoint> points, {
   bool toGcj02 = true,
-  double maxSpeedMps = kColorScaleMaxSpeedMps,
   int maxVerticesPerSegment = 24,
   Set<int>? breakBefore,
 }) {
@@ -65,7 +63,6 @@ List<RouteSegment> buildRouteSegments(
   List<RouteVertex> current = <RouteVertex>[
     _vertex(located.first.point, toGcj02),
   ];
-  final List<double> currentSpeeds = <double>[_speed(located.first.point)];
 
   for (int i = 1; i < located.length; i++) {
     final TrackPoint prev = located[i - 1].point;
@@ -74,47 +71,27 @@ List<RouteSegment> buildRouteSegments(
     final bool explicitBreak = breakBefore?.contains(located[i].index) ?? false;
     if (explicitBreak ||
         !_connectable(prev, cur, checkTimeGap: breakBefore == null)) {
-      _flush(segments, current, currentSpeeds, maxSpeedMps);
+      _flush(segments, current);
       current = <RouteVertex>[_vertex(cur, toGcj02)];
-      currentSpeeds
-        ..clear()
-        ..add(_speed(cur));
       continue;
     }
 
     if (current.length >= maxVerticesPerSegment) {
-      _flush(segments, current, currentSpeeds, maxSpeedMps);
+      _flush(segments, current);
       // 新段从上一段的末点开始，保证折线在视觉上是连着的。
       current = <RouteVertex>[current.last];
-      currentSpeeds
-        ..clear()
-        ..add(_speed(prev));
     }
 
     current.add(_vertex(cur, toGcj02));
-    currentSpeeds.add(_speed(cur));
   }
 
-  _flush(segments, current, currentSpeeds, maxSpeedMps);
+  _flush(segments, current);
   return segments;
 }
 
-void _flush(
-  List<RouteSegment> out,
-  List<RouteVertex> vertices,
-  List<double> speeds,
-  double maxSpeedMps,
-) {
+void _flush(List<RouteSegment> out, List<RouteVertex> vertices) {
   if (vertices.length < 2) return;
-  double sum = 0;
-  for (final double s in speeds) {
-    sum += s;
-  }
-  final double average = speeds.isEmpty ? 0 : sum / speeds.length;
-  out.add(RouteSegment(
-    vertices: List<RouteVertex>.unmodifiable(vertices),
-    colorArgb: speedColorArgb(average, maxSpeedMps: maxSpeedMps),
-  ));
+  out.add(RouteSegment(vertices: List<RouteVertex>.unmodifiable(vertices)));
 }
 
 bool _connectable(TrackPoint a, TrackPoint b, {bool checkTimeGap = true}) {
@@ -136,5 +113,3 @@ RouteVertex _vertex(TrackPoint p, bool toGcj02) {
   final ({double lat, double lon}) converted = wgs84ToGcj02(p.lat!, p.lon!);
   return RouteVertex(converted.lat, converted.lon);
 }
-
-double _speed(TrackPoint p) => p.speedMps ?? 0;

@@ -96,8 +96,10 @@ const int kCueDistanceTierM = 10000;
 /// 档位按 km/h 定义（用户口径就是「每提升 10km/h」），英里单位下的显示再换算。
 const int kCueSpeedTierKmh = 10;
 
-/// 速度着色（m/s）与功率着色（W）的归一化上限。见设计文档 8.2。
-const double kColorScaleMaxSpeedMps = 15.0;
+/// 速度刻度尺的满量程（m/s）。见设计文档 8.2。
+///
+/// 轨迹与曲线已改为跟随主题色，这个数现在只决定骑行界面那条速度刻度条有多满。
+const double kSpeedScaleMaxMps = 15.0;
 
 /// 曲线平滑的切线除数。
 ///

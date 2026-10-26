@@ -3,22 +3,20 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
-import '../../domain/analysis/color_scale.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/curve.dart';
 
 /// 详情页的一条曲线。见设计文档 10.3 的第 3~5 块。
 ///
-/// 自绘而不是用图表库：设计文档 8.2 要求速度曲线与地图轨迹共用同一套颜色映射，
-/// 而 `fl_chart` 的折线只能整条一个颜色（或一个按 x 位置的渐变），
-/// 做不出「按每一段的速度着色」。自绘可以直接复用 [segmentColorArgb]。
+/// 自绘而不是用图表库：`fl_chart` 的折线只能整条一个颜色（或一个按 x 位置的
+/// 渐变），而这里要画平均线、极值标注与断点分段，自己画最直接。曲线色统一取
+/// 主题强调色——四条曲线同屏，颜色不再承载「这是哪条曲线」以外的信息。
 class CurveChart extends StatelessWidget {
   const CurveChart({
     required this.samples,
     required this.unitLabel,
     required this.formatValue,
     this.averageValue,
-    this.colorBySpeed = false,
     required this.baseColorArgb,
     super.key,
   });
@@ -40,10 +38,7 @@ class CurveChart extends StatelessWidget {
   /// 142」，参考线必须和它对得上，否则用户会以为哪里算错了。
   final double? averageValue;
 
-  /// 为真时按每段平均速度着色（速度曲线用），否则用 [baseColorArgb]。
-  final bool colorBySpeed;
-
-  /// 非按速度着色时的曲线色（主题强调色的 ARGB 整数）。
+  /// 曲线色（主题强调色的 ARGB 整数）。
   ///
   /// 画笔只认 int 不认 `Color`，所以由调用方从 `context.palette.accent` 转好传入。
   final int baseColorArgb;
@@ -58,7 +53,6 @@ class CurveChart extends StatelessWidget {
         size: Size.infinite,
         painter: _CurvePainter(
           samples: samples,
-          colorBySpeed: colorBySpeed,
           baseColorArgb: baseColorArgb,
           unitLabel: unitLabel,
           averageValue: averageValue,
@@ -86,7 +80,6 @@ List<(int, int)> drawnCurveSegments(List<CurveSample> samples) {
 class _CurvePainter extends CustomPainter {
   _CurvePainter({
     required this.samples,
-    required this.colorBySpeed,
     required this.baseColorArgb,
     required this.unitLabel,
     required this.averageValue,
@@ -94,7 +87,6 @@ class _CurvePainter extends CustomPainter {
   });
 
   final List<CurveSample> samples;
-  final bool colorBySpeed;
   final int baseColorArgb;
   final String unitLabel;
   final double? averageValue;
@@ -134,11 +126,7 @@ class _CurvePainter extends CustomPainter {
       maxY: scaleY,
     );
     for (final CurveArc arc in arcs) {
-      final CurveSample a = samples[arc.fromIndex];
-      final CurveSample b = samples[arc.toIndex];
-      paint.color = Color(
-        colorBySpeed ? segmentColorArgb(a.y, b.y) : baseColorArgb,
-      );
+      paint.color = Color(baseColorArgb);
       canvas.drawPath(
         Path()
           ..moveTo(_px(arc.from, size).dx, _px(arc.from, size).dy)
@@ -172,7 +160,7 @@ class _CurvePainter extends CustomPainter {
 
   /// 平均线：一条横穿的虚线，右端标出数值。
   ///
-  /// 画虚线而不是实线：它是参考线，不是数据，不该和琥珀色的曲线抢注意力。
+  /// 画虚线而不是实线：它是参考线，不是数据，不该和主题色的曲线抢注意力。
   void _paintAverageLine(Canvas canvas, Size size, double scaleY) {
     final double? average = averageValue;
     if (average == null) return;
@@ -277,7 +265,6 @@ class _CurvePainter extends CustomPainter {
   @override
   bool shouldRepaint(_CurvePainter old) =>
       !identical(old.samples, samples) ||
-      old.colorBySpeed != colorBySpeed ||
       old.baseColorArgb != baseColorArgb ||
       old.unitLabel != unitLabel ||
       old.averageValue != averageValue;

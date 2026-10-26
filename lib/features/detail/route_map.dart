@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../app/theme.dart';
 import '../../domain/analysis/route_segments.dart';
 
 /// 详情页顶部的着色轨迹地图。见设计文档 9.1 / 9.2。
@@ -39,6 +40,9 @@ class RouteMap extends StatelessWidget {
       );
     }
 
+    // 轨迹统一跟随主题色：不再按速度分档着色（见 app/theme.dart 的颜色说明）。
+    final Color trackColor = context.palette.accent;
+
     return SizedBox(
       height: height,
       child: FlutterMap(
@@ -64,8 +68,11 @@ class RouteMap extends StatelessWidget {
                   points: <LatLng>[
                     for (final RouteVertex v in s.vertices) LatLng(v.lat, v.lon),
                   ],
-                  strokeWidth: 4,
-                  color: Color(s.colorArgb),
+                  strokeWidth: kRouteStrokeWidth,
+                  color: trackColor,
+                  // 描边让轨迹在黄白路面与深色底图上都立得住，见 [kRouteCasing]。
+                  borderStrokeWidth: kRouteCasingWidth,
+                  borderColor: kRouteCasing,
                 ),
             ],
           ),

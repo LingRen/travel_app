@@ -171,7 +171,6 @@ class _DetailBody extends ConsumerWidget {
               // 里面，它的时间平均就是「总距离 / 总时长」，也就是总均速。
               averageValue: s?.avgSpeedMps,
               formatValue: (double v) => formatSpeedValue(v, unit),
-              colorBySpeed: true,
               baseColorArgb: context.palette.accent.toARGB32(),
             ),
           ),
