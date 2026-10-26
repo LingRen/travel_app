@@ -14,6 +14,7 @@ class RouteMap extends StatelessWidget {
     required this.segments,
     required this.tileUrlTemplate,
     this.subdomains = const <String>[],
+    this.gapEnds = const <LatLng>[],
     this.height = 260,
     super.key,
   });
@@ -24,6 +25,13 @@ class RouteMap extends StatelessWidget {
   final String tileUrlTemplate;
 
   final List<String> subdomains;
+
+  /// 信号中断断口两侧的定位点（已按瓦片源转换）。
+  ///
+  /// 缺口两侧各画一个小圆点：线断在那里，但用户要知道那是信号丢了，不是记录
+  /// 出了问题。不画连接线——断口之间的直线是假数据。
+  final List<LatLng> gapEnds;
+
   final double height;
 
   @override
@@ -76,8 +84,38 @@ class RouteMap extends StatelessWidget {
                 ),
             ],
           ),
+          if (gapEnds.isNotEmpty)
+            MarkerLayer(
+              markers: <Marker>[
+                for (final LatLng p in gapEnds)
+                  Marker(
+                    point: p,
+                    width: _GapEndDot.size,
+                    height: _GapEndDot.size,
+                    child: const _GapEndDot(),
+                  ),
+              ],
+            ),
         ],
       ),
     );
   }
+}
+
+/// 断口端点：一个小圆点，实心警告色 + 深色边。
+///
+/// 与轨迹的深色描边同源：底图明度不可控，浅色块自己也要带一圈边界。
+class _GapEndDot extends StatelessWidget {
+  const _GapEndDot();
+
+  static const double size = 10;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: kAppWarning,
+          border: Border.all(color: kRouteCasing, width: 1.5),
+        ),
+      );
 }

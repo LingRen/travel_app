@@ -104,6 +104,17 @@ List<TrackPoint> pointsWithHr() => <TrackPoint>[
         ),
     ];
 
+/// 中段丢过 14 秒定位：详情页据此在地图上标断口、写一行中断摘要。
+List<TrackPoint> pointsWithGap() => <TrackPoint>[
+      const TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4),
+      const TrackPoint(
+          rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, speedMps: 4),
+      // 14 秒空档 + 约 1.1 公里位移：信号真的丢了。
+      const TrackPoint(rideId: 1, tMs: 16000, lat: 31.01, lon: 121.0, speedMps: 5),
+      const TrackPoint(
+          rideId: 1, tMs: 17000, lat: 31.0101, lon: 121.0, speedMps: 5),
+    ];
+
 Widget wrap({
   required WorkoutDetail detail,
   AppSettings settings = _settings,
@@ -410,6 +421,32 @@ void main() {
     expect(line.strokeWidth, kRouteStrokeWidth);
     expect(line.borderStrokeWidth, kRouteCasingWidth);
     expect(line.borderColor, kRouteCasing);
+  });
+
+  // 信号弱导致轨迹断开时，界面必须解释这个缺口：否则用户只看到线断了一截，
+  // 会以为记录出了问题。地图标两端 + 顶部写一行摘要，两处一起守。
+  testWidgets('信号中断时标出断口并写明段数与总时长', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithGap()),
+    );
+
+    expect(find.textContaining('信号中断 1 段'), findsOneWidget);
+    expect(find.textContaining('共 00:14'), findsOneWidget);
+
+    final MarkerLayer layer =
+        tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    expect(layer.markers.length, 2, reason: '断口两侧各一个端点标记');
+  });
+
+  testWidgets('没有断口时不显示中断摘要', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+    );
+
+    expect(find.textContaining('信号中断'), findsNothing);
+    expect(find.byType(MarkerLayer), findsNothing);
   });
 
   // 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还

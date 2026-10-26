@@ -174,6 +174,10 @@ class RecordController extends Notifier<RecordState> {
   /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
   bool _foreground = true;
 
+  /// 上一次节拍判定出的「信号弱」状态。只在翻转的那一刻播报一次，
+  /// 否则每秒一条「GPS 信号弱」会把其它提示全淹掉。
+  bool _wasGpsWeak = false;
+
   /// 后台期间上次强制落盘的时刻，用于把崩溃丢数据的窗口压到 3 秒内。
   int _lastBackgroundFlushMs = 0;
 
@@ -189,6 +193,8 @@ class RecordController extends Notifier<RecordState> {
   Future<void> start() async {
     if (_session != null) return;
     _error = null;
+    _lastFixMs = 0;
+    _wasGpsWeak = false;
 
     // 快照选中类型：start() 全程（等待权限/连传感器）都用这一刻的类型，
     // 期间用户点 chip 不再影响本次落库——「开始」按钮显示什么，落库就是什么。
@@ -295,6 +301,10 @@ class RecordController extends Notifier<RecordState> {
     final RecordingSession? session = _session;
     if (session == null || _finished) return;
     session.resume(_now());
+    // 暂停期间没有定位是正常的：恢复后从头开始算「多久没拿到点」，
+    // 否则一恢复就会先播一条「GPS 信号弱」，紧接着再播「定位已恢复」。
+    _lastFixMs = _now();
+    _wasGpsWeak = false;
     unawaited(ref.read(workoutRepositoryProvider).setStatus(_rideId!, WorkoutStatus.recording));
     _publish();
   }
@@ -342,6 +352,7 @@ class RecordController extends Notifier<RecordState> {
     _lastBackgroundFlushMs = 0;
     _lastCue = null;
     _cueSeq = 0;
+    _wasGpsWeak = false;
     state = RecordState(
       foreground: _foreground,
       selectedActivityType: _selectedActivityType,
@@ -432,6 +443,7 @@ class RecordController extends Notifier<RecordState> {
     session.tick(_now());
 
     _drainCues(session);
+    _collectGpsCues(session);
 
     if (_foreground) {
       _publish();
@@ -452,12 +464,32 @@ class RecordController extends Notifier<RecordState> {
   ///
   /// **刻意与前台判断解耦**：熄屏放口袋时界面不重建，但语音必须照常念出来——
   /// 选语音播报的全部理由就是这种场景。只在亮屏时播报等于这个功能没做。
-  void _drainCues(RecordingSession session) {
-    final List<RideCue> cues = session.takeCues();
+  void _drainCues(RecordingSession session) => _emitCues(session.takeCues());
+
+  /// 信号弱的进出各播报一次。见设计文档 11.2。
+  ///
+  /// 只在 recording 阶段判：暂停期间没有新定位是正常的，不该播「信号弱」。
+  /// 恢复时的那一句同样重要——骑行中用户看不见屏幕，不知道刚才那段已经接上了。
+  void _collectGpsCues(RecordingSession session) {
+    if (session.phase != RecordingPhase.recording) return;
+    final bool weak = _isGpsWeak();
+    if (weak == _wasGpsWeak) return;
+    _wasGpsWeak = weak;
+    _emitCues(<RideCue>[weak ? const GpsWeakCue() : const GpsRecoveredCue()]);
+  }
+
+  /// 把一批提示交给播报出口，并更新横幅要展示的那一条。
+  void _emitCues(List<RideCue> cues) {
     if (cues.isEmpty) return;
     _cueSeq++;
     _lastCue = cues.last;
-    unawaited(_cuePlayer.speak(cues, _distanceUnit, session.activityType));
+    unawaited(
+      _cuePlayer.speak(
+        cues,
+        _distanceUnit,
+        _session?.activityType ?? ActivityType.cycling,
+      ),
+    );
   }
 
   /// 提示播报用的单位。设置读不出来时按公里（与界面同一套兜底）。

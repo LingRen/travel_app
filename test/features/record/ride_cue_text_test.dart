@@ -78,4 +78,44 @@ void main() {
       );
     });
   });
+
+  group('信号提示文案', () {
+    test('横幅用 GPS 缩写，语音念「卫星信号」避免逐字念字母', () {
+      expect(
+        rideCueBannerText(
+          const GpsWeakCue(),
+          DistanceUnit.kilometer,
+          ActivityType.cycling,
+        ),
+        'GPS 信号弱',
+      );
+      expect(
+        rideCueSpeechText(
+          const GpsWeakCue(),
+          DistanceUnit.kilometer,
+          ActivityType.cycling,
+        ),
+        '卫星信号弱',
+      );
+    });
+
+    test('定位恢复两种出口文案一致', () {
+      expect(
+        rideCueBannerText(
+          const GpsRecoveredCue(),
+          DistanceUnit.kilometer,
+          ActivityType.running,
+        ),
+        '定位已恢复',
+      );
+      expect(
+        rideCueSpeechText(
+          const GpsRecoveredCue(),
+          DistanceUnit.kilometer,
+          ActivityType.running,
+        ),
+        '定位已恢复',
+      );
+    });
+  });
 }

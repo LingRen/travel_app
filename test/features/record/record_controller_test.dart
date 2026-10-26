@@ -514,6 +514,35 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('信号丢失与恢复各播报一次，不重复刷屏', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller =
+        container.read(recordControllerProvider.notifier);
+    await controller.start();
+
+    await rideOneSecond(tester, lat: 31.0);
+    cuePlayer.spokenBatches.clear();
+
+    // 11 秒没有新定位：只播一条「信号弱」，之后每秒的节拍不再重复播。
+    clockMs += 11000;
+    await tester.pump(const Duration(seconds: 11));
+
+    expect(cuePlayer.spokenBatches, <List<RideCue>>[
+      <RideCue>[const GpsWeakCue()],
+    ]);
+
+    // 定位回来：补一条「定位已恢复」。
+    await rideOneSecond(tester, lat: 31.001);
+
+    expect(
+      cuePlayer.spokenBatches
+          .map((List<RideCue> batch) => batch.single)
+          .toList(),
+      <RideCue>[const GpsWeakCue(), const GpsRecoveredCue()],
+    );
+    container.dispose();
+  });
+
   testWidgets('写入连续失败三次后提示用户', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller =

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../app/providers.dart';
 import '../../app/theme.dart';
@@ -96,10 +97,12 @@ class _DetailBody extends ConsumerWidget {
             kDefaultMapTileUrlTemplate;
     // 只有 GCJ-02 的瓦片源（高德、腾讯）才把轨迹转过去；OSM 这类 WGS-84
     // 源上再转一次会让轨迹整体偏出几百米。
-    final List<RouteSegment> route = buildRouteSegments(
-      points,
-      toGcj02: isGcj02TileSource(tileUrl),
-    );
+    final bool toGcj02 = isGcj02TileSource(tileUrl);
+    final List<RouteSegment> route = buildRouteSegments(points, toGcj02: toGcj02);
+    // 信号中断的断口。地图上标两端，顶部再写一行摘要——否则用户只看到轨迹
+    // 忽然断了，会以为记录出了问题。
+    final List<RouteGap> gaps = findRouteGaps(points, toGcj02: toGcj02);
+    final int gapSeconds = gaps.fold(0, (int sum, RouteGap g) => sum + g.durationS);
 
     // 竖屏维持 260dp；横屏等矮视口按高度收窄，见 [_kMapHeightShrink]。
     final double mapHeight = math.min(
@@ -113,6 +116,12 @@ class _DetailBody extends ConsumerWidget {
           segments: route,
           tileUrlTemplate: tileUrl,
           subdomains: kDefaultMapTileSubdomains,
+          gapEnds: <LatLng>[
+            for (final RouteGap g in gaps) ...<LatLng>[
+              LatLng(g.before.lat, g.before.lon),
+              LatLng(g.after.lat, g.after.lon),
+            ],
+          ],
           height: mapHeight,
         ),
         Padding(
@@ -147,6 +156,28 @@ class _DetailBody extends ConsumerWidget {
             ],
           ),
         ),
+        // 信号中断摘要。只在中段真的丢过定位时出现：这一行解释的是「轨迹为什么
+        // 断了一截」，放在地图正下方，读到的位置和看到的现象在同一屏。
+        if (gaps.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+            child: Row(
+              children: <Widget>[
+                const Icon(Icons.wifi_off, size: 16, color: kAppWarning),
+                const SizedBox(width: kSpaceS),
+                Expanded(
+                  child: Text(
+                    '信号中断 ${gaps.length} 段 · 共 ${formatDuration(gapSeconds)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: kAppWarning,
+                      fontFeatures: kTabularFigures,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         SummaryGrid(ride: ride, unit: unit),
         if (points.isEmpty)
           const Padding(

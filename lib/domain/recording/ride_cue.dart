@@ -45,3 +45,17 @@ final class SpeedCue extends RideCue {
   /// 跨档那一刻的实际速度（km/h）。
   final double kmh;
 }
+
+/// 定位丢失：超过 [kGpsGapMs] 没有新点。
+///
+/// 由记录控制器在 1Hz 节拍上判定，不经过 [CueDetector]——它看的是定位流的
+/// 时间，不是距离/速度。骑行中用户看不见屏幕时，这一句是「刚才那段白记了」的
+/// 唯一提示。
+final class GpsWeakCue extends RideCue {
+  const GpsWeakCue();
+}
+
+/// 定位恢复。与 [GpsWeakCue] 成对出现，只在状态翻转的那一刻各播一次。
+final class GpsRecoveredCue extends RideCue {
+  const GpsRecoveredCue();
+}

@@ -263,6 +263,61 @@ void main() {
     });
   });
 
+  // 信号中断的断口：详情页拿它在地图上标两端、在顶部写「信号中断 N 段」。
+  // 口径必须与画线用的 isMeaningfulGap 完全一致，否则会出现「线断了但没有标记」
+  // 或「标了断口但线连得上」这种自相矛盾。
+  group('信号中断断口', () {
+    test('超过 10 秒且真的挪了地方才算中断', () {
+      final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
+        pt(0),
+        pt(1000, lat: 31.0001),
+        // 14 秒空档 + 约 1.1 公里位移：真丢了信号。
+        pt(15000, lat: 31.01),
+        pt(16000, lat: 31.0101),
+      ], toGcj02: false);
+
+      expect(gaps.length, 1);
+      expect(gaps.single.startMs, 1000);
+      expect(gaps.single.endMs, 15000);
+      expect(gaps.single.durationS, 14);
+      // 断口两端就是那两个定位点本身。
+      expect(gaps.single.before.lat, closeTo(31.0001, 1e-9));
+      expect(gaps.single.after.lat, closeTo(31.01, 1e-9));
+    });
+
+    test('停车时的空档不算中断', () {
+      final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
+        pt(0),
+        // 14 秒空档，但只挪动了几米：系统在停车时停止送点，不是丢信号。
+        pt(14000, lat: 31.00002),
+      ], toGcj02: false);
+
+      expect(gaps, isEmpty);
+    });
+
+    test('没有坐标的传感器点被跳过，不在它前后各造一个假断口', () {
+      final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
+        pt(0),
+        const TrackPoint(rideId: 1, tMs: 5000, hr: 140),
+        pt(14000, lat: 31.01),
+      ], toGcj02: false);
+
+      expect(gaps.length, 1, reason: 'GPS 丢失期间的心率点不参与定位判定');
+      expect(gaps.single.startMs, 0);
+      expect(gaps.single.endMs, 14000);
+    });
+
+    test('断口端点跟随瓦片源做坐标转换', () {
+      final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
+        pt(0),
+        pt(14000, lat: 31.01),
+      ]);
+      final ({double lat, double lon}) expected = wgs84ToGcj02(31.01, 121.0);
+      expect(gaps.single.after.lat, closeTo(expected.lat, 1e-9));
+      expect(gaps.single.after.lon, closeTo(expected.lon, 1e-9));
+    });
+  });
+
   // 实时轨迹缩略图（设计文档 9.4）喂进来的是抽稀过的点：相邻两点隔 15 秒是
   // 常态（慢速骑行、红绿灯、400 点后折半压缩），拿 kGpsGapMs 去卡会把一条连续
   // 轨迹切成一截截——真机上看到的「断断续续」。断点改由采集侧显式标记。

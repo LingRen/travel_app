@@ -13,12 +13,15 @@ String rideCueBannerText(RideCue cue, DistanceUnit unit, ActivityType type) =>
       DistanceCue c => '${_distanceVerb(type)} ${c.km} 公里',
       SpeedCue c =>
         '速度 ${formatSpeedValue(c.kmh / 3.6, unit)} ${speedUnitLabel(unit)}',
+      GpsWeakCue() => 'GPS 信号弱',
+      GpsRecoveredCue() => '定位已恢复',
     };
 
 /// 语音播报的文案。
 ///
 /// 与提示条刻意不同：单位要念全（「km/h」会被 TTS 念成一串字母），时长要念成
-/// 「2分47秒」而不是「02:47」（后者会被读成「零二四七」）。
+/// 「2分47秒」而不是「02:47」（后者会被读成「零二四七」）。「GPS」同理——
+/// 字母缩写会被逐字念成「G P S」，念「卫星信号」更像人话。
 String rideCueSpeechText(RideCue cue, DistanceUnit unit, ActivityType type) =>
     switch (cue) {
       LapCue c =>
@@ -26,6 +29,8 @@ String rideCueSpeechText(RideCue cue, DistanceUnit unit, ActivityType type) =>
       DistanceCue c => '${_distanceVerb(type)} ${c.km} 公里',
       SpeedCue c =>
         '速度${formatSpeedValue(c.kmh / 3.6, unit)}${_spokenSpeedUnit(unit)}',
+      GpsWeakCue() => '卫星信号弱',
+      GpsRecoveredCue() => '定位已恢复',
     };
 
 /// 距离里程碑文案里的动词，按运动类型适配。

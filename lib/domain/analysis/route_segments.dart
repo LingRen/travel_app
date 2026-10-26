@@ -113,3 +113,54 @@ RouteVertex _vertex(TrackPoint p, bool toGcj02) {
   final ({double lat, double lon}) converted = wgs84ToGcj02(p.lat!, p.lon!);
   return RouteVertex(converted.lat, converted.lon);
 }
+
+/// 一次 GPS 信号中断：断口两侧的最后一个 / 第一个定位点，以及中断时长。
+///
+/// 口径与画线用的 [isMeaningfulGap] 完全一致——轨迹上断开的地方，这里就有一条。
+/// 详情页拿它在地图上标出断口、在顶部写一行「信号中断 N 段」。**不用于填补数据**：
+/// 缺口是真的没测到，插值出来的线是假的。
+class RouteGap {
+  const RouteGap({
+    required this.startMs,
+    required this.endMs,
+    required this.before,
+    required this.after,
+  });
+
+  /// 最后一次拿到定位的时刻。
+  final int startMs;
+
+  /// 恢复定位的时刻。
+  final int endMs;
+
+  /// 断口前最后一个定位点（已按瓦片源转换）。
+  final RouteVertex before;
+
+  /// 断口后第一个定位点（已按瓦片源转换）。
+  final RouteVertex after;
+
+  /// 中断时长（秒）。
+  int get durationS => ((endMs - startMs) / 1000).round();
+}
+
+/// 找出轨迹里所有值得标出来的信号中断。口径见 [findRouteGaps] 的类注释。
+List<RouteGap> findRouteGaps(List<TrackPoint> points, {bool toGcj02 = true}) {
+  final List<TrackPoint> located = <TrackPoint>[
+    for (final TrackPoint p in points)
+      if (p.hasPosition) p,
+  ];
+
+  final List<RouteGap> gaps = <RouteGap>[];
+  for (int i = 1; i < located.length; i++) {
+    final TrackPoint a = located[i - 1];
+    final TrackPoint b = located[i];
+    if (!isMeaningfulGap(a, b)) continue;
+    gaps.add(RouteGap(
+      startMs: a.tMs,
+      endMs: b.tMs,
+      before: _vertex(a, toGcj02),
+      after: _vertex(b, toGcj02),
+    ));
+  }
+  return gaps;
+}
