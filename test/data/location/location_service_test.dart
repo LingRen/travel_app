@@ -160,6 +160,40 @@ void main() {
     });
   });
 
+  group('hasPermission', () {
+    test('已授权时返回 true，且不申请权限', () async {
+      for (final LocationPermission permission in <LocationPermission>[
+        LocationPermission.whileInUse,
+        LocationPermission.always,
+      ]) {
+        final FakeLocationPlatform platform =
+            FakeLocationPlatform(permission: permission);
+        expect(
+          await LocationService(platform: platform).hasPermission(),
+          isTrue,
+          reason: permission.name,
+        );
+        expect(platform.requestPermissionCalls, 0);
+      }
+    });
+
+    test('未授权时返回 false，且不弹系统申请框', () async {
+      for (final LocationPermission permission in <LocationPermission>[
+        LocationPermission.denied,
+        LocationPermission.deniedForever,
+      ]) {
+        final FakeLocationPlatform platform =
+            FakeLocationPlatform(permission: permission);
+        expect(
+          await LocationService(platform: platform).hasPermission(),
+          isFalse,
+          reason: permission.name,
+        );
+        expect(platform.requestPermissionCalls, 0);
+      }
+    });
+  });
+
   group('checkReadiness', () {
     test('定位服务关闭时返回 serviceDisabled，且不申请权限', () async {
       final FakeLocationPlatform platform = FakeLocationPlatform(

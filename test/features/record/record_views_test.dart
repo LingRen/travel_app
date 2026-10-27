@@ -107,14 +107,20 @@ class _FakeLocationService implements LocationService {
 
   LocationReadiness readiness = LocationReadiness.ready;
 
+  /// 待机页预热定位的返回值；null 表示还没锁星或没有 WiFi 定位。
+  LocationFix? previewFix;
+
   @override
   Future<LocationReadiness> checkReadiness() async => readiness;
+
+  @override
+  Future<bool> hasPermission() async => true;
 
   @override
   Stream<LocationFix> fixes() => _fixes.stream;
 
   @override
-  Future<LocationFix?> quickPreviewFix() async => null;
+  Future<LocationFix?> quickPreviewFix() async => previewFix;
 
   @override
   Future<bool> openAppSettings() async => true;
@@ -198,18 +204,22 @@ void main() {
     VoidCallback? onFinish,
     ActivityType selectedActivityType = ActivityType.cycling,
     ValueChanged<ActivityType>? onSelectActivityType,
+    DateTime? now,
+    VoidCallback? onFixError,
   }) =>
       HandlebarView(
         state: state,
         unit: DistanceUnit.kilometer,
         tileUrlTemplate: kDefaultMapTileUrlTemplate,
         selectedActivityType: selectedActivityType,
+        now: now,
         onSelectActivityType: onSelectActivityType ?? (_) {},
         onStart: onStart ?? () {},
         onPause: onPause ?? () {},
         onResume: onResume ?? () {},
         onFinish: onFinish ?? () {},
         onPickDevice: onPickDevice ?? (_) {},
+        onFixError: onFixError,
       );
 
   group('骑行界面', () {
@@ -223,7 +233,7 @@ void main() {
       // 记录 tab 落地就是这一页（设计文档 10.1），未开始态即入口态：
       // 状态条写「未开始」，主按钮是「开始骑行」（文案带类型，见 chip 行），
       // 暂停键不出现（没东西可暂停）。
-      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('准备出发'), findsOneWidget);
       expect(find.text('开始骑行'), findsOneWidget);
       expect(find.text('暂停'), findsNothing);
       expect(find.text('继续'), findsNothing);
@@ -239,7 +249,7 @@ void main() {
 
       // 骑行中真正频繁按的是暂停（红灯、休息），它拿走 2/3 宽并落在右下拇指
       // 区；一次骑行只按一次的「结束」只占 1/3，被推到左侧并隔开一个 kSpaceL。
-      expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('记录中'), findsOneWidget);
       expect(find.text('结束'), findsOneWidget);
       expect(find.text('暂停'), findsOneWidget);
       expect(find.text('继续'), findsNothing);
@@ -407,7 +417,7 @@ void main() {
       expect(find.text('距离'), findsOneWidget);
       expect(find.text('1.23 km'), findsOneWidget);
       expect(find.text('时长'), findsOneWidget);
-      expect(find.text('01:30'), findsOneWidget);
+      expect(find.text('00:01:30'), findsOneWidget);
       expect(find.text('海拔'), findsOneWidget);
       expect(find.text('128 m'), findsOneWidget);
       expect(find.text('爬升'), findsOneWidget);
@@ -527,7 +537,7 @@ void main() {
       expect(find.text('21.6'), findsOneWidget);
       expect(find.text('km/h'), findsOneWidget);
       expect(find.text('1.23 km'), findsOneWidget);
-      expect(find.text('01:30'), findsOneWidget);
+      expect(find.text('00:01:30'), findsOneWidget);
       expect(find.text('132'), findsOneWidget);
       expect(find.text('85'), findsOneWidget);
       expect(find.text('功率'), findsOneWidget);
@@ -547,7 +557,209 @@ void main() {
       expect(find.text('功率'), findsNothing);
       // 心率、踏频、功率三格没数据，加上没高程数据的海拔，一共四个占位符。
       expect(find.text('--'), findsNWidgets(4));
-      expect(find.text('0'), findsNothing);
+      // 唯一的「0」是刻度尺的 0 档，不是把缺失的传感器读数显示成 0。
+      expect(find.text('0'), findsOneWidget);
+    });
+
+    testWidgets('纸色浮层：渐变是纸色，读数用墨色，不再挂深色投影',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
+
+      final DecoratedBox scrim = tester.widget<DecoratedBox>(
+        find.byKey(const Key('handlebar-scrim')),
+      );
+      final LinearGradient gradient =
+          (scrim.decoration as BoxDecoration).gradient! as LinearGradient;
+      // 顶部 0.94、底部 0.96 的纸色，中间两段全透明——地图带保持原亮度。
+      expect(gradient.colors.first, const Color(0xF0F5F0E5));
+      expect(gradient.colors.last, const Color(0xF5F5F0E5));
+      expect(gradient.colors[2].a, 0);
+      expect(gradient.colors[3].a, 0);
+
+      final AppPalette palette =
+          tester.element(find.text('距离')).palette;
+      final Text speed =
+          tester.widget<Text>(find.byKey(const Key('handlebar-speed')));
+      expect(speed.style!.color, palette.ink);
+      expect(speed.style!.shadows, isNull);
+      final Text distance = tester.widget<Text>(find.text('1.23 km'));
+      expect(distance.style!.color, palette.ink);
+    });
+
+    testWidgets('待机页显示日期时间与定位精度', (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(
+        RecordState(
+          previewFix: const LocationFix(
+            tMs: 1000,
+            lat: 30.0,
+            lon: 120.0,
+            accuracyM: 4,
+          ),
+        ),
+        now: DateTime(2026, 10, 27, 6, 42),
+      )));
+
+      expect(find.text('10月27日 · 周二 · 06:42'), findsOneWidget);
+      expect(find.text('定位已就绪'), findsOneWidget);
+      expect(find.text('精度 4 m · 按下开始，记录这一程。'), findsOneWidget);
+      expect(find.text('准备出发'), findsOneWidget);
+      expect(find.text(' · GPS 已锁定'), findsOneWidget);
+      expect(find.text('开始骑行'), findsOneWidget);
+    });
+
+    testWidgets('待机页未锁星时说明等待定位，开始按钮仍在',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(),
+        now: DateTime(2026, 10, 27, 6, 42),
+      )));
+
+      // 地图上的占位在待机页关掉了，只保留卡片这一句。
+      expect(find.text('等待定位…'), findsOneWidget);
+      expect(find.text('正在获取当前位置，按下开始后会再次尝试。'), findsOneWidget);
+      expect(find.text(' · 等待定位'), findsOneWidget);
+      expect(find.text('开始骑行'), findsOneWidget);
+    });
+
+    testWidgets('状态条按记录 / 暂停 / 弱信号切换文案',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(wrap(handlebar(active)));
+      expect(find.text('记录中'), findsOneWidget);
+      expect(find.text(' · 信号良好'), findsOneWidget);
+
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.paused,
+        elapsedMs: 1000,
+      ))));
+      expect(find.text('已暂停'), findsOneWidget);
+      expect(find.text(' · 信号良好'), findsNothing);
+
+      await tester.pumpWidget(wrap(handlebar(const RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 1000,
+        gpsWeak: true,
+      ))));
+      expect(find.text('记录中'), findsOneWidget);
+      expect(find.text(' · GPS 信号弱'), findsOneWidget);
+      expect(find.text(' · 信号良好'), findsNothing);
+    });
+
+    testWidgets('跑步 / 登山底部三格是心率、海拔、爬升，不出现踏频与功率',
+        (WidgetTester tester) async {
+      for (final ActivityType type in <ActivityType>[
+        ActivityType.running,
+        ActivityType.mountaineering,
+      ]) {
+        await tester.pumpWidget(wrap(handlebar(
+          RecordState(
+            rideId: 1,
+            phase: RecordingPhase.recording,
+            elapsedMs: 1000,
+            currentAltitudeM: 128,
+            elevationGainM: 342,
+            selectedActivityType: type,
+          ),
+          selectedActivityType: type,
+        )));
+
+        expect(find.text('当前配速'), findsOneWidget, reason: type.dbValue);
+        expect(find.text('海拔'), findsNWidgets(2), reason: type.dbValue);
+        expect(find.text('爬升'), findsNWidgets(2), reason: type.dbValue);
+        expect(find.text('128 m'), findsNWidgets(2), reason: type.dbValue);
+        expect(find.text('342 m'), findsNWidgets(2), reason: type.dbValue);
+        expect(find.text('踏频'), findsNothing, reason: type.dbValue);
+        expect(find.text('功率'), findsNothing, reason: type.dbValue);
+        expect(find.text('功率（估算）'), findsNothing, reason: type.dbValue);
+      }
+    });
+
+    testWidgets('地图加纸色滤镜、指北与比例尺，记录中不可拖动',
+        (WidgetTester tester) async {
+      final List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+        const TrackPoint(rideId: 1, tMs: 3000, lat: 30.002, lon: 120.002),
+      ];
+      await tester.pumpWidget(wrap(handlebar(RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 3000,
+        liveTrack: track,
+      ))));
+      await tester.pump();
+
+      expect(find.byKey(const Key('live-map-color-filter')), findsOneWidget);
+      expect(find.byKey(const Key('map-north')), findsOneWidget);
+      expect(find.byKey(const Key('map-scale-bar')), findsOneWidget);
+
+      final FlutterMap map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(map.options.interactionOptions.flags, InteractiveFlag.none);
+
+      final Polyline<Object> line = tester
+          .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+          .polylines
+          .first;
+      expect(
+        line.color,
+        tester.element(find.byKey(const Key('live-route-map'))).palette.accentInk,
+        reason: '轨迹用文字安全色，浅色纸底图上仍可读',
+      );
+    });
+
+    testWidgets('GPS 断点把实时轨迹切成两段', (WidgetTester tester) async {
+      final List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+        const TrackPoint(rideId: 1, tMs: 3000, lat: 30.002, lon: 120.002),
+        const TrackPoint(rideId: 1, tMs: 4000, lat: 30.003, lon: 120.003),
+      ];
+      await tester.pumpWidget(wrap(handlebar(RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 4000,
+        liveTrack: track,
+        liveTrackBreaks: const <int>{2},
+      ))));
+
+      final PolylineLayer<Object> layer =
+          tester.widget<PolylineLayer<Object>>(find.byType(PolylineLayer));
+      expect(layer.polylines.length, 2);
+    });
+
+    testWidgets('阻断类错误旁给出可执行的设置入口',
+        (WidgetTester tester) async {
+      int actions = 0;
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          errorMessage: '定位权限已被永久拒绝，请到系统设置中开启',
+        ),
+        onFixError: () => actions++,
+      )));
+      expect(find.text('去设置'), findsOneWidget);
+      await tester.tap(find.text('去设置'));
+      expect(actions, 1);
+
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          errorMessage: '系统定位服务未开启，请先打开定位',
+        ),
+        onFixError: () => actions++,
+      )));
+      expect(find.text('打开定位'), findsOneWidget);
+      await tester.tap(find.text('打开定位'));
+      expect(actions, 2);
+
+      // 写盘失败不是权限问题，旁边不该出现「去设置」。
+      await tester.pumpWidget(wrap(handlebar(
+        const RecordState(
+          errorMessage: '轨迹写入连续失败，请检查手机存储空间',
+        ),
+        onFixError: () => actions++,
+      )));
+      expect(find.text('去设置'), findsNothing);
+      expect(find.text('打开定位'), findsNothing);
     });
 
     testWidgets('骑行中点传感器灯就是配对入口', (WidgetTester tester) async {
@@ -744,8 +956,19 @@ void main() {
         selectedActivityType: ActivityType.running,
       )));
 
-      // 3 m/s → 每公里 333.3 秒 = 5'33"，单位是 /km 而不是 km/h。
-      expect(find.text("5'33\""), findsOneWidget);
+      // 3 m/s → 每公里 333.3 秒 = 5'33"，单位是 /km 而不是 km/h。分、秒是
+      // 独立 Text（分隔符降一档），逐段断言。
+      expect(
+        tester.widget<Text>(find.byKey(const Key('handlebar-speed'))).data,
+        '5',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('handlebar-pace-seconds')))
+            .data,
+        '33',
+      );
+      expect(find.byKey(const Key('handlebar-pace-unit')), findsOneWidget);
       expect(find.text('/km'), findsOneWidget);
       expect(find.text('km/h'), findsNothing);
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
@@ -860,7 +1083,7 @@ void main() {
 
       // 原来的准备页已经并进这一屏（设计文档 10.1）：进来就能看到读数区、
       // 缩略图、传感器灯与运动类型 chip 行，只是还没开始。
-      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('准备出发'), findsOneWidget);
       expect(find.text('开始骑行'), findsOneWidget);
       expect(find.text('开始'), findsNothing);
       expect(find.byKey(const Key('handlebar-speed')), findsOneWidget);
@@ -894,7 +1117,7 @@ void main() {
       expect(repo.startWorkoutCalls, 0, reason: '阻断类错误下不能创建骑行记录');
       expect(find.text('开始骑行'), findsOneWidget, reason: '仍停在未开始状态');
       // 失败时不该顺手把用户推进记录中：状态条与主按钮都得留在未开始态。
-      expect(find.text('未开始'), findsOneWidget);
+      expect(find.text('准备出发'), findsOneWidget);
       expect(find.text('结束'), findsNothing);
     });
 
@@ -908,7 +1131,7 @@ void main() {
 
       // 未开始只有一件事可做，那颗「开始」整宽独占；进入记录后底部换成按频率
       // 分宽的两键（设计文档 10.1），主动作是那颗 2/3 宽的「暂停」。
-      expect(find.text('进行中'), findsOneWidget);
+      expect(find.text('记录中'), findsOneWidget);
       expect(find.text('结束'), findsOneWidget);
       expect(find.text('暂停'), findsOneWidget);
       expect(find.text('开始骑行'), findsNothing);
@@ -941,6 +1164,54 @@ void main() {
 
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('待机页预热定位后显示精度', (WidgetTester tester) async {
+      location.previewFix = const LocationFix(
+        tMs: 1000,
+        lat: 30.0,
+        lon: 120.0,
+        accuracyM: 4,
+      );
+      await pumpRecordPage(tester);
+      // 预热定位在首帧后的回调里发起，再泵一帧让异步结果落到状态上。
+      await tester.pump();
+
+      expect(find.text('定位已就绪'), findsOneWidget);
+      expect(find.text('精度 4 m · 按下开始，记录这一程。'), findsOneWidget);
+      expect(find.text(' · GPS 已锁定'), findsOneWidget);
+    });
+
+    testWidgets('结束后显示结算页，完成后回到待机并保留类型',
+        (WidgetTester tester) async {
+      await pumpRecordPage(
+        tester,
+        settings: _testSettings.copyWith(lastActivityType: ActivityType.hiking),
+      );
+
+      await tester.tap(find.text('开始徒步'));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('handlebar-finish')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, '结束'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('记录已保存'), findsOneWidget);
+      expect(find.text('完成'), findsOneWidget);
+      expect(find.text('记录已写入历史，详情页可以看轨迹与曲线。'), findsOneWidget);
+
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('记录已保存'), findsNothing);
+      expect(find.text('开始徒步'), findsOneWidget, reason: '完成后保留上次类型');
     });
   });
 }

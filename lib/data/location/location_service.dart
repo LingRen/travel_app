@@ -163,6 +163,16 @@ class LocationService {
     return LocationReadiness.ready;
   }
 
+  /// 是否已经有定位权限。
+  ///
+  /// 与 [checkReadiness] 不同：只读当前权限，不弹系统申请框。待机页想先点亮
+  /// 地图、显示定位精度时用它——用户还没按「开始」，不该在这时就弹权限框。
+  Future<bool> hasPermission() async {
+    final LocationPermission permission = await _platform.checkPermission();
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   /// 跳转系统设置页，供权限被拒时引导用户。
   Future<bool> openAppSettings() => _platform.openAppSettings();
 

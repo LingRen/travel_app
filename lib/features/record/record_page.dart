@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/ble/ble_scanner.dart';
 import '../../data/ble/sensor_monitor.dart';
+import '../../data/location/location_service.dart';
 import '../../data/settings_repository.dart';
 import 'device_picker_sheet.dart';
 import 'handlebar_view.dart';
@@ -48,9 +49,15 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   }
 
   /// 崩溃恢复时用户在启动弹窗里选了「继续」，这里接着写那个会话。
+  ///
+  /// 没有待恢复的会话时预热一次定位：待机页要显示「GPS 已锁定 / 精度 N m」，
+  /// 不能等用户按下开始才第一次问位置。
   void _consumeResumeRequest() {
     final int? rideId = ref.read(resumeRideIdProvider);
-    if (rideId == null) return;
+    if (rideId == null) {
+      unawaited(ref.read(recordControllerProvider.notifier).loadIdlePreview());
+      return;
+    }
     ref.read(resumeRideIdProvider.notifier).state = null;
     unawaited(ref.read(recordControllerProvider.notifier).resumeExisting(rideId));
   }
@@ -76,6 +83,18 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
     await ref
         .read(recordControllerProvider.notifier)
         .connectSensor(kind, device.device);
+  }
+
+  /// 阻断类错误旁的「去设置 / 打开定位」。按错误文案选目标页。
+  Future<void> _openLocationHelp() async {
+    final String message =
+        ref.read(recordControllerProvider).errorMessage ?? '';
+    final LocationService service = ref.read(locationServiceProvider);
+    if (message.contains('定位服务')) {
+      await service.openLocationSettings();
+    } else {
+      await service.openAppSettings();
+    }
   }
 
   Future<void> _confirmFinish(RecordController controller) async {
@@ -128,12 +147,14 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
         unit: unit,
         tileUrlTemplate: tileUrl,
         selectedActivityType: state.selectedActivityType,
+        now: DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)()),
         onSelectActivityType: controller.selectActivityType,
         onStart: controller.start,
         onPause: controller.pause,
         onResume: controller.resume,
         onFinish: () => _confirmFinish(controller),
         onPickDevice: _pickDevice,
+        onFixError: _openLocationHelp,
       );
     }
 
@@ -146,71 +167,103 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
 /// 这一屏只出现一次、看一眼就走，所以把两个数字放到最大（display 字号），
 /// 其余全部撤掉。原来的版本在 28pt 数字下面留了一大片空白。
 class _FinishedView extends StatelessWidget {
-  const _FinishedView({required this.state, required this.unit, required this.onReset});
+  const _FinishedView({
+    required this.state,
+    required this.unit,
+    required this.onReset,
+  });
 
   final RecordState state;
   final DistanceUnit unit;
   final VoidCallback onReset;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-        child: Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.check_circle, size: 18, color: context.palette.accent),
-                  const SizedBox(width: kSpaceS),
-                  const Text('记录已保存', style: kSectionTextStyle),
-                ],
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return SafeArea(
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              kSpaceL,
+              kSpaceM,
+              kSpaceL,
+              kSpaceM,
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 20,
+                  color: palette.accentInk,
+                ),
+                const SizedBox(width: kSpaceS),
+                Text(
+                  '记录已保存',
+                  style: kSerifHeadingTextStyle.copyWith(fontSize: 22),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: palette.hairline),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _FinishedReadout(
+                      label: '距离',
+                      value: formatDistance(state.distanceM, unit),
+                    ),
+                    const SizedBox(height: kSpaceXl),
+                    _FinishedReadout(
+                      label: '时长',
+                      value: formatDuration(state.elapsedSeconds),
+                    ),
+                    const SizedBox(height: kSpaceXl),
+                    Text(
+                      '记录已写入历史，详情页可以看轨迹与曲线。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: palette.muted),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const Divider(height: 1),
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      _FinishedReadout(
-                        label: '距离',
-                        value: formatDistance(state.distanceM, unit),
-                      ),
-                      const SizedBox(height: kSpaceXl),
-                      _FinishedReadout(
-                        label: '时长',
-                        value: formatDuration(state.elapsedSeconds),
-                      ),
-                      const SizedBox(height: kSpaceXl),
-                      const Text(
-                        '记录已写入历史，详情页可以看轨迹与曲线。',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: kAppTextMuted),
-                      ),
-                    ],
+          ),
+          Divider(height: 1, color: palette.hairline),
+          Padding(
+            padding: const EdgeInsets.all(kSpaceL),
+            child: SizedBox(
+              width: double.infinity,
+              height: HandlebarView.buttonHeight,
+              child: FilledButton(
+                onPressed: onReset,
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.accentInk,
+                  foregroundColor: palette.onAccent,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(kRadiusButton),
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  '完成',
+                  style: TextStyle(
+                    fontSize: kFontTitle,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(kSpaceL),
-              child: FilledButton(
-                onPressed: onReset,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(HandlebarView.buttonHeight),
-                ),
-                child: const Text(
-                  '完成',
-                  style: TextStyle(fontSize: kFontTitle, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _FinishedReadout extends StatelessWidget {
@@ -222,9 +275,15 @@ class _FinishedReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
         children: <Widget>[
-          Text(value, style: kDisplayTextStyle),
+          // 结算是一次性静态读数，按设计文档用衬线大数字，不用仪表等宽字体。
+          Text(value, style: kSerifDisplayTextStyle),
           const SizedBox(height: kSpaceXs),
-          Text(label, style: kLabelTextStyle),
+          Text(
+            label,
+            style: kLabelTextStyle.copyWith(
+              color: context.palette.muted,
+            ),
+          ),
         ],
       );
 }

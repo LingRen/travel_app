@@ -380,6 +380,9 @@ class RecordController extends Notifier<RecordState> {
       foreground: _foreground,
       selectedActivityType: _selectedActivityType,
     );
+    // 结算页点「完成」回到待机：顺手重新预热定位，下一次开始前地图与精度
+    // 不用再从空白开始。
+    unawaited(loadIdlePreview());
   }
 
   /// 未开始时切换运动类型。记录中不可切换：类型在开始那一刻已经冻结落库。
@@ -448,6 +451,28 @@ class RecordController extends Notifier<RecordState> {
     final bool foreground = state == AppLifecycleState.resumed;
     if (foreground != _foreground) _foreground = foreground;
     if (!foreground) unawaited(_flush(force: true));
+    _publish();
+  }
+
+  /// 待机页预热定位：已有权限时先拿一次粗略定位，点亮地图并给出精度。
+  ///
+  /// 只读权限、不主动申请——用户还没按「开始」，弹权限框太早。没有权限或
+  /// 室外还没锁星时安静地停在「等待定位」，按下开始会走 [start] 的完整校验。
+  Future<void> loadIdlePreview() async {
+    // reset() 会 fire-and-forget 地调用它；测试或页面销毁可能赶在异步结果
+    // 回来之前，读已释放的 Ref 会直接抛异常。
+    if (!ref.mounted || _session != null || _finished) return;
+    if (!await _location.hasPermission()) return;
+    if (!ref.mounted) return;
+    final LocationFix? fix = await _location.quickPreviewFix();
+    if (!ref.mounted ||
+        fix == null ||
+        _session != null ||
+        _finished ||
+        _lastFixMs != 0) {
+      return;
+    }
+    _previewFix = fix;
     _publish();
   }
 

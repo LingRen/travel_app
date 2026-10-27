@@ -123,6 +123,15 @@ void main() {
     });
   });
 
+  group('formatDurationClock', () {
+    test('始终输出 h:mm:ss，跨小时不改变宽度', () {
+      expect(formatDurationClock(0), '00:00:00');
+      expect(formatDurationClock(90), '00:01:30');
+      expect(formatDurationClock(3661), '01:01:01');
+      expect(formatDurationClock(-1), '00:00:00');
+    });
+  });
+
   group('formatPace', () {
     test('公里/英里两种单位', () {
       // 10 km/h = 2.777... m/s → 6分整每公里。
@@ -137,6 +146,14 @@ void main() {
     test('formatPace 秒进位到整分', () {
       // 359.6 s/km round 后 60 秒 → 进位为整分：6'00" 而非 5'00"。
       expect(formatPace(1000 / 359.6, DistanceUnit.kilometer), "6'00\"");
+    });
+
+    test('paceParts 把分秒拆开给主读数排版', () {
+      final ({int minutes, int seconds})? parts =
+          paceParts(3.0, DistanceUnit.kilometer);
+      expect(parts!.minutes, 5);
+      expect(parts.seconds, 33);
+      expect(paceParts(0, DistanceUnit.kilometer), isNull);
     });
   });
 

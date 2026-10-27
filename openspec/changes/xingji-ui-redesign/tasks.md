@@ -26,14 +26,14 @@
 
 ## 4. 记录页
 
-- [ ] 4.1 将 `lib/features/record/handlebar_view.dart` 的两条 HUD 渐变改为纸色（顶部 0.94→0、底部 0.96→0），文字改墨色，移除深色投影，中间地图带保持原亮度。验证：`test/features/record/record_views_test.dart` 断言渐变颜色、文字颜色与地图带高度。
-- [ ] 4.2 重做待机态：类型浮标、日期时间、定位精度说明、四格读数与整宽「开始{类型}」；状态条不放动作键。验证：`test/features/record/record_views_test.dart` 覆盖定位已就绪与未就绪两种文案。
-- [ ] 4.3 记录中动作区改为「结束」1/3 靠左、「暂停 / 继续」2/3 靠右，结束先弹「结束本次{类型}？」确认。验证：`test/features/record/record_views_test.dart` 断言宽度比例、暂停切换与取消不改变状态。
-- [ ] 4.4 主读数与底部三格按类型分派：骑行显示速度 + 0–50 刻度 + 心率 / 踏频 / 功率；配速类型显示配速占位符 + 心率 / 海拔 / 爬升，不出现踏频与功率。验证：`test/features/record/record_views_test.dart` 覆盖骑行、跑步静止、登山三种布局。
-- [ ] 4.5 为 `live_route_map.dart` 的瓦片加降饱和暖色滤镜，轨迹用 `accentInk` + `#1D1B17CC` 描边，新增固定指北与比例尺，记录中 `InteractiveFlag.none`，GPS 中断 >10 秒断开。验证：`test/features/record/record_views_test.dart` 与 `test/domain/analysis/route_segments_test.dart` 通过。
-- [ ] 4.6 提示横幅浮在上下浮层之间，出现与收起不挤压读数；配速类型的整公里提示使用配速口径且不播报速度档。验证：`test/features/record/record_views_test.dart` 与 `test/domain/recording/cue_detector_test.dart` 覆盖布局不变与配速文案。
-- [ ] 4.7 新增结算页：显示「记录已保存」、距离、时长、写入历史说明与「完成」；完成后回到待机并保留上次类型。验证：`test/features/record/record_views_test.dart` 断言结算内容与完成后的待机态。
-- [ ] 4.8 定位权限、定位服务与连续写入失败的错误显示在动作区上方，附原因与下一步入口。验证：`test/features/record/record_views_test.dart` 覆盖权限被拒与服务关闭。
+- [x] 4.1 将 `lib/features/record/handlebar_view.dart` 的两条 HUD 渐变改为纸色（顶部 0.94→0、底部 0.96→0），文字改墨色，移除深色投影，中间地图带保持原亮度。验证：`test/features/record/record_views_test.dart` 断言渐变颜色、文字颜色与地图带高度。
+- [x] 4.2 重做待机态：类型浮标、日期时间、定位精度说明、四格读数与整宽「开始{类型}」；状态条不放动作键。验证：`test/features/record/record_views_test.dart` 覆盖定位已就绪与未就绪两种文案。
+- [x] 4.3 记录中动作区改为「结束」1/3 靠左、「暂停 / 继续」2/3 靠右，结束先弹「结束本次{类型}？」确认。验证：`test/features/record/record_views_test.dart` 断言宽度比例、暂停切换与取消不改变状态。
+- [x] 4.4 主读数与底部三格按类型分派：骑行显示速度 + 0–50 刻度 + 心率 / 踏频 / 功率；配速类型显示配速占位符 + 心率 / 海拔 / 爬升，不出现踏频与功率。验证：`test/features/record/record_views_test.dart` 覆盖骑行、跑步静止、登山三种布局。
+- [x] 4.5 为 `live_route_map.dart` 的瓦片加降饱和暖色滤镜，轨迹用 `accentInk` + `#1D1B17CC` 描边，新增固定指北与比例尺，记录中 `InteractiveFlag.none`，GPS 中断 >10 秒断开。验证：`test/features/record/record_views_test.dart` 与 `test/domain/analysis/route_segments_test.dart` 通过。
+- [x] 4.6 提示横幅浮在上下浮层之间，出现与收起不挤压读数；配速类型的整公里提示使用配速口径且不播报速度档。验证：`test/features/record/record_views_test.dart` 与 `test/domain/recording/cue_detector_test.dart` 覆盖布局不变与配速文案。
+- [x] 4.7 新增结算页：显示「记录已保存」、距离、时长、写入历史说明与「完成」；完成后回到待机并保留上次类型。验证：`test/features/record/record_views_test.dart` 断言结算内容与完成后的待机态。
+- [x] 4.8 定位权限、定位服务与连续写入失败的错误显示在动作区上方，附原因与下一步入口。验证：`test/features/record/record_views_test.dart` 覆盖权限被拒与服务关闭。
 - [ ] 4.9 更新 `README.md` 的记录页段落为纸本 HUD、五类型、按类型主读数与筛选口径。验证：文档描述与 4.1–4.8 的实现一致，无旧「深色浮层」表述。
 
 ## 5. 历史与单次详情

@@ -139,6 +139,9 @@ class _FakeLocationService implements LocationService {
   Future<LocationReadiness> checkReadiness() async => readiness;
 
   @override
+  Future<bool> hasPermission() async => true;
+
+  @override
   Stream<LocationFix> fixes() => _fixes.stream;
 
   @override

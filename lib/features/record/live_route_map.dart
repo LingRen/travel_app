@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -29,6 +31,7 @@ class LiveRouteMap extends StatefulWidget {
     this.subdomains = const <String>[],
     this.height,
     this.placeholderAlignment = Alignment.center,
+    this.showPlaceholder = true,
     super.key,
   });
 
@@ -57,6 +60,10 @@ class LiveRouteMap extends StatefulWidget {
   ///「等待定位…」占位文案的位置。铺满整页时浮层会盖住正中，占位要挪到露出的
   /// 那一条带上，否则用户看不到任何提示。
   final AlignmentGeometry placeholderAlignment;
+
+  /// 没有定位点时是否显示「等待定位…」。待机页已有一张说明卡片时可以关掉，
+  /// 避免同一句话出现两次；地图底仍铺纸色。
+  final bool showPlaceholder;
 
   @override
   State<LiveRouteMap> createState() => _LiveRouteMapState();
@@ -245,35 +252,58 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
         key: const Key('live-route-map'),
         height: widget.height,
         child: _vertices.isEmpty && _previewVertex == null
-            ? _placeholder()
-            : _map(),
+            ? _placeholder(context)
+            : _map(context),
       );
 
-  Widget _placeholder() => Align(
-        alignment: widget.placeholderAlignment,
-        child: const Text('等待定位…', style: kLabelTextStyle),
-      );
-
-  Widget _map() => FlutterMap(
-        mapController: _controller,
-        options: MapOptions(
-          initialCameraFit: _initialFit,
-          backgroundColor: kAppSurface,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.none,
+  Widget _placeholder(BuildContext context) => widget.showPlaceholder
+      ? Align(
+          alignment: widget.placeholderAlignment,
+          child: Text(
+            '等待定位…',
+            style: kLabelTextStyle.copyWith(color: context.palette.muted),
           ),
-          onMapReady: () {
-            _ready = true;
-            _scheduleSyncCamera();
-          },
+        )
+      : ColoredBox(color: context.palette.paper);
+
+  Widget _map(BuildContext context) {
+    // 360×640 这类矮屏上，上下浮层把地图带压到一百来像素；指北与比例尺
+    // 要再往上收一档，否则会落到主读数上。正常屏保持设计稿的中段位置。
+    final bool compact = MediaQuery.sizeOf(context).height < 700;
+    return FlutterMap(
+      mapController: _controller,
+      options: MapOptions(
+        initialCameraFit: _initialFit,
+        backgroundColor: context.palette.paper,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.none,
         ),
-        children: <Widget>[
-          TileLayer(
-            urlTemplate: widget.tileUrlTemplate,
-            subdomains: widget.subdomains,
-            userAgentPackageName: 'com.ling.cycling_app',
+        onMapReady: () {
+          _ready = true;
+          _scheduleSyncCamera();
+        },
+      ),
+      children: <Widget>[
+          // 瓦片降饱和 + 纸色薄罩，让高德的彩色底图接近设计稿的纸本舆图。
+          // 只包 TileLayer：轨迹与指北/比例尺不受影响。
+          ColorFiltered(
+            key: const Key('live-map-color-filter'),
+            colorFilter: ColorFilter.mode(
+              context.palette.paper.withValues(alpha: 0.16),
+              BlendMode.srcOver,
+            ),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.matrix(_kMapTileMatrix),
+              child: TileLayer(
+                urlTemplate: widget.tileUrlTemplate,
+                subdomains: widget.subdomains,
+                userAgentPackageName: 'com.ling.cycling_app',
+              ),
+            ),
           ),
-          PolylineLayer<Object>(polylines: _polylinesWith(context.palette.accent)),
+          PolylineLayer<Object>(
+            polylines: _polylinesWith(context.palette.accentInk),
+          ),
           if (_markerPoint != null)
             MarkerLayer(
               markers: <Marker>[
@@ -285,8 +315,138 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
                 ),
               ],
             ),
+          // 指北与比例尺只是参照，不吃手势。正常屏放在地图带中段，矮屏
+          // 往上收一档，避免压到主读数。
+          IgnorePointer(
+            child: Align(
+              alignment: compact
+                  ? const Alignment(0.9, -0.3)
+                  : const Alignment(0.9, 0.04),
+              child: const _NorthIndicator(),
+            ),
+          ),
+          IgnorePointer(
+            child: Align(
+              alignment: compact
+                  ? const Alignment(-0.86, -0.3)
+                  : const Alignment(-0.86, 0.2),
+              child: const _MapScaleBar(),
+            ),
+          ),
         ],
       );
+  }
+}
+
+/// 瓦片降饱和矩阵：保留 55% 饱和度，再把整体略微提亮，配合上面的纸色薄罩。
+///
+/// 高德瓦片是彩色道路图，直接铺在纸本界面上会喧宾夺主；降饱和后仍保留道路
+/// 层级与水面/绿地的区分，只是不再抢主题色轨迹。
+const List<double> _kMapTileMatrix = <double>[
+  0.6457, 0.3218, 0.0325, 0, 6,
+  0.0957, 0.8718, 0.0325, 0, 3,
+  0.0957, 0.3218, 0.5825, 0, -4,
+  0, 0, 0, 1, 0,
+];
+
+/// 指北标识。地图不旋转，所以永远指北。
+class _NorthIndicator extends StatelessWidget {
+  const _NorthIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      key: const Key('map-north'),
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.paper.withValues(alpha: 0.88),
+        border: Border.all(color: palette.hairline),
+      ),
+      child: Text(
+        '北',
+        style: kLabelTextStyle.copyWith(
+          fontSize: 11,
+          letterSpacing: 0,
+          color: palette.ink,
+        ),
+      ),
+    );
+  }
+}
+
+/// 比例尺。按当前缩放与纬度把米/像素换算成一个整数距离，画一段横线。
+///
+/// 地图记录中不可交互，但「这段路有多长」仍需要一个参照；比例尺只做显示，
+/// 用 [IgnorePointer] 包住，不改变地图的手势行为。
+class _MapScaleBar extends StatelessWidget {
+  const _MapScaleBar();
+
+  /// 目标横线长度（逻辑像素）。实际会取一个不超过它的 1/2/5 整十距离。
+  static const double _targetWidth = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final MapCamera camera = MapCamera.of(context);
+    final double metersPerPixel = _metersPerPixel(camera);
+    final double niceMeters = _niceDistance(metersPerPixel * _targetWidth);
+    final double width = (niceMeters / metersPerPixel).clamp(24.0, 140.0);
+    final String label = niceMeters >= 1000
+        ? '${(niceMeters / 1000).toStringAsFixed(niceMeters % 1000 == 0 ? 0 : 1)} km'
+        : '${niceMeters.round()} m';
+
+    return Column(
+      key: const Key('map-scale-bar'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: kLabelTextStyle.copyWith(
+            fontSize: 10,
+            letterSpacing: 0,
+            color: palette.ink,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Container(width: 2, height: 8, color: palette.ink),
+            Container(width: width, height: 2, color: palette.ink),
+            Container(width: 2, height: 8, color: palette.ink),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Web Mercator 下每像素代表的米数。瓦片边长按 flutter_map 默认的 256。
+  static double _metersPerPixel(MapCamera camera) {
+    const double equatorMeters = 40075016.686;
+    final double latRad = camera.center.latitude * math.pi / 180;
+    final double scale = math.pow(2, camera.zoom).toDouble();
+    return equatorMeters * math.cos(latRad) / (256 * scale);
+  }
+
+  /// 取 1、2、5 乘以 10 的整数次幂中不超过 [raw] 的最大值。
+  static double _niceDistance(double raw) {
+    if (!raw.isFinite || raw <= 0) return 100;
+    final double exponent =
+        math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+    final double fraction = raw / exponent;
+    final double nice = fraction >= 5
+        ? 5
+        : fraction >= 2
+            ? 2
+            : 1;
+    return nice * exponent;
+  }
 }
 
 /// 当前位置的指示点：强调色圆点加白边，和轨迹线区分开。

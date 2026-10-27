@@ -59,6 +59,16 @@ String formatDuration(int seconds) {
   return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
 }
 
+/// 记录 HUD 的时钟文本，始终 `h:mm:ss`，形如 `00:48:26`。
+///
+/// 与 [formatDuration] 分开：历史 / 结算用紧凑的 `48:26`，记录页的时长每
+/// 秒都在跳，固定三位（时:分:秒）能避免跨过一小时时整行数字横向位移。
+String formatDurationClock(int seconds) {
+  final int safe = seconds < 0 ? 0 : seconds;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(safe ~/ 3600)}:${two((safe % 3600) ~/ 60)}:${two(safe % 60)}';
+}
+
 /// 功率文本。没配功率计时没有功率数据，用破折号占位。
 String formatPower(double? watts) => watts == null ? '—' : '${watts.round()} W';
 
@@ -90,6 +100,14 @@ String formatChineseYearMonth(DateTime t) {
   return '$year · $month月';
 }
 
+/// 待机页的日期时间，形如 `10月27日 · 周二 · 06:42`。用本地时区。
+String formatChineseMonthDayWeekTime(DateTime t) {
+  const List<String> weekdays = <String>['一', '二', '三', '四', '五', '六', '日'];
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${t.month}月${t.day}日 · 周${weekdays[t.weekday - 1]} · '
+      '${two(t.hour)}:${two(t.minute)}';
+}
+
 /// 日期时间文本，形如 `2026-09-21 08:05`。用本地时区。
 ///
 /// 不做「今年省略年份」的压缩：列表里跨年的记录混在一起时，省略年份会看不出
@@ -106,26 +124,15 @@ String formatDateTime(int epochMs) {
 /// 速度无效（0、负值）时显示 `--`：起步前没有速度可言，摆 0 会像「停着」。
 /// 显示格式固定 `5'30"`（分'秒"，秒数两位补齐），单位尾缀由调用方拼。
 String formatPace(double speedMps, DistanceUnit unit) {
-  final ({int minutes, int seconds})? parts = _paceParts(speedMps, unit);
+  final ({int minutes, int seconds})? parts = paceParts(speedMps, unit);
   if (parts == null) return '--';
   return "${parts.minutes}'${parts.seconds.toString().padLeft(2, '0')}\"";
 }
 
-/// 配速的口语念法，如 `5分30秒每公里`，供语音播报使用。
-///
-/// 不能直接把 [formatPace] 的结果扔给 TTS：`5'30"` 会被逐字符念出来。
-/// 速度无效时说「暂无配速」，与界面上 `--` 的含义一致。
-String formatPaceSpoken(double speedMps, DistanceUnit unit) {
-  final ({int minutes, int seconds})? parts = _paceParts(speedMps, unit);
-  if (parts == null) return '暂无配速';
-  final String where = unit == DistanceUnit.mile ? '每英里' : '每公里';
-  final String minutes = parts.minutes > 0 ? '${parts.minutes}分' : '';
-  final String seconds = parts.seconds > 0 ? '${parts.seconds}秒' : '';
-  return '$minutes$seconds$where';
-}
-
 /// 配速的分秒构成。速度无效时返回 null。
-({int minutes, int seconds})? _paceParts(double speedMps, DistanceUnit unit) {
+///
+/// 主读数要把「分」「秒」「分隔符」分成不同字号，不能只拿拼接好的字符串。
+({int minutes, int seconds})? paceParts(double speedMps, DistanceUnit unit) {
   if (speedMps <= 0) return null;
   // 秒每单位距离：公里 1000m，英里 1609.344m。
   final double metersPerUnit =
@@ -136,4 +143,17 @@ String formatPaceSpoken(double speedMps, DistanceUnit unit) {
   // remainder 可能为 60（round 进位），归一化进位到整分。
   if (rest == 60) return (minutes: minutes + 1, seconds: 0);
   return (minutes: minutes, seconds: rest);
+}
+
+/// 配速的口语念法，如 `5分30秒每公里`，供语音播报使用。
+///
+/// 不能直接把 [formatPace] 的结果扔给 TTS：`5'30"` 会被逐字符念出来。
+/// 速度无效时说「暂无配速」，与界面上 `--` 的含义一致。
+String formatPaceSpoken(double speedMps, DistanceUnit unit) {
+  final ({int minutes, int seconds})? parts = paceParts(speedMps, unit);
+  if (parts == null) return '暂无配速';
+  final String where = unit == DistanceUnit.mile ? '每英里' : '每公里';
+  final String minutes = parts.minutes > 0 ? '${parts.minutes}分' : '';
+  final String seconds = parts.seconds > 0 ? '${parts.seconds}秒' : '';
+  return '$minutes$seconds$where';
 }
