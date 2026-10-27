@@ -191,11 +191,15 @@ class _GapEndDot extends StatelessWidget {
   );
 }
 
-/// 起点：18 dp 主题色空心环 +「起」。
+/// 起点：22 dp 主题色环，环内衬纸色圆底 +「起」。
+///
+/// 不能只画空心环：「起」是主题色，而轨迹也是主题色，标记又正落在轨迹端点上，
+/// 字会整块融进线里（真机截图可见）。纸色圆底把轨迹压住，字才立得住；最外圈
+/// 再留 2 dp 纸色边，环跨过轨迹时也不至于糊成一片。
 class _StartMarker extends StatelessWidget {
   const _StartMarker();
 
-  static const double size = 18;
+  static const double size = 22;
 
   @override
   Widget build(BuildContext context) {
@@ -204,18 +208,22 @@ class _StartMarker extends StatelessWidget {
       label: '起点',
       child: Container(
         key: const Key('detail-start-marker'),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: palette.accentInk, width: 2),
-        ),
-        child: Text(
-          '起',
-          style: TextStyle(
-            fontSize: 9,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            color: palette.accentInk,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: palette.paper),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: palette.accentInk, width: 2),
+          ),
+          child: Text(
+            '起',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              color: palette.accentInk,
+            ),
           ),
         ),
       ),
