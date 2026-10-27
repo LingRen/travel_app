@@ -176,319 +176,339 @@ class HandlebarView extends StatelessWidget {
       ],
     ];
 
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        // 整页就是地图。读数与按钮浮在它上面（见类注释与设计文档 10.1）。
-        LiveRouteMap(
-          points: state.liveTrack,
-          breakIndexes: state.liveTrackBreaks,
-          previewFix: state.previewFix,
-          tileUrlTemplate: tileUrlTemplate,
-          subdomains: kDefaultMapTileSubdomains,
-          placeholderAlignment: const Alignment(0, -0.35),
-          // 待机页的「等待定位」由中间那张卡片说明，地图上不再重复一句。
-          showPlaceholder: !idle,
-        ),
-        // 纸色渐变。中间 0.46–0.56 留全透明，地图带保持原亮度；上下两块靠
-        // 纸色压住足够的不透明度，墨色文字在浅色瓦片上也读得出来。
-        IgnorePointer(
-          child: DecoratedBox(
-            key: const Key('handlebar-scrim'),
-            decoration: const BoxDecoration(gradient: _kPaperScrim),
-            child: const SizedBox.expand(),
-          ),
-        ),
-        SafeArea(
-          child: Column(
-            children: <Widget>[
-              // 顶部一块：状态 + 本次运动的总量与环境读数。
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  kSpaceM,
-                  kSpaceS,
-                  kSpaceM,
-                  0,
-                ),
-                child: Column(
-                  children: <Widget>[
-                    _StatusStrip(
-                      state: state,
-                      idle: idle,
-                      paused: paused,
-                      locationReady: locationReady,
-                      activityType: selectedActivityType,
-                      onPickDevice: onPickDevice,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        // 小屏 + 大字号时纵向预算不够：底部导航与状态栏吃掉一百多 dp 后，地图带会
+        // 被压到 120 dp 以下。这一档把速度刻度尺收起来、纵向间距减半，把空间还给地图。
+        final bool compact =
+            MediaQuery.textScalerOf(context).scale(1) >= 1.2 &&
+            constraints.maxHeight < 620;
+        final double blockGap = compact ? kSpaceXs : kSpaceS;
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            // 整页就是地图。读数与按钮浮在它上面（见类注释与设计文档 10.1）。
+            LiveRouteMap(
+              points: state.liveTrack,
+              breakIndexes: state.liveTrackBreaks,
+              previewFix: state.previewFix,
+              tileUrlTemplate: tileUrlTemplate,
+              subdomains: kDefaultMapTileSubdomains,
+              placeholderAlignment: const Alignment(0, -0.35),
+              // 待机页的「等待定位」由中间那张卡片说明，地图上不再重复一句。
+              showPlaceholder: !idle,
+            ),
+            // 纸色渐变。中间 0.46–0.56 留全透明，地图带保持原亮度；上下两块靠
+            // 纸色压住足够的不透明度，墨色文字在浅色瓦片上也读得出来。
+            IgnorePointer(
+              child: DecoratedBox(
+                key: const Key('handlebar-scrim'),
+                decoration: const BoxDecoration(gradient: _kPaperScrim),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            SafeArea(
+              child: Column(
+                children: <Widget>[
+                  // 顶部一块：状态 + 本次运动的总量与环境读数。
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      kSpaceM,
+                      kSpaceS,
+                      kSpaceM,
+                      0,
                     ),
-                    const SizedBox(height: kSpaceS),
-                    _MetricRow(
-                      dividerMargin: kSpaceS,
-                      cells: <Widget>[
-                        _MetricCell(
-                          label: '距离',
-                          value: formatDistance(state.distanceM, unit),
+                    child: Column(
+                      children: <Widget>[
+                        _StatusStrip(
+                          state: state,
+                          idle: idle,
+                          paused: paused,
+                          locationReady: locationReady,
+                          activityType: selectedActivityType,
+                          compact: compact,
+                          onPickDevice: onPickDevice,
                         ),
-                        _MetricCell(
-                          label: '时长',
-                          value: formatDurationClock(state.elapsedSeconds),
-                        ),
-                        // 海拔与爬升：前者是「现在多高」，后者是「一共爬了多少」。
-                        // 设备不给高程时海拔显示 `--`，不显示 0——0 米海拔是一个
-                        // 具体读数，会和「没有数据」混起来。
-                        _MetricCell(
-                          label: '海拔',
-                          value: altitudeM == null
-                              ? '--'
-                              : formatElevation(altitudeM, unit),
-                        ),
-                        _MetricCell(
-                          label: '爬升',
-                          value: formatElevation(state.elevationGainM, unit),
+                        const SizedBox(height: kSpaceS),
+                        _MetricRow(
+                          dividerMargin: kSpaceS,
+                          cells: <Widget>[
+                            _MetricCell(
+                              label: '距离',
+                              value: formatDistance(state.distanceM, unit),
+                            ),
+                            _MetricCell(
+                              label: '时长',
+                              value: formatDurationClock(state.elapsedSeconds),
+                            ),
+                            // 海拔与爬升：前者是「现在多高」，后者是「一共爬了多少」。
+                            // 设备不给高程时海拔显示 `--`，不显示 0——0 米海拔是一个
+                            // 具体读数，会和「没有数据」混起来。
+                            _MetricCell(
+                              label: '海拔',
+                              value: altitudeM == null
+                                  ? '--'
+                                  : formatElevation(altitudeM, unit),
+                            ),
+                            _MetricCell(
+                              label: '爬升',
+                              value: formatElevation(
+                                state.elevationGainM,
+                                unit,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              // 中间这条是留给地图的：待机卡片与提示横幅都浮在它正中。放在
-              // Stack 里而不是直接排进 Column——横幅每闪一次都改高度的话，
-              // 上下两块会跟着跳。
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: <Widget>[
-                    if (idle)
-                      Center(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              ActivityTypeChip(
-                                key: const Key('activity-type-chip'),
-                                type: selectedActivityType,
-                                onTap: () => showPaperSheet<void>(
-                                  context: context,
-                                  builder: (_) => ActivityTypeSheet(
-                                    current: selectedActivityType,
-                                    onSelected: onSelectActivityType,
+                  ),
+                  // 中间这条是留给地图的：待机卡片与提示横幅都浮在它正中。放在
+                  // Stack 里而不是直接排进 Column——横幅每闪一次都改高度的话，
+                  // 上下两块会跟着跳。
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        if (idle)
+                          Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  ActivityTypeChip(
+                                    key: const Key('activity-type-chip'),
+                                    type: selectedActivityType,
+                                    onTap: () => showPaperSheet<void>(
+                                      context: context,
+                                      builder: (_) => ActivityTypeSheet(
+                                        current: selectedActivityType,
+                                        onSelected: onSelectActivityType,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: kSpaceM),
+                                  _IdleCard(
+                                    now: now ?? DateTime.now(),
+                                    accuracyM: state.previewFix?.accuracyM,
+                                    locationReady: locationReady,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: kSpaceM),
-                              _IdleCard(
-                                now: now ?? DateTime.now(),
-                                accuracyM: state.previewFix?.accuracyM,
-                                locationReady: locationReady,
-                              ),
-                            ],
+                            ),
                           ),
+                        RideCueBanner(
+                          cue: state.lastCue,
+                          seq: state.cueSeq,
+                          unit: unit,
+                          activityType: selectedActivityType,
                         ),
-                      ),
-                    RideCueBanner(
-                      cue: state.lastCue,
-                      seq: state.cueSeq,
-                      unit: unit,
-                      activityType: selectedActivityType,
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              // 底部一块：当下读数（主读数、传感器）与动作区。拇指与视线都在这儿，
-              // 所以把「现在多少」放这一块，把「一共多少」放到上面那块。
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  kSpaceM,
-                  0,
-                  kSpaceM,
-                  kSpaceS,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      usePace ? '当前配速' : '当前速度',
-                      style: kLabelTextStyle.copyWith(color: palette.muted),
+                  ),
+                  // 底部一块：当下读数（主读数、传感器）与动作区。拇指与视线都在这儿，
+                  // 所以把「现在多少」放这一块，把「一共多少」放到上面那块。
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      kSpaceM,
+                      0,
+                      kSpaceM,
+                      kSpaceS,
                     ),
-                    const SizedBox(height: kSpaceXs),
-                    // 速度与单位排成一行：单位贴着基线放在右侧，省下的那十几
-                    // 像素留给地图。数字仍由 FittedBox 兜底——正常尺寸下它不
-                    // 参与布局，只有横向真的放不下时才缩小。
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: usePace
-                          ? _PaceReadout(
-                              speedMps: state.currentSpeedMps,
-                              unit: unit,
-                              placeholder: pacePlaceholder,
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: <Widget>[
-                                Text(
-                                  formatSpeedValue(state.currentSpeedMps, unit),
-                                  key: const Key('handlebar-speed'),
-                                  style: kInstrumentTextStyle,
-                                ),
-                                const SizedBox(width: kSpaceS),
-                                Text(
-                                  speedUnitLabel(unit),
-                                  style: kLabelTextStyle.copyWith(
-                                    color: palette.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                    const SizedBox(height: kSpaceS),
-                    // 速度刻度尺只有骑行有意义：配速没有「现在处于什么档位」的
-                    // 参照，跑步看它纯属噪音。
-                    if (!usePace) ...<Widget>[
-                      _SpeedScale(speedMps: state.currentSpeedMps),
-                      const SizedBox(height: kSpaceS),
-                    ],
-                    _MetricRow(dividerMargin: kSpaceS, cells: bottomCells),
-                    // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
-                    // 这一屏：前者让「开始」点了没反应，不说清楚就成了哑键；
-                    // 后者发生在骑行中。不用 SnackBar——它自己会消失，而这两个
-                    // 错误在用户处理前一直成立。
-                    if (error != null) ...<Widget>[
-                      const SizedBox(height: kSpaceS),
-                      _InlineNotice(
-                        message: error,
-                        actionLabel: errorActionLabel,
-                        onAction: onFixError,
-                      ),
-                    ],
-                    const SizedBox(height: kSpaceS),
-                    // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；
-                    // 记录中按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，
-                    // 「结束」占 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满
-                    // buttonHeight 高，骑车戴手套也按得中（见 10.1）。
-                    SizedBox(
-                      width: double.infinity,
-                      height: buttonHeight,
-                      child: idle
-                          ? FilledButton.icon(
-                              key: const Key('handlebar-start'),
-                              onPressed: onStart,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.accentInk,
-                                foregroundColor: palette.onAccent,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(kRadiusButton),
-                                  ),
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.play_arrow_rounded,
-                                size: 22,
-                              ),
-                              label: Text(
-                                '开始${selectedActivityType.label}',
-                                style: const TextStyle(
-                                  fontSize: kFontTitle,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            )
-                          : Row(
-                              // stretch：两颗键都要撑满 buttonHeight，而不是各自
-                              // 取固有高度后在 64 高的槽里居中——那会让它们看起来
-                              // 比未开始态那颗「开始」小一圈。
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                Expanded(
-                                  flex: finishFlex,
-                                  child: OutlinedButton(
-                                    key: const Key('handlebar-finish'),
-                                    onPressed: onFinish,
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: palette.ink,
-                                      backgroundColor: palette.sheet.withValues(
-                                        alpha: 0.72,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          usePace ? '当前配速' : '当前速度',
+                          style: kLabelTextStyle.copyWith(color: palette.muted),
+                        ),
+                        const SizedBox(height: kSpaceXs),
+                        // 速度与单位排成一行：单位贴着基线放在右侧，省下的那十几
+                        // 像素留给地图。数字仍由 FittedBox 兜底——正常尺寸下它不
+                        // 参与布局，只有横向真的放不下时才缩小。
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: usePace
+                              ? _PaceReadout(
+                                  speedMps: state.currentSpeedMps,
+                                  unit: unit,
+                                  placeholder: pacePlaceholder,
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: <Widget>[
+                                    Text(
+                                      formatSpeedValue(
+                                        state.currentSpeedMps,
+                                        unit,
                                       ),
-                                      side: BorderSide(color: palette.hairline),
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.all(
-                                          Radius.circular(kRadiusButton),
+                                      key: const Key('handlebar-speed'),
+                                      style: kInstrumentTextStyle,
+                                    ),
+                                    const SizedBox(width: kSpaceS),
+                                    Text(
+                                      speedUnitLabel(unit),
+                                      style: kLabelTextStyle.copyWith(
+                                        color: palette.muted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                        SizedBox(height: blockGap),
+                        // 速度刻度尺只有骑行有意义：配速没有「现在处于什么档位」的
+                        // 参照，跑步看它纯属噪音。纵向紧张的档位（见 compact）也收起来。
+                        if (!usePace && !compact) ...<Widget>[
+                          _SpeedScale(speedMps: state.currentSpeedMps),
+                          SizedBox(height: blockGap),
+                        ],
+                        _MetricRow(dividerMargin: kSpaceS, cells: bottomCells),
+                        // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
+                        // 这一屏：前者让「开始」点了没反应，不说清楚就成了哑键；
+                        // 后者发生在骑行中。不用 SnackBar——它自己会消失，而这两个
+                        // 错误在用户处理前一直成立。
+                        if (error != null) ...<Widget>[
+                          const SizedBox(height: kSpaceS),
+                          _InlineNotice(
+                            message: error,
+                            actionLabel: errorActionLabel,
+                            onAction: onFixError,
+                          ),
+                        ],
+                        SizedBox(height: blockGap),
+                        // 底部动作区。未开始只有一件事可做，那颗「开始」就整宽独占；
+                        // 记录中按动作频率分宽：「暂停 / 继续」占 2/3 落在右下拇指区，
+                        // 「结束」占 1/3 被推到左侧并隔开一个 kSpaceL。两颗键都撑满
+                        // buttonHeight 高，骑车戴手套也按得中（见 10.1）。
+                        SizedBox(
+                          width: double.infinity,
+                          height: buttonHeight,
+                          child: idle
+                              ? FilledButton.icon(
+                                  key: const Key('handlebar-start'),
+                                  onPressed: onStart,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: palette.accentInk,
+                                    foregroundColor: palette.onAccent,
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(kRadiusButton),
+                                      ),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 22,
+                                  ),
+                                  label: Text(
+                                    '开始${selectedActivityType.label}',
+                                    style: const TextStyle(
+                                      fontSize: kFontTitle,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                )
+                              : Row(
+                                  // stretch：两颗键都要撑满 buttonHeight，而不是各自
+                                  // 取固有高度后在 64 高的槽里居中——那会让它们看起来
+                                  // 比未开始态那颗「开始」小一圈。
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: <Widget>[
+                                    Expanded(
+                                      flex: finishFlex,
+                                      child: OutlinedButton(
+                                        key: const Key('handlebar-finish'),
+                                        onPressed: onFinish,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: palette.ink,
+                                          backgroundColor: palette.sheet
+                                              .withValues(alpha: 0.72),
+                                          side: BorderSide(
+                                            color: palette.hairline,
+                                          ),
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.all(
+                                              Radius.circular(kRadiusButton),
+                                            ),
+                                          ),
+                                        ),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: <Widget>[
+                                              const Icon(
+                                                Icons.stop_rounded,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: kSpaceS),
+                                              Text(
+                                                '结束',
+                                                style: const TextStyle(
+                                                  fontSize: kFontTitle,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          const Icon(
-                                            Icons.stop_rounded,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: kSpaceS),
-                                          Text(
-                                            '结束',
-                                            style: const TextStyle(
-                                              fontSize: kFontTitle,
-                                              fontWeight: FontWeight.w700,
+                                    const SizedBox(width: kSpaceL),
+                                    Expanded(
+                                      flex: toggleFlex,
+                                      child: FilledButton(
+                                        key: const Key('handlebar-toggle'),
+                                        onPressed: paused ? onResume : onPause,
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: palette.accentInk,
+                                          foregroundColor: palette.onAccent,
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.all(
+                                              Radius.circular(kRadiusButton),
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: kSpaceL),
-                                Expanded(
-                                  flex: toggleFlex,
-                                  child: FilledButton(
-                                    key: const Key('handlebar-toggle'),
-                                    onPressed: paused ? onResume : onPause,
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: palette.accentInk,
-                                      foregroundColor: palette.onAccent,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.all(
-                                          Radius.circular(kRadiusButton),
+                                        ),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: <Widget>[
+                                              Icon(
+                                                paused
+                                                    ? Icons.play_arrow_rounded
+                                                    : Icons.pause_rounded,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: kSpaceS),
+                                              Text(
+                                                paused ? '继续' : '暂停',
+                                                style: const TextStyle(
+                                                  fontSize: kFontTitle,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          Icon(
-                                            paused
-                                                ? Icons.play_arrow_rounded
-                                                : Icons.pause_rounded,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(width: kSpaceS),
-                                          Text(
-                                            paused ? '继续' : '暂停',
-                                            style: const TextStyle(
-                                              fontSize: kFontTitle,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -530,6 +550,7 @@ class _StatusStrip extends StatelessWidget {
     required this.paused,
     required this.locationReady,
     required this.activityType,
+    required this.compact,
     required this.onPickDevice,
   });
 
@@ -540,6 +561,7 @@ class _StatusStrip extends StatelessWidget {
 
   /// 本次运动的类型。传感器灯按它裁剪：跑步没有踏频/功率灯。
   final ActivityType activityType;
+  final bool compact;
   final void Function(SensorKind kind) onPickDevice;
 
   @override
@@ -589,14 +611,19 @@ class _StatusStrip extends StatelessWidget {
               ),
               if (detail != null)
                 Flexible(
-                  child: Text(
-                    detail,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: kFontBody,
-                      color: state.gpsWeak && !idle && !paused
-                          ? palette.warning
-                          : palette.muted,
+                  // 窄屏大字号时「· GPS 已锁定」会被挤成省略号；这一档把这段
+                  // 辅助文字的字号锁回基准，状态词本身仍随系统字号放大。
+                  child: MediaQuery.withClampedTextScaling(
+                    maxScaleFactor: compact ? 1.0 : 2.0,
+                    child: Text(
+                      detail,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: kFontBody,
+                        color: state.gpsWeak && !idle && !paused
+                            ? palette.warning
+                            : palette.muted,
+                      ),
                     ),
                   ),
                 ),
@@ -1002,7 +1029,7 @@ class _MetricCell extends StatelessWidget {
             Flexible(
               child: Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: kLabelTextStyle.copyWith(color: palette.muted),
               ),
