@@ -161,14 +161,21 @@ void main() {
   testWidgets('卡片显示日期、距离、时长、均速与爬升', (WidgetTester tester) async {
     await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
 
-    expect(find.text('2026-09-21 08:00'), findsOneWidget);
-    expect(find.text('25.30 km'), findsOneWidget);
+    // 日期列：MM.DD + 星期；时间行写「出发」。
+    expect(find.text('09.21'), findsOneWidget);
+    expect(find.text('周一'), findsOneWidget);
+    expect(find.text('08:00 出发'), findsOneWidget);
+    // 距离拆成衬线大数字 + 小单位；移动均速 7.44 m/s → 26.8 km/h。
+    expect(find.text('25.3'), findsOneWidget);
+    expect(find.text('km'), findsOneWidget);
     expect(find.text('1:00:00'), findsOneWidget);
-    // 卡片渲染的是移动均速（7.44 m/s），不是 avgSpeedMps（7.03 m/s）。
     expect(find.text('26.8 km/h'), findsOneWidget);
-    expect(find.text('爬升 180 m'), findsOneWidget);
-    // 这次骑行没有功率数据，不能摆一个 `功率 0 W`。
-    expect(find.textContaining('功率'), findsNothing);
+    expect(find.text('180 m'), findsOneWidget);
+    expect(find.text('爬升'), findsOneWidget);
+    // 这次骑行没有功率数据：列还在，值用破折号，不能摆 `0 W`。
+    expect(find.text('功率'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+    expect(find.textContaining('0 W'), findsNothing);
   });
 
   testWidgets('类型筛选：选跑步只留跑步卡片，选全部恢复', (WidgetTester tester) async {
@@ -238,7 +245,8 @@ void main() {
     );
 
     // 2.5 m/s → 1000/2.5 = 400 s/km → 6'40"。
-    expect(find.text('配速 6\'40"'), findsOneWidget);
+    expect(find.text('配速'), findsOneWidget);
+    expect(find.text('6\'40"'), findsOneWidget);
     expect(find.textContaining('km/h'), findsNothing);
   });
 
@@ -274,7 +282,7 @@ void main() {
   //
   // 第二条记录刻意没有功率：空格子若被抽掉，前三列会跟着变宽，第一条记录的
   // 均速与爬升就会和它对不上。
-  testWidgets('四项读数按 4:4:5:3 分成四列，且跨条目对齐', (WidgetTester tester) async {
+  testWidgets('四项读数按固定四列排开，跨条目对齐', (WidgetTester tester) async {
     await pumpHistory(
       tester,
       rides: <Workout>[
@@ -309,33 +317,19 @@ void main() {
       ridePoints: points(),
     );
 
+    // 四条标签各自出现两次，值按列对齐：同一列第二行的左边缘与第一行相同。
+    for (final String label in <String>['时长', '均速', '爬升', '功率']) {
+      expect(find.text(label), findsNWidgets(2), reason: label);
+    }
     double left(String text) => tester.getTopLeft(find.text(text)).dx;
-
-    final double duration = left('1:00:00');
-    final double speed = left('26.8 km/h');
-    final double climb = left('爬升 180 m');
-    final double power = left('135 W');
-
-    // 列宽按 4:4:5:3 分配：爬升列比另外两列各宽一档。它带的是两个汉字加四个
-    // 数字（`爬升 1240 m`），四列等分时在 360dp 的机器上末尾的 `m` 会被挤到
-    // 第二行——这条是 360dp 真机上实测到的，等分改成加权就是为了它。
-    //
-    // 只比比例、不钉绝对像素：视口宽度是这条用例自己设的，钉死像素等于把视口
-    // 尺寸也一起钉住了。测试字体每个字符都是一个方块，和真机字体的字宽对不上，
-    // 所以这里量不出「会不会换行」，只钉得住列宽的比例关系。
-    //
-    // 相邻两列的左边缘之差 = 前一列的宽 + 列间距，所以要先减掉 `kSpaceS`。
-    final double durationW = (speed - duration) - kSpaceS;
-    final double speedW = (climb - speed) - kSpaceS;
-    final double climbW = (power - climb) - kSpaceS;
-    expect(speedW, closeTo(durationW, 0.01));
-    expect(climbW, closeTo(durationW * 5 / 4, 0.01));
-
-    // 第二条没有功率读数，但前三列必须落在与第一条完全相同的位置上。
-    // 半小时的时长文本是 `30:00`：不足一小时不补小时位，见 `formatDuration`。
-    expect(left('30:00'), closeTo(duration, 0.01));
-    expect(left('21.6 km/h'), closeTo(speed, 0.01));
-    expect(left('爬升 60 m'), closeTo(climb, 0.01));
+    expect(left('30:00'), closeTo(left('1:00:00'), 0.01));
+    expect(left('21.6 km/h'), closeTo(left('26.8 km/h'), 0.01));
+    expect(left('60 m'), closeTo(left('180 m'), 0.01));
+    final Finder powerLabels = find.text('功率');
+    expect(
+      tester.getTopLeft(powerLabels.first).dx,
+      closeTo(tester.getTopLeft(powerLabels.last).dx, 0.01),
+    );
   });
 
   testWidgets('卡片里渲染迷你速度曲线', (WidgetTester tester) async {
@@ -347,17 +341,22 @@ void main() {
   // 计划书原本这条用例与「卡片显示日期…」完全重复（同样的输入、同样的断言），
   // 区分力为零。改成同时钉住「有/无标题」两个渲染分支：
   // 无标题时只有一行日期；有标题时标题与日期各一行（日期不会重复出现）。
-  testWidgets('无标题时只渲染一行日期', (WidgetTester tester) async {
+  testWidgets('无标题时用「{类型}记录」兜底，并保留日期列', (WidgetTester tester) async {
     await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
 
-    expect(find.text('2026-09-21 08:00'), findsOneWidget);
+    expect(find.text('骑行记录'), findsOneWidget);
+    expect(find.text('09.21'), findsOneWidget);
+    expect(find.text('08:00 出发'), findsOneWidget);
+    expect(find.text('2026-09-21 08:00'), findsNothing);
   });
 
-  testWidgets('有标题时标题与日期各渲染一行', (WidgetTester tester) async {
+  testWidgets('有标题时标题与日期列各自渲染', (WidgetTester tester) async {
     await pumpHistory(tester, rides: <Workout>[ride(1, title: '晨骑')], ridePoints: points());
 
     expect(find.text('晨骑'), findsOneWidget);
-    expect(find.text('2026-09-21 08:00'), findsOneWidget);
+    expect(find.text('09.21'), findsOneWidget);
+    expect(find.text('08:00 出发'), findsOneWidget);
+    expect(find.text('骑行记录'), findsNothing);
   });
 
   testWidgets('英里单位下按英里显示距离', (WidgetTester tester) async {
@@ -373,7 +372,107 @@ void main() {
       ),
     );
 
-    expect(find.text('15.72 mi'), findsOneWidget); // 25300 m
+    expect(find.text('15.7'), findsOneWidget); // 25300 m
+    expect(find.text('mi'), findsOneWidget);
+  });
+
+  testWidgets('页眉显示记录总数、最近月份与当月摘要', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(
+          1,
+          title: '晨骑',
+          startedAtMs: DateTime(2026, 10, 5, 8).millisecondsSinceEpoch,
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    expect(find.text('运 动 日 志'), findsOneWidget);
+    expect(find.text('二〇二六 · 十月'), findsOneWidget);
+    expect(find.text('共 1 次'), findsOneWidget);
+    // 25.3 km / 1 小时 0 分，按最近有记录的月份汇总。
+    expect(find.textContaining('本月 1 次'), findsOneWidget);
+    expect(find.textContaining('25.3 km'), findsOneWidget);
+    expect(find.textContaining('1 小时 0 分'), findsOneWidget);
+    expect(find.byKey(const Key('sport-filter-trigger')), findsOneWidget);
+  });
+
+  testWidgets('首屏只渲染最近月份，点「更早的记录」后展开', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(
+          1,
+          title: '十月记录',
+          startedAtMs: DateTime(2026, 10, 5, 8).millisecondsSinceEpoch,
+        ),
+        ride(
+          2,
+          title: '九月记录',
+          startedAtMs: DateTime(2026, 9, 20, 8).millisecondsSinceEpoch,
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    expect(find.text('十月记录'), findsOneWidget);
+    expect(find.text('九月记录'), findsNothing);
+    expect(find.byKey(const Key('history-older')), findsOneWidget);
+    expect(find.textContaining('更早的记录 · 1 次'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('history-older')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('九月记录'), findsOneWidget);
+    expect(find.text('二〇二六 · 九月'), findsOneWidget);
+    expect(find.byKey(const Key('history-older')), findsNothing);
+  });
+
+  testWidgets('切换筛选后收起「更早的记录」', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(
+          1,
+          title: '十月骑行',
+          startedAtMs: DateTime(2026, 10, 5, 8).millisecondsSinceEpoch,
+        ),
+        ride(
+          2,
+          title: '九月跑步',
+          startedAtMs: DateTime(2026, 9, 20, 8).millisecondsSinceEpoch,
+          activityType: ActivityType.running,
+        ),
+      ],
+      ridePoints: points(),
+    );
+
+    await tester.tap(find.byKey(const Key('history-older')));
+    await tester.pumpAndSettle();
+    expect(find.text('九月跑步'), findsOneWidget);
+
+    await selectFilter(tester, 'sport-filter-running');
+    expect(find.text('十月骑行'), findsNothing);
+    expect(find.text('九月跑步'), findsOneWidget);
+    // 只剩一个月份，更早入口不存在；再切回全部，展开状态已复位。
+    await selectFilter(tester, 'sport-filter-all');
+    expect(find.text('十月骑行'), findsOneWidget);
+    expect(find.byKey(const Key('history-older')), findsOneWidget);
+  });
+
+  testWidgets('筛选空态提供「查看全部运动」', (WidgetTester tester) async {
+    await pumpHistory(tester, rides: const <Workout>[]);
+
+    await selectFilter(tester, 'sport-filter-running');
+    expect(find.text('还没有跑步记录'), findsOneWidget);
+    expect(find.byKey(const Key('history-show-all')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('history-show-all')));
+    await tester.pumpAndSettle();
+    expect(find.text('还没有运动记录'), findsOneWidget);
+    expect(find.byKey(const Key('history-show-all')), findsNothing);
   });
 
   testWidgets('点卡片进入详情页', (WidgetTester tester) async {

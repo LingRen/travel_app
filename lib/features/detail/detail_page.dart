@@ -15,7 +15,6 @@ import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_summary.dart';
-import '../activity/activity_type_visuals.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
 import 'gpx_export.dart';
@@ -27,15 +26,12 @@ import 'summary_grid.dart';
 const double _kMapHeight = 260;
 
 /// 矮视口（横屏）下地图最多占视口高度的比例。
-///
-/// 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还
-/// 高：首屏被地图占满，而地图开了拖动会吃掉滑动手势，页面滚不动，下方的汇总与
-/// 曲线就够不到了（真机横屏实测）。收窄到视口高度的一小段，让下面能露出来。
 const double _kMapHeightShrink = 0.45;
 
-/// 单次骑行详情页。见设计文档 10.3。
+/// 单次运动详情页。见设计文档 10.3。
 ///
-/// 地图轨迹与导出 GPX 由 Task 10 补在本页上方与下方。
+/// 页眉只有返回与「{类型}详情」，地图装在一张发丝线卡片里；下面是标题 / 日期、
+/// 两行三列汇总、按类型命名的曲线与导出入口。
 class DetailPage extends ConsumerWidget {
   const DetailPage({required this.rideId, super.key});
 
@@ -43,23 +39,70 @@ class DetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<WorkoutDetail> detail = ref.watch(rideDetailProvider(rideId));
+    final AsyncValue<WorkoutDetail> detail =
+        ref.watch(rideDetailProvider(rideId));
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
             DistanceUnit.kilometer;
+    final String typeLabel = detail.value?.ride.activityType.label ?? '运动';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          detail.value?.ride.title ??
-              '${detail.value?.ride.activityType.label ?? '运动'}详情',
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            _DetailTopBar(title: '$typeLabel详情'),
+            Expanded(
+              child: detail.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (Object error, StackTrace stack) =>
+                    Center(child: Text('读取记录失败：$error')),
+                data: (WorkoutDetail data) =>
+                    _DetailBody(detail: data, unit: unit),
+              ),
+            ),
+          ],
         ),
       ),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) =>
-            Center(child: Text('读取记录失败：$error')),
-        data: (WorkoutDetail data) => _DetailBody(detail: data, unit: unit),
+    );
+  }
+}
+
+class _DetailTopBar extends StatelessWidget {
+  const _DetailTopBar({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return SizedBox(
+      height: 52,
+      child: Stack(
+        children: <Widget>[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('detail-back'),
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: TextButton.styleFrom(
+                foregroundColor: palette.ink,
+                padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+                minimumSize: const Size(44, 44),
+              ),
+              icon: const Icon(Icons.chevron_left, size: 22),
+              label: const Text('返回'),
+            ),
+          ),
+          Center(
+            child: Text(
+              title,
+              style: kLabelTextStyle.copyWith(
+                color: palette.muted,
+                letterSpacing: 3,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -73,13 +116,14 @@ class _DetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppPalette palette = context.palette;
     final Workout ride = detail.ride;
     final List<TrackPoint> points = detail.points;
     final int maxHeartRate =
         ref.watch(appSettingsProvider).value?.maxHeartRate ??
             kDefaultMaxHeartRate;
 
-    final List<CurveSample> speed =
+    final List<CurveSample> speedSamples =
         buildCurve(points, metric: CurveMetric.speed);
     final List<CurveSample> hr =
         buildCurve(points, metric: CurveMetric.heartRate);
@@ -88,89 +132,137 @@ class _DetailBody extends ConsumerWidget {
     final List<CurveSample> power =
         buildCurve(points, metric: CurveMetric.power);
 
+    final bool usesPace = ride.activityType.usesPace;
+    final double metersPerUnit =
+        unit == DistanceUnit.mile ? 1609.344 : 1000.0;
+    // 配速曲线纵轴是「秒/单位距离」，不是速度。直接把速度曲线改个标题会
+    // 让纵轴含义和标注对不上，这里先换算再交给同一个画笔。
+    final List<CurveSample> paceSamples = <CurveSample>[
+      for (final CurveSample sample in speedSamples)
+        if (sample.y > 0)
+          CurveSample(
+            xSeconds: sample.xSeconds,
+            y: metersPerUnit / sample.y,
+            segment: sample.segment,
+          ),
+    ];
+    final List<CurveSample> mainSamples =
+        usesPace ? paceSamples : speedSamples;
+
     final WorkoutSummary? s = ride.summary;
     final String speedUnit = speedUnitLabel(unit);
-    String speedText(double mps) => '${formatSpeedValue(mps, unit)} $speedUnit';
+    final String paceUnit = paceUnitLabel(unit);
+    final double? mainAverage = usesPace
+        ? (s != null && s.movingAvgSpeedMps > 0
+            ? metersPerUnit / s.movingAvgSpeedMps
+            : null)
+        : s?.avgSpeedMps;
 
     final String tileUrl =
         ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
             kDefaultMapTileUrlTemplate;
-    // 只有 GCJ-02 的瓦片源（高德、腾讯）才把轨迹转过去；OSM 这类 WGS-84
-    // 源上再转一次会让轨迹整体偏出几百米。
     final bool toGcj02 = isGcj02TileSource(tileUrl);
-    final List<RouteSegment> route = buildRouteSegments(points, toGcj02: toGcj02);
-    // 信号中断的断口。地图上标两端，顶部再写一行摘要——否则用户只看到轨迹
-    // 忽然断了，会以为记录出了问题。
+    final List<RouteSegment> route =
+        buildRouteSegments(points, toGcj02: toGcj02);
     final List<RouteGap> gaps = findRouteGaps(points, toGcj02: toGcj02);
-    final int gapSeconds = gaps.fold(0, (int sum, RouteGap g) => sum + g.durationS);
+    final int gapSeconds =
+        gaps.fold(0, (int sum, RouteGap gap) => sum + gap.durationS);
 
-    // 竖屏维持 260dp；横屏等矮视口按高度收窄，见 [_kMapHeightShrink]。
     final double mapHeight = math.min(
       _kMapHeight,
       MediaQuery.sizeOf(context).height * _kMapHeightShrink,
     );
+    final String? title = ride.title?.trim();
+    final String displayTitle = (title == null || title.isEmpty)
+        ? '${ride.activityType.label}记录'
+        : title;
 
     return ListView(
+      padding: EdgeInsets.zero,
       children: <Widget>[
-        RouteMap(
-          segments: route,
-          tileUrlTemplate: tileUrl,
-          subdomains: kDefaultMapTileSubdomains,
-          gapEnds: <LatLng>[
-            for (final RouteGap g in gaps) ...<LatLng>[
-              LatLng(g.before.lat, g.before.lon),
-              LatLng(g.after.lat, g.after.lon),
-            ],
-          ],
-          height: mapHeight,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: palette.hairline),
+              borderRadius: BorderRadius.circular(kRadiusPanel),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: RouteMap(
+              segments: route,
+              tileUrlTemplate: tileUrl,
+              subdomains: kDefaultMapTileSubdomains,
+              gapEnds: <LatLng>[
+                for (final RouteGap gap in gaps) ...<LatLng>[
+                  LatLng(gap.before.lat, gap.before.lon),
+                  LatLng(gap.after.lat, gap.after.lon),
+                ],
+              ],
+              height: mapHeight,
+            ),
+          ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              // 类型徽标：图标 + 标签 + 日期一排。图标与历史卡片同规格（16、
-              // 不占色），混合类型的记录在详情页里一眼能看出是骑行还是跑步。
-              Icon(
-                activityTypeIcon(ride.activityType),
-                size: 16,
-                color: kAppTextMuted,
-              ),
-              const SizedBox(width: kSpaceS),
-              Text(
-                ride.activityType.label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: kAppTextMuted,
-                  fontFeatures: kTabularFigures,
+              Expanded(
+                child: Text(
+                  displayTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: kSerifHeadingTextStyle.copyWith(
+                    fontSize: 28,
+                    height: 1.2,
+                  ),
                 ),
               ),
-              const SizedBox(width: kSpaceS),
-              Text(
-                formatDateTime(ride.startedAtMs),
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: kAppTextMuted,
-                  fontFeatures: kTabularFigures,
-                ),
+              const SizedBox(width: kSpaceM),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    formatMonthDayDot(ride.startedAtMs),
+                    style: kSerifHeadingTextStyle.copyWith(
+                      fontSize: 22,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${formatChineseWeekday(ride.startedAtMs)} · '
+                    '${formatTimeHm(ride.startedAtMs)}',
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.muted,
+                      fontFeatures: kTabularFigures,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        // 信号中断摘要。只在中段真的丢过定位时出现：这一行解释的是「轨迹为什么
-        // 断了一截」，放在地图正下方，读到的位置和看到的现象在同一屏。
+        // 只在地图真的断过时解释；不展示天气、地点或路线名。
         if (gaps.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+            padding: const EdgeInsets.fromLTRB(
+              kSpaceL,
+              kSpaceS,
+              kSpaceL,
+              0,
+            ),
             child: Row(
               children: <Widget>[
-                const Icon(Icons.wifi_off, size: 16, color: kAppWarning),
+                Icon(Icons.wifi_off, size: 16, color: palette.warning),
                 const SizedBox(width: kSpaceS),
                 Expanded(
                   child: Text(
                     '信号中断 ${gaps.length} 段 · 共 ${formatDuration(gapSeconds)}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: kAppWarning,
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.warning,
                       fontFeatures: kTabularFigures,
                     ),
                   ),
@@ -178,40 +270,51 @@ class _DetailBody extends ConsumerWidget {
               ],
             ),
           ),
-        SummaryGrid(ride: ride, unit: unit),
+        const SizedBox(height: kSpaceS),
+        Divider(height: 1, indent: kSpaceL, endIndent: kSpaceL,
+            color: palette.hairline),
+        SummaryGrid(
+          key: const Key('detail-summary'),
+          ride: ride,
+          unit: unit,
+          points: points,
+        ),
+        Divider(height: 1, indent: kSpaceL, endIndent: kSpaceL,
+            color: palette.hairline),
         if (points.isEmpty)
           Padding(
             padding: const EdgeInsets.all(kSpaceL),
-            child: Text('这次${ride.activityType.label}没有轨迹数据', style: kMutedTextStyle),
+            child: Text(
+              '这次${ride.activityType.label}没有轨迹数据',
+              style: kMutedTextStyle,
+            ),
           ),
-        // 每项指标自成一组：标题 → 该项的读数 → 该项的曲线。原来所有读数挤在
-        // 顶部一张规格表里、所有曲线排在下面，读「心率多少、心率怎么变的」
-        // 要在两处之间来回对；并到一组之后从上往下读一遍就够。
-        if (speed.length >= 2)
+        if (mainSamples.length >= 2)
           _MetricSection(
-            title: '速度',
-            readouts: <SpecEntry>[
-              if (s != null) ('总均速', speedText(s.avgSpeedMps)),
-              if (s != null) ('移动均速', speedText(s.movingAvgSpeedMps)),
-              if (s?.maxSpeedMps != null) ('最高速', speedText(s!.maxSpeedMps!)),
-            ],
+            key: const Key('detail-section-speed'),
+            title: usesPace ? '配速' : '速度',
+            summary: usesPace
+                ? (s == null
+                    ? ''
+                    : '均配 ${formatPace(s.movingAvgSpeedMps, unit)} $paceUnit')
+                : (s == null
+                    ? ''
+                    : '均速 ${formatSpeedValue(s.avgSpeedMps, unit)} $speedUnit'),
             child: CurveChart(
-              samples: speed,
-              unitLabel: speedUnit,
-              // 用总均速而不是移动均速：曲线是按时间铺开的，静止的时间也在
-              // 里面，它的时间平均就是「总距离 / 总时长」，也就是总均速。
-              averageValue: s?.avgSpeedMps,
-              formatValue: (double v) => formatSpeedValue(v, unit),
-              baseColorArgb: context.palette.accent.toARGB32(),
+              samples: mainSamples,
+              unitLabel: usesPace ? paceUnit : speedUnit,
+              averageValue: mainAverage,
+              formatValue: usesPace
+                  ? formatPaceSeconds
+                  : (double value) => formatSpeedValue(value, unit),
+              baseColorArgb: palette.accentInk.toARGB32(),
             ),
           ),
         if (hr.length >= 2)
           _MetricSection(
+            key: const Key('detail-section-hr'),
             title: '心率',
-            readouts: <SpecEntry>[
-              if (s?.avgHr != null) ('平均心率', '${s!.avgHr!.round()} bpm'),
-              if (s?.maxHr != null) ('最高心率', '${s!.maxHr} bpm'),
-            ],
+            summary: _hrSummary(s),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
@@ -220,58 +323,78 @@ class _DetailBody extends ConsumerWidget {
                   unitLabel: 'bpm',
                   averageValue: s?.avgHr?.toDouble(),
                   formatValue: _wholeNumber,
-                  baseColorArgb: context.palette.accent.toARGB32(),
+                  baseColorArgb: palette.accentInk.toARGB32(),
                 ),
                 const SizedBox(height: kSpaceM),
-                HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
+                HrZoneBar(
+                  breakdown: hrZoneBreakdown(points, maxHeartRate),
+                ),
               ],
             ),
           ),
-        if (cadence.length >= 2)
+        if (!usesPace && cadence.length >= 2)
           _MetricSection(
+            key: const Key('detail-section-cadence'),
             title: '踏频',
-            readouts: <SpecEntry>[
-              if (s?.avgCadence != null)
-                ('平均踏频', '${s!.avgCadence!.round()} rpm'),
-            ],
+            summary: s?.avgCadence == null
+                ? ''
+                : '均 ${s!.avgCadence!.round()} rpm',
             child: CurveChart(
               samples: cadence,
               unitLabel: 'rpm',
               averageValue: s?.avgCadence,
               formatValue: _wholeNumber,
-              baseColorArgb: context.palette.accent.toARGB32(),
+              baseColorArgb: palette.accentInk.toARGB32(),
             ),
           ),
-        if (power.length >= 2)
+        if (!usesPace && power.length >= 2)
           _MetricSection(
-            // 没接功率计的那次骑行，这里的功率是按速度、坡度与体重估出来的
-            // （见 `analysis/power.dart`）。存进库里的数值与实测功率长得一模一样，
-            // 只有设备名能区分，所以标题里写明。
+            key: const Key('detail-section-power'),
+            // 没接功率计时，这里的功率是按速度、坡度与体重估出来的；标题
+            // 必须写明，否则会被当成功率计的实测值。
             title: ride.powerDeviceName == null ? '功率（估算）' : '功率',
-            readouts: <SpecEntry>[
-              if (s?.avgPowerW != null)
-                ('平均功率', '${s!.avgPowerW!.round()} W'),
-              if (s?.maxPowerW != null) ('最高功率', '${s!.maxPowerW} W'),
-            ],
+            summary: _powerSummary(s),
             child: CurveChart(
               samples: power,
               unitLabel: 'W',
               averageValue: s?.avgPowerW,
               formatValue: _wholeNumber,
-              baseColorArgb: context.palette.accent.toARGB32(),
+              baseColorArgb: palette.accentInk.toARGB32(),
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceXl, kSpaceL, 0),
-          child: FilledButton.icon(
-            onPressed: () => _exportGpx(context, ride, points),
-            icon: const Icon(Icons.ios_share),
-            label: const Text('导出 GPX'),
+          padding: const EdgeInsets.fromLTRB(
+            kSpaceL,
+            kSpaceXl,
+            kSpaceL,
+            kSpaceXxl,
+          ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const Key('gpx-export'),
+              onPressed: () => _exportGpx(context, ride, points),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('导出 GPX'),
+            ),
           ),
         ),
-        const SizedBox(height: kSpaceXxl),
       ],
     );
+  }
+
+  static String _hrSummary(WorkoutSummary? s) {
+    final List<String> parts = <String>[];
+    if (s?.avgHr != null) parts.add('均 ${s!.avgHr!.round()}');
+    if (s?.maxHr != null) parts.add('高 ${s!.maxHr}');
+    return parts.isEmpty ? '' : '${parts.join(' · ')} bpm';
+  }
+
+  static String _powerSummary(WorkoutSummary? s) {
+    final List<String> parts = <String>[];
+    if (s?.avgPowerW != null) parts.add('均 ${s!.avgPowerW!.round()} W');
+    if (s?.maxPowerW != null) parts.add('高 ${s!.maxPowerW} W');
+    return parts.join(' · ');
   }
 
   /// 导出失败时给用户一句能看懂的话，而不是把异常栈糊在界面上。
@@ -290,54 +413,69 @@ class _DetailBody extends ConsumerWidget {
 }
 
 /// 心率 / 踏频 / 功率在曲线上的标注口径：取整。
-///
-/// 与上方读数同源——汇总里写着「平均心率 142」，曲线上的标注就不能是 141.7，
-/// 两个地方对不上时用户会以为是算错了。
 String _wholeNumber(double value) => value.round().toString();
 
-/// 一个指标区块：标题 → 该项读数 → 该项曲线。
-///
-/// 上方一条从边到边的细线把它和前一组分开——曲线区块之间原本只靠留白分隔，
-/// 一屏里三段曲线连在一起，容易误读成同一块内容。
-///
-/// [readouts] 为空时（没有汇总指标，或该项本身没有读数）只画曲线，不留下
-/// 一段空白。
+/// 一个指标区块：标题 + 右侧摘要 + 曲线。
 class _MetricSection extends StatelessWidget {
   const _MetricSection({
     required this.title,
-    required this.readouts,
+    required this.summary,
     required this.child,
+    super.key,
   });
 
   final String title;
-  final List<SpecEntry> readouts;
+  final String summary;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              kSpaceL,
-              kSpaceL,
-              kSpaceL,
-              kSpaceS,
-            ),
-            child: Text(title, style: kSectionTextStyle),
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Divider(
+          height: 1,
+          indent: kSpaceL,
+          endIndent: kSpaceL,
+          color: palette.hairline,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            kSpaceL,
+            kSpaceL,
+            kSpaceL,
+            kSpaceS,
           ),
-          if (readouts.isNotEmpty) ...<Widget>[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
-              child: SpecList(entries: readouts),
-            ),
-            const SizedBox(height: kSpaceM),
-          ],
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
-            child: child,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  style: kSectionTextStyle.copyWith(
+                    fontFamily: kSerifFamily,
+                    fontFamilyFallback: kSerifFallback,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (summary.isNotEmpty)
+                Text(
+                  summary,
+                  style: kLabelTextStyle.copyWith(
+                    color: palette.muted,
+                    letterSpacing: 0,
+                  ),
+                ),
+            ],
           ),
-        ],
-      );
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+          child: child,
+        ),
+      ],
+    );
+  }
 }

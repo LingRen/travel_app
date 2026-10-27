@@ -3,27 +3,28 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
+import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_summary.dart';
 
-/// 规格表的一行：量名与读数。
-typedef SpecEntry = (String label, String value);
-
-/// 基础信息规格表。见设计文档 10.3 的第 2 块。
+/// 详情页的两行三列汇总。见设计文档 10.3 的第 2 块。
 ///
-/// 原来是 104px 的方块网格：十二个指标铺成几行方块，左对齐的标签配上大号
-/// 绿色数字，读起来像一堆并列的仪表盘贴纸，但方块宽度固定、数值长短不一，
-/// 数字既对不齐也排不成列。改成规格表后标签在左、数值在右，数值是等宽
-/// tabular 数字，纵向自然成列——想比两次骑行的均速时，扫同一列就行。
-/// 行与行之间用细线分开，而不是靠间距，这是仪表说明书的读法。
-///
-/// 这里只放**没有曲线可配**的那些量（距离、时长、爬升……）。速度、心率、
-/// 踏频、功率的读数跟着各自的曲线走，见 [SpecList] 与详情页的曲线区块。
+/// 第一行是距离 / 时长 / 爬升，第二行是均速（或配速）/ 心率 / 功率；非骑行
+/// 类型没有功率，用该次记录的最高海拔替代。数值用衬线大字，单位降一档，
+/// 列与列之间靠留白分隔，不画竖线。
 class SummaryGrid extends StatelessWidget {
-  const SummaryGrid({required this.ride, required this.unit, super.key});
+  const SummaryGrid({
+    required this.ride,
+    required this.unit,
+    this.points = const <TrackPoint>[],
+    super.key,
+  });
 
   final Workout ride;
   final DistanceUnit unit;
+
+  /// 用于取最高海拔；非骑行类型把功率格换成海拔时才会读它。
+  final List<TrackPoint> points;
 
   @override
   Widget build(BuildContext context) {
@@ -35,71 +36,140 @@ class SummaryGrid extends StatelessWidget {
       );
     }
 
-    final List<SpecEntry> entries = <SpecEntry>[
-      ('距离', formatDistance(s.distanceM, unit)),
-      ('时长', formatDuration(s.durationS)),
-      ('移动时长', formatDuration(s.movingS)),
-      ('爬升', formatElevation(s.elevationGainM, unit)),
-      if (s.calories != null) ('卡路里', '${s.calories!.round()} kcal（参考）'),
-      ('轨迹点', '${s.pointCount}'),
+    final bool usesPace = ride.activityType.usesPace;
+    final ({String value, String unit}) distance =
+        formatDistanceParts(s.distanceM, unit);
+    final ({String value, String unit}) climb =
+        _splitUnit(formatElevation(s.elevationGainM, unit));
+    final double? maxAltitude = ride.activityType.supportsPower
+        ? null
+        : _maxAltitude(points);
+
+    final List<_SummaryCell> firstRow = <_SummaryCell>[
+      _SummaryCell(label: '距离', value: distance.value, unit: distance.unit),
+      _SummaryCell(label: '时长', value: formatDuration(s.durationS)),
+      _SummaryCell(label: '爬升', value: climb.value, unit: climb.unit),
+    ];
+    final List<_SummaryCell> secondRow = <_SummaryCell>[
+      _SummaryCell(
+        label: usesPace ? '配速' : '均速',
+        value: usesPace
+            ? formatPace(s.movingAvgSpeedMps, unit)
+            : formatSpeedValue(s.movingAvgSpeedMps, unit),
+        unit: usesPace ? paceUnitLabel(unit) : speedUnitLabel(unit),
+      ),
+      _SummaryCell(
+        label: '心率',
+        value: s.avgHr?.round().toString() ?? '—',
+        unit: s.avgHr == null ? null : 'bpm',
+      ),
+      if (ride.activityType.supportsPower)
+        _SummaryCell(
+          label: '功率',
+          value: s.avgPowerW?.round().toString() ?? '—',
+          unit: s.avgPowerW == null ? null : 'W',
+        )
+      else
+        _SummaryCell(
+          label: '海拔',
+          value: maxAltitude?.round().toString() ?? '—',
+          unit: maxAltitude == null ? null : 'm',
+        ),
     ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-      child: SpecList(entries: entries),
+      child: Column(
+        children: <Widget>[
+          Row(children: _cells(firstRow)),
+          Divider(height: 1, color: context.palette.hairline),
+          Row(children: _cells(secondRow)),
+        ],
+      ),
     );
+  }
+
+  static List<Widget> _cells(List<_SummaryCell> cells) => <Widget>[
+        for (int i = 0; i < cells.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(width: kSpaceM),
+          Expanded(child: cells[i]),
+        ],
+      ];
+
+  static ({String value, String unit}) _splitUnit(String text) {
+    final int space = text.lastIndexOf(' ');
+    if (space <= 0) return (value: text, unit: '');
+    return (value: text.substring(0, space), unit: text.substring(space + 1));
+  }
+
+  static double? _maxAltitude(List<TrackPoint> points) {
+    double? max;
+    for (final TrackPoint p in points) {
+      final double? altitude = p.altitudeM;
+      if (altitude == null) continue;
+      if (max == null || altitude > max) max = altitude;
+    }
+    return max;
   }
 }
 
-/// 细线分隔的规格表。
-///
-/// 详情页的基础信息块与每条曲线的读数块共用同一套排版：量名在左、读数在右，
-/// 行间一条细线。抽出来是为了让「一屏里六处读数」长得完全一样，不必各自
-/// 复制一遍 Row + Divider。
-class SpecList extends StatelessWidget {
-  const SpecList({required this.entries, super.key});
+class _SummaryCell extends StatelessWidget {
+  const _SummaryCell({required this.label, required this.value, this.unit});
 
-  final List<SpecEntry> entries;
+  final String label;
+  final String value;
+  final String? unit;
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: kSpaceS),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          for (int i = 0; i < entries.length; i++) ...<Widget>[
-            if (i > 0) const Divider(height: 1),
-            _SpecRow(entry: entries[i]),
-          ],
+          Text(
+            label,
+            style: kLabelTextStyle.copyWith(
+              color: palette.muted,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: <Widget>[
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: kSerifHeadingTextStyle.copyWith(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w500,
+                      fontFeatures: kTabularFigures,
+                    ),
+                  ),
+                ),
+              ),
+              if (unit != null && unit!.isNotEmpty) ...<Widget>[
+                const SizedBox(width: 3),
+                Text(
+                  unit!,
+                  style: kLabelTextStyle.copyWith(
+                    fontSize: 10,
+                    letterSpacing: 0,
+                    color: palette.muted,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
-      );
+      ),
+    );
+  }
 }
-
-/// 一行规格：左边是量名，右边是读数。行高由读数决定，标签不参与撑高，
-/// 这样即便标签换行也不会把某一行顶得比别人胖。
-class _SpecRow extends StatelessWidget {
-  const _SpecRow({required this.entry});
-
-  final SpecEntry entry;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: kSpaceS),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: <Widget>[
-            Expanded(child: Text(entry.$1, style: kLabelTextStyle)),
-            const SizedBox(width: kSpaceM),
-            Text(entry.$2, style: _readoutStyle),
-          ],
-        ),
-      );
-}
-
-/// 规格表里读数比仪表主数字收一档，一屏能容下十几行而不显得吵。
-const TextStyle _readoutStyle = TextStyle(
-  fontFamily: kMonoFamily,
-  fontSize: 18,
-  fontWeight: FontWeight.w600,
-  height: 1.1,
-  color: kAppTextPrimary,
-  fontFeatures: kTabularFigures,
-);

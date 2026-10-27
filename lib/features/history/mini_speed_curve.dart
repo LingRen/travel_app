@@ -11,9 +11,12 @@ import '../../domain/models/track_point.dart';
 /// 颜色跟随主题色，与详情页曲线、地图轨迹一致——原来按速度给每段上色，浅黄端
 /// 在浅色底上根本读不出来，那点分档信息不值得让整条曲线模糊掉。
 class MiniSpeedCurve extends StatelessWidget {
-  const MiniSpeedCurve({required this.points, super.key});
+  const MiniSpeedCurve({required this.points, this.color, super.key});
 
   final List<TrackPoint> points;
+
+  /// 曲线色。最近一条用主题文字色，更早的条目用弱一档的墨色，让首屏有主次。
+  final Color? color;
 
   static const double height = 32;
 
@@ -34,7 +37,10 @@ class MiniSpeedCurve extends StatelessWidget {
       width: double.infinity,
       child: CustomPaint(
         size: Size.infinite,
-        painter: _MiniSpeedPainter(samples, context.palette.accent),
+        painter: _MiniSpeedPainter(
+          samples,
+          color ?? context.palette.accentInk,
+        ),
       ),
     );
   }
@@ -85,7 +91,7 @@ class _MiniSpeedPainter extends CustomPainter {
 
     final Paint paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round
       ..color = color;
 

@@ -293,7 +293,7 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
               BlendMode.srcOver,
             ),
             child: ColorFiltered(
-              colorFilter: const ColorFilter.matrix(_kMapTileMatrix),
+              colorFilter: const ColorFilter.matrix(kMapTileColorMatrix),
               child: TileLayer(
                 urlTemplate: widget.tileUrlTemplate,
                 subdomains: widget.subdomains,
@@ -337,17 +337,6 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
       );
   }
 }
-
-/// 瓦片降饱和矩阵：保留 55% 饱和度，再把整体略微提亮，配合上面的纸色薄罩。
-///
-/// 高德瓦片是彩色道路图，直接铺在纸本界面上会喧宾夺主；降饱和后仍保留道路
-/// 层级与水面/绿地的区分，只是不再抢主题色轨迹。
-const List<double> _kMapTileMatrix = <double>[
-  0.6457, 0.3218, 0.0325, 0, 6,
-  0.0957, 0.8718, 0.0325, 0, 3,
-  0.0957, 0.3218, 0.5825, 0, -4,
-  0, 0, 0, 1, 0,
-];
 
 /// 指北标识。地图不旋转，所以永远指北。
 class _NorthIndicator extends StatelessWidget {

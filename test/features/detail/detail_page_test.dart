@@ -145,9 +145,11 @@ void main() {
       detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
-    expect(find.text('25.30 km'), findsOneWidget);
+    expect(find.text('25.3'), findsOneWidget);
+    expect(find.text('km'), findsOneWidget);
     expect(find.text('1:00:00'), findsOneWidget);
-    expect(find.text('180 m'), findsOneWidget);
+    expect(find.text('180'), findsOneWidget);
+    expect(find.text('m'), findsOneWidget);
   });
 
   testWidgets('标题显示骑行标题与日期', (WidgetTester tester) async {
@@ -157,11 +159,11 @@ void main() {
     );
 
     expect(find.text('晨骑'), findsOneWidget);
-    expect(find.text('2026-09-21 08:00'), findsOneWidget);
+    expect(find.text('09.21'), findsOneWidget);
+    expect(find.text('周一 · 08:00'), findsOneWidget);
   });
 
-  // 详情页头部徽标：类型图标 + 标签 + 日期一排（Task 8）。
-  testWidgets('跑步记录：徽标显示跑步图标与「跑步」标签', (WidgetTester tester) async {
+  testWidgets('跑步记录：页眉写「跑步详情」，汇总用配速', (WidgetTester tester) async {
     await pumpDetail(
       tester,
       detail: WorkoutDetail(
@@ -170,10 +172,9 @@ void main() {
       ),
     );
 
-    expect(find.text('跑步'), findsOneWidget);
-    expect(find.byIcon(Icons.directions_run), findsOneWidget);
-    // 日期仍在同一排。
-    expect(find.text('2026-09-21 08:00'), findsOneWidget);
+    expect(find.text('跑步详情'), findsOneWidget);
+    expect(find.text('配速'), findsNWidgets(2), reason: '汇总格 + 曲线标题');
+    expect(find.text('09.21'), findsOneWidget);
   });
 
   testWidgets('无标题的骑行记录：AppBar 显示「骑行详情」而非「跑步详情」', (WidgetTester tester) async {
@@ -195,9 +196,9 @@ void main() {
       detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
-    expect(find.text('速度'), findsOneWidget);
-    expect(find.text('心率'), findsOneWidget);
-    expect(find.text('踏频'), findsOneWidget);
+    expect(find.byKey(const Key('detail-section-speed')), findsOneWidget);
+    expect(find.byKey(const Key('detail-section-hr')), findsOneWidget);
+    expect(find.byKey(const Key('detail-section-cadence')), findsOneWidget);
     expect(find.byType(CurveChart), findsNWidgets(3));
   });
 
@@ -281,9 +282,9 @@ void main() {
       detail: WorkoutDetail(ride: rideWith(), points: noHr),
     );
 
-    expect(find.text('心率'), findsNothing);
+    expect(find.byKey(const Key('detail-section-hr')), findsNothing);
     expect(find.byType(HrZoneBar), findsNothing);
-    expect(find.text('速度'), findsOneWidget);
+    expect(find.byKey(const Key('detail-section-speed')), findsOneWidget);
   });
 
   testWidgets('没有踏频数据时不渲染踏频曲线', (WidgetTester tester) async {
@@ -304,8 +305,8 @@ void main() {
       detail: WorkoutDetail(ride: rideWith(), points: noCadence),
     );
 
-    expect(find.text('踏频'), findsNothing);
-    expect(find.text('心率'), findsOneWidget);
+    expect(find.byKey(const Key('detail-section-cadence')), findsNothing);
+    expect(find.byKey(const Key('detail-section-hr')), findsOneWidget);
   });
 
   // 没接功率计的那次骑行，库里存的功率是按速度、坡度与体重估出来的，和实测
@@ -321,10 +322,11 @@ void main() {
       );
 
       expect(find.text('功率（估算）'), findsOneWidget);
-      expect(find.text('功率'), findsNothing);
-      expect(find.text('平均功率'), findsOneWidget);
-      expect(find.text('205 W'), findsOneWidget);
-      expect(find.text('230 W'), findsOneWidget);
+      // 汇总格的标签也叫「功率」；「估算」只出现在曲线区块标题里。
+      expect(find.text('功率'), findsOneWidget);
+      expect(find.byKey(const Key('detail-section-power')), findsOneWidget);
+      expect(find.textContaining('均 205 W'), findsOneWidget);
+      expect(find.textContaining('高 230 W'), findsOneWidget);
     });
 
     testWidgets('接了功率计：标题就是「功率」', (WidgetTester tester) async {
@@ -336,7 +338,7 @@ void main() {
         ),
       );
 
-      expect(find.text('功率'), findsOneWidget);
+      expect(find.text('功率'), findsNWidgets(2), reason: '汇总格 + 曲线标题');
       expect(find.text('功率（估算）'), findsNothing);
     });
   });
@@ -361,9 +363,10 @@ void main() {
     );
 
     expect(find.byType(CurveChart), findsNothing);
-    expect(find.text('速度'), findsNothing);
-    expect(find.text('心率'), findsNothing);
-    expect(find.text('踏频'), findsNothing);
+    expect(find.byKey(const Key('detail-section-speed')), findsNothing);
+    expect(find.byKey(const Key('detail-section-hr')), findsNothing);
+    expect(find.byKey(const Key('detail-section-cadence')), findsNothing);
+    expect(find.byKey(const Key('detail-section-power')), findsNothing);
     expect(find.byType(HrZoneBar), findsNothing);
   });
 
@@ -536,6 +539,90 @@ void main() {
 
     expect(find.byType(RouteMap), findsOneWidget);
     expect(find.text('没有可显示的轨迹'), findsOneWidget);
+  });
+
+  testWidgets('汇总两行三列：骑行显示功率，功率为空时用破折号',
+      (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: rideWith(summary: _powerSummary, powerDeviceName: 'ASSIOMA'),
+        points: pointsWithPower(),
+      ),
+    );
+
+    expect(find.text('距离'), findsOneWidget);
+    expect(find.text('时长'), findsOneWidget);
+    expect(find.text('爬升'), findsOneWidget);
+    expect(find.text('均速'), findsOneWidget);
+    expect(find.text('心率'), findsOneWidget);
+    expect(find.text('功率'), findsNWidgets(2), reason: '汇总格 + 曲线标题');
+    expect(find.text('205'), findsOneWidget);
+  });
+
+  testWidgets('徒步 / 登山汇总用海拔替代功率', (WidgetTester tester) async {
+    for (final ActivityType type in <ActivityType>[
+      ActivityType.hiking,
+      ActivityType.mountaineering,
+    ]) {
+      await pumpDetail(
+        tester,
+        detail: WorkoutDetail(
+          ride: rideWith(activityType: type),
+          points: pointsWithHr(),
+        ),
+      );
+
+      expect(find.text('海拔'), findsOneWidget, reason: type.dbValue);
+      expect(find.text('功率'), findsNothing, reason: type.dbValue);
+      expect(find.text('13'), findsOneWidget, reason: '最高海拔 13 m');
+    }
+  });
+
+  testWidgets('配速类型详情：曲线叫配速，不出现踏频 / 功率区块',
+      (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: rideWith(activityType: ActivityType.mountaineering),
+        points: pointsWithHr(),
+      ),
+    );
+
+    expect(find.byKey(const Key('detail-section-speed')), findsOneWidget);
+    expect(find.text('配速'), findsNWidgets(2));
+    expect(find.byKey(const Key('detail-section-cadence')), findsNothing);
+    expect(find.byKey(const Key('detail-section-power')), findsNothing);
+    expect(find.textContaining('下滑'), findsNothing);
+  });
+
+  testWidgets('详情不展示天气、地点与路线名', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+    );
+
+    for (final String word in <String>[
+      '天气',
+      '晴',
+      '成都',
+      '龙泉',
+      '桃花故里',
+      '°C',
+    ]) {
+      expect(find.textContaining(word), findsNothing, reason: word);
+    }
+  });
+
+  testWidgets('详情页提供返回与 GPX 导出入口', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+    );
+
+    expect(find.byKey(const Key('detail-back')), findsOneWidget);
+    expect(find.byKey(const Key('gpx-export')), findsOneWidget);
+    expect(find.text('导出 GPX'), findsOneWidget);
   });
 
   group('曲线断点分段', () {

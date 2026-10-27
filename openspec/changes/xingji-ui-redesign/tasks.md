@@ -38,15 +38,15 @@
 
 ## 5. 历史与单次详情
 
-- [ ] 5.1 重做 `lib/features/history/history_page.dart` 页眉：「运 动 日 志」「二〇二六 · 十月」「行迹」、记录总数、本月摘要与「全部运动 ⌄」。验证：`test/features/history/history_page_test.dart` 断言页眉文本与筛选入口。
-- [ ] 5.2 历史按最近有记录的月份分组，首屏只渲染该月，底部「更早的记录 · N 次」在内存展开；筛选变化重置展开。验证：`test/features/history/history_page_test.dart` 覆盖有更早记录、无更早记录与筛选后重置。
-- [ ] 5.3 重做 `lib/features/history/ride_card.dart` 为日志条目：日期星期、标题 / 时间、出发时间、右上距离、四列次级读数与迷你曲线，条目间用发丝线。验证：`test/features/history/history_page_test.dart` 断言骑行显示均速与功率、跑步显示配速且功率列留空。
-- [ ] 5.4 历史空态按当前筛选显示「还没有{类型}记录」或「还没有运动记录」，并提供「查看全部运动」。验证：`test/features/history/history_page_test.dart` 覆盖登山筛选无结果。
-- [ ] 5.5 详情页接入历史 tab 的嵌套导航：顶部返回 + 「{类型}详情」、地图、标题与日期时间，底部导航保持可见。验证：`test/features/detail/detail_page_test.dart` 与 `test/app/home_shell_test.dart` 覆盖返回、tab 切换后保留详情栈。
-- [ ] 5.6 详情汇总改为两行三列六项读数，功率仅骑行显示，非骑行以海拔替代。验证：`test/features/detail/detail_page_test.dart` 覆盖骑行、徒步、登山三种汇总。
-- [ ] 5.7 详情曲线按类型命名：骑行「速度」，配速类型「配速」；心率区间条保留；踏频 / 功率区块只在骑行且有数据时出现。验证：`test/features/detail/detail_page_test.dart` 断言跑步与登山不出现踏频 / 功率及下滑提示。
-- [ ] 5.8 详情不展示天气、地点名称或路线名，无数据时不保留占位。验证：`test/features/detail/detail_page_test.dart` 断言无天气 / 地点文案与空白占位。
-- [ ] 5.9 详情地图竖屏 260dp、矮视口 45% 高度；信号中断段数与总时长显示在地图下方；GPX 导出入口与失败提示保留。验证：`test/features/detail/detail_page_test.dart` 覆盖横屏高度、中断摘要与导出失败。
+- [x] 5.1 重做 `lib/features/history/history_page.dart` 页眉：「运 动 日 志」「二〇二六 · 十月」「行迹」、记录总数、本月摘要与「全部运动 ⌄」。验证：`test/features/history/history_page_test.dart` 断言页眉文本与筛选入口。
+- [x] 5.2 历史按最近有记录的月份分组，首屏只渲染该月，底部「更早的记录 · N 次」在内存展开；筛选变化重置展开。验证：`test/features/history/history_page_test.dart` 覆盖有更早记录、无更早记录与筛选后重置。
+- [x] 5.3 重做 `lib/features/history/ride_card.dart` 为日志条目：日期星期、标题 / 时间、出发时间、右上距离、四列次级读数与迷你曲线，条目间用发丝线。验证：`test/features/history/history_page_test.dart` 断言骑行显示均速与功率、跑步显示配速且功率列留空。
+- [x] 5.4 历史空态按当前筛选显示「还没有{类型}记录」或「还没有运动记录」，并提供「查看全部运动」。验证：`test/features/history/history_page_test.dart` 覆盖登山筛选无结果。
+- [x] 5.5 详情页接入历史 tab 的嵌套导航：顶部返回 + 「{类型}详情」、地图、标题与日期时间，底部导航保持可见。验证：`test/features/detail/detail_page_test.dart` 与 `test/app/home_shell_test.dart` 覆盖返回、tab 切换后保留详情栈。
+- [x] 5.6 详情汇总改为两行三列六项读数，功率仅骑行显示，非骑行以海拔替代。验证：`test/features/detail/detail_page_test.dart` 覆盖骑行、徒步、登山三种汇总。
+- [x] 5.7 详情曲线按类型命名：骑行「速度」，配速类型「配速」；心率区间条保留；踏频 / 功率区块只在骑行且有数据时出现。验证：`test/features/detail/detail_page_test.dart` 断言跑步与登山不出现踏频 / 功率及下滑提示。
+- [x] 5.8 详情不展示天气、地点名称或路线名，无数据时不保留占位。验证：`test/features/detail/detail_page_test.dart` 断言无天气 / 地点文案与空白占位。
+- [x] 5.9 详情地图竖屏 260dp、矮视口 45% 高度；信号中断段数与总时长显示在地图下方；GPX 导出入口与失败提示保留。验证：`test/features/detail/detail_page_test.dart` 覆盖横屏高度、中断摘要与导出失败。
 - [ ] 5.10 更新 `README.md` 的历史、详情与 GPX 段落，改为月份分组、纸本条目与按类型读数。验证：文档描述与 5.1–5.9 一致，无「卡片列表」旧描述。
 
 ## 6. 统计

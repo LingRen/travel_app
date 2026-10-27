@@ -44,17 +44,23 @@ class RouteMap extends StatelessWidget {
     if (all.isEmpty) {
       return SizedBox(
         height: height,
-        child: const Center(child: Text('没有可显示的轨迹')),
+        child: Center(
+          child: Text(
+            '没有可显示的轨迹',
+            style: kLabelTextStyle.copyWith(color: context.palette.muted),
+          ),
+        ),
       );
     }
 
-    // 轨迹统一跟随主题色：不再按速度分档着色（见 app/theme.dart 的颜色说明）。
-    final Color trackColor = context.palette.accent;
+    // 轨迹统一跟随文字安全色：不再按速度分档着色（见 app/theme.dart）。
+    final Color trackColor = context.palette.accentInk;
 
     return SizedBox(
       height: height,
       child: FlutterMap(
         options: MapOptions(
+          backgroundColor: context.palette.paper,
           initialCameraFit: CameraFit.bounds(
             bounds: LatLngBounds.fromPoints(all),
             padding: const EdgeInsets.all(24),
@@ -64,10 +70,21 @@ class RouteMap extends StatelessWidget {
           ),
         ),
         children: <Widget>[
-          TileLayer(
-            urlTemplate: tileUrlTemplate,
-            subdomains: subdomains,
-            userAgentPackageName: 'com.ling.cycling_app',
+          // 与记录页同一套纸本滤镜：降饱和 + 纸色薄罩，轨迹与断点不受影响。
+          ColorFiltered(
+            key: const Key('detail-map-color-filter'),
+            colorFilter: ColorFilter.mode(
+              context.palette.paper.withValues(alpha: 0.16),
+              BlendMode.srcOver,
+            ),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.matrix(kMapTileColorMatrix),
+              child: TileLayer(
+                urlTemplate: tileUrlTemplate,
+                subdomains: subdomains,
+                userAgentPackageName: 'com.ling.cycling_app',
+              ),
+            ),
           ),
           PolylineLayer(
             polylines: <Polyline<Object>>[
@@ -84,6 +101,12 @@ class RouteMap extends StatelessWidget {
                 ),
             ],
           ),
+          const IgnorePointer(
+            child: Align(
+              alignment: Alignment(0.9, -0.82),
+              child: _NorthBadge(),
+            ),
+          ),
           if (gapEnds.isNotEmpty)
             MarkerLayer(
               markers: <Marker>[
@@ -97,6 +120,35 @@ class RouteMap extends StatelessWidget {
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// 指北标识。详情地图不旋转，所以永远指北。
+class _NorthBadge extends StatelessWidget {
+  const _NorthBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Container(
+      key: const Key('detail-map-north'),
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.paper.withValues(alpha: 0.88),
+        border: Border.all(color: palette.hairline),
+      ),
+      child: Text(
+        '北',
+        style: kLabelTextStyle.copyWith(
+          fontSize: 10,
+          letterSpacing: 0,
+          color: palette.ink,
+        ),
       ),
     );
   }

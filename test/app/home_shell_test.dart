@@ -159,7 +159,8 @@ void main() {
     expect(find.byType(DetailPage), findsOneWidget);
     expect(find.byType(PaperNavBar), findsOneWidget);
 
-    await tester.pageBack();
+    // 详情页不再用 Material AppBar，返回键是纸本页眉里的「返回」。
+    await tester.tap(find.byKey(const Key('detail-back')));
     await tester.pumpAndSettle();
 
     expect(find.byType(DetailPage), findsNothing);

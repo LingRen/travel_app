@@ -7,25 +7,20 @@ import '../../data/settings_repository.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_summary.dart';
-import '../activity/activity_type_visuals.dart';
 import 'history_providers.dart';
 import 'mini_speed_curve.dart';
 
 /// 历史列表里的一条运动。见设计文档 10.2。
 ///
-/// 做成「日志条目」而不是卡片：卡片把每条记录封成一个独立的圆角块，一屏里
-/// 六张一样的卡读下来分不清主次，也浪费掉左右两侧的联系。改成条目后，
-/// 左侧是身份（标题/时间），右侧是距离主读数，下方四项次级读数排成固定四列——
-/// 每列左边缘跨条目对齐，扫一列比扫一堆散落的字符串快得多。
-///
-/// 条目内部没有分隔线：条目之间那条由列表画，里面再画一条就成了每行两道线。
-///
-/// 全条目唯一的颜色来自那条速度缩略图：颜色只表示数据（见 app/theme.dart）。
+/// 做成「日志条目」而不是卡片：左侧是日期与星期，中间是标题与出发时间，
+/// 右侧是距离主读数；下方四项读数按固定四列排开，最下面一条迷你曲线。
+/// 条目之间用发丝线分隔，不包圆角卡片。
 class WorkoutCard extends ConsumerWidget {
   const WorkoutCard({
     required this.ride,
     required this.unit,
     this.onTap,
+    this.highlight = false,
     super.key,
   });
 
@@ -33,18 +28,29 @@ class WorkoutCard extends ConsumerWidget {
   final DistanceUnit unit;
   final VoidCallback? onTap;
 
+  /// 首屏最近一条：迷你曲线用主题色；更早的条目用弱一档的墨色。
+  final bool highlight;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppPalette palette = context.palette;
     final WorkoutSummary? s = ride.summary;
-    final String? title = ride.title?.trim();
-    final bool titled = title != null && title.isNotEmpty;
+    final String? rawTitle = ride.title?.trim();
+    final String title = (rawTitle == null || rawTitle.isEmpty)
+        ? '${ride.activityType.label}记录'
+        : rawTitle;
+    final ({String value, String unit}) distance =
+        formatDistanceParts(s?.distanceM ?? 0, unit);
+    final bool usesPace = ride.activityType.usesPace;
 
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: kSpaceL,
-          vertical: kSpaceM,
+        padding: const EdgeInsets.fromLTRB(
+          kSpaceL,
+          kSpaceM,
+          kSpaceL,
+          kSpaceM,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,103 +58,126 @@ class WorkoutCard extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                // 类型图标：不占色（装饰一律不上色，见 app/theme.dart），
-                // 只让混合类型的列表在扫读时能一眼分出骑行与跑步。
-                Icon(
-                  activityTypeIcon(ride.activityType),
-                  size: 16,
-                  color: kAppTextMuted,
+                // 日期列：日号大、星期小。月份由页眉/分组标题承担。
+                SizedBox(
+                  width: 52,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        formatMonthDayDot(ride.startedAtMs),
+                        style: kSerifHeadingTextStyle.copyWith(
+                          fontSize: 22,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formatChineseWeekday(ride.startedAtMs),
+                        style: kLabelTextStyle.copyWith(
+                          color: palette.muted,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: kSpaceS),
+                const SizedBox(width: kSpaceM),
+                // 标题与出发时间。没有用户标题时用「{类型}记录」，不拿日期
+                // 冒充标题——日期已经在左边那一列了。
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        titled ? title : formatDateTime(ride.startedAtMs),
-                        style: const TextStyle(
-                          fontSize: kFontSubtitle,
-                          fontWeight: FontWeight.w600,
-                          color: kAppTextPrimary,
-                          // 没有标题时这一行就是日期，数字要等宽；有标题时是中文，
-                          // 不受影响。
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: kSerifHeadingTextStyle.copyWith(fontSize: 21),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${formatTimeHm(ride.startedAtMs)} 出发',
+                        style: TextStyle(
+                          fontSize: kFontMeta,
+                          color: palette.muted,
                           fontFeatures: kTabularFigures,
                         ),
                       ),
-                      // 有标题时时间降为副行。没标题时它就是主行，不再重复。
-                      if (titled) ...<Widget>[
-                        const SizedBox(height: 2),
-                        Text(
-                          formatDateTime(ride.startedAtMs),
-                          style: const TextStyle(
-                            fontSize: kFontLabel,
-                            color: kAppTextMuted,
-                            fontFeatures: kTabularFigures,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                if (s != null) ...<Widget>[
-                  const SizedBox(width: kSpaceM),
-                  Text(
-                    formatDistance(s.distanceM, unit),
-                    style: kMetricTextStyle,
-                  ),
-                ],
+                const SizedBox(width: kSpaceM),
+                // 距离主读数：衬线大数字 + 小单位。数值与单位分开，单位不
+                // 跟着数字一起放大。
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: <Widget>[
+                    Text(
+                      distance.value,
+                      key: ValueKey<String>('ride-distance-${ride.id}'),
+                      style: kSerifDisplayTextStyle.copyWith(
+                        fontSize: 36,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      distance.unit,
+                      style: kLabelTextStyle.copyWith(
+                        fontSize: 10,
+                        letterSpacing: 0,
+                        color: palette.muted,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             if (s == null)
-              const Padding(
-                padding: EdgeInsets.only(top: kSpaceS),
+              Padding(
+                padding: const EdgeInsets.only(top: kSpaceS),
                 child: Text('这条记录还没有汇总指标', style: kMutedTextStyle),
               )
             else ...<Widget>[
               const SizedBox(height: kSpaceM),
-              // 四项读数排成固定四列。每项必须各自是独立的 Text：它们既是给人看
-              // 的读数，也是测试定位卡片内容的锚点（`find.text('爬升 180 m')`），
-              // 合并成一个字符串就断掉了。
-              //
-              // 四项里只有爬升带中文标签：它的单位 `m` 与距离的 `m` 会混，其余
-              // 三项（时长、`km/h`、`W`）的单位自明，再加标签只是重复。
-              //
-              // 四列不等宽（4:4:5:3）。等宽在 360dp 上会把爬升列挤破：一列只有
-              // 76dp，而「爬升 1240 m」是两个汉字加四个数字，比 `23.9 km/h` 还宽，
-              // 末位的 `m` 会被挤到第二行去。爬升列多分一档、从最宽的功率列匀出
-              // 一档就够。宽度对每一条记录都是同一个定值，左边缘照旧跨条目对齐。
+              // 四列读数：标签在上、值在下，列宽等分，跨条目对齐。
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _MetaCell(formatDuration(s.durationS), flex: 4),
+                  _Stat(
+                    label: '时长',
+                    value: formatDuration(s.durationS),
+                  ),
                   const SizedBox(width: kSpaceS),
-                  // 骑行主读数是均速，跑步/健走/徒步是配速（见 activity_type.dart
-                  // 的 usesPace）。配速不含单位尾缀：`5'30"` 在公里制下自明。
-                  _MetaCell(
-                    ride.activityType.usesPace
-                        ? '配速 ${formatPace(s.movingAvgSpeedMps, unit)}'
+                  _Stat(
+                    label: usesPace ? '配速' : '均速',
+                    value: usesPace
+                        ? formatPace(s.movingAvgSpeedMps, unit)
                         : '${formatSpeedValue(s.movingAvgSpeedMps, unit)} '
                             '${speedUnitLabel(unit)}',
-                    flex: 4,
                   ),
                   const SizedBox(width: kSpaceS),
-                  _MetaCell(
-                    '爬升 ${formatElevation(s.elevationGainM, unit)}',
-                    flex: 5,
+                  _Stat(
+                    label: '爬升',
+                    value: formatElevation(s.elevationGainM, unit),
                   ),
                   const SizedBox(width: kSpaceS),
-                  // 没配功率计的那次骑行没有功率，整项不显示：写个 `0 W` 会被
-                  // 当成「踏空了」。但格子要留着——抽掉它，前三列会跟着变宽，
-                  // 和配了功率计的条目就对不起齐了。
-                  _MetaCell(
-                    s.avgPowerW == null ? null : formatPower(s.avgPowerW),
-                    flex: 3,
+                  _Stat(
+                    label: ride.activityType.supportsPower ? '功率' : null,
+                    value: ride.activityType.supportsPower
+                        ? (s.avgPowerW == null
+                            ? '—'
+                            : formatPower(s.avgPowerW))
+                        : null,
                   ),
                 ],
               ),
             ],
             if (ride.id != null) ...<Widget>[
-              const SizedBox(height: kSpaceM),
-              _MiniCurve(rideId: ride.id),
+              const SizedBox(height: kSpaceS),
+              _MiniCurve(rideId: ride.id, highlight: highlight),
             ],
           ],
         ),
@@ -157,38 +186,58 @@ class WorkoutCard extends ConsumerWidget {
   }
 }
 
-/// 四列读数里的一格。内容为 null 时留空占位，保住其余各列的位置。
-///
-/// [flex] 是本列在四列里分到的宽度权重。四列按需要不等宽，但每一条记录用的都是
-/// 同一组权重，所以左边缘照样跨条目对齐。
-class _MetaCell extends StatelessWidget {
-  const _MetaCell(this.text, {required this.flex});
+/// 四列读数里的一格。标签或值缺省时仍保留列宽，保证跨条目对齐。
+class _Stat extends StatelessWidget {
+  const _Stat({this.label, this.value});
 
-  final String? text;
-
-  final int flex;
+  final String? label;
+  final String? value;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    flex: flex,
-    child: text == null
-        ? const SizedBox.shrink()
-        : Text(text!, style: _metaStyle),
-  );
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (label != null)
+            Text(
+              label!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: kLabelTextStyle.copyWith(
+                color: palette.muted,
+                letterSpacing: 0,
+              ),
+            ),
+          const SizedBox(height: 2),
+          // 速度列带 km/h，360dp 的四等分里比其它三列宽；用 FittedBox
+          // 等比缩小，不要让单位被省略号截成 `km...`。
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value ?? '',
+              maxLines: 1,
+              softWrap: false,
+              style: kMetricTextStyle.copyWith(
+                fontSize: 16,
+                color: value == null ? palette.muted : palette.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
-
-/// 次级读数：等宽数字，让四列在纵向对齐。
-const TextStyle _metaStyle = TextStyle(
-  fontSize: kFontMeta,
-  color: kAppTextMuted,
-  fontFeatures: kTabularFigures,
-);
 
 /// 迷你曲线单独拆一个 Consumer，让轨迹点的加载不影响卡片其余部分的重建。
 class _MiniCurve extends ConsumerWidget {
-  const _MiniCurve({required this.rideId});
+  const _MiniCurve({required this.rideId, required this.highlight});
 
   final int? rideId;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -199,7 +248,12 @@ class _MiniCurve extends ConsumerWidget {
       ridePointsProvider(id),
     );
     return points.maybeWhen(
-      data: (List<TrackPoint> list) => MiniSpeedCurve(points: list),
+      data: (List<TrackPoint> list) => MiniSpeedCurve(
+        points: list,
+        color: highlight
+            ? context.palette.accentInk
+            : context.palette.muted.withValues(alpha: 0.45),
+      ),
       orElse: () => const SizedBox(height: MiniSpeedCurve.height),
     );
   }

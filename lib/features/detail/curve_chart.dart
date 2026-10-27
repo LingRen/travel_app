@@ -187,10 +187,11 @@ class _CurvePainter extends CustomPainter {
     // 默认压在线上方；线贴到图表顶部时翻到下方，免得标签被裁掉。
     final double labelY =
         y - label.height - 2 < 0 ? y + 3 : y - label.height - 2;
+    // 平均线标签靠左：极值标签通常在曲线的峰/谷附近，靠右会和它叠在一起。
     label.paint(
       canvas,
       Offset(
-        math.max(0, size.width - label.width),
+        4,
         labelY.clamp(0.0, math.max(0.0, size.height - label.height)),
       ),
     );
@@ -272,7 +273,8 @@ class _CurvePainter extends CustomPainter {
 
 /// 极值标注：等宽 + tabular，数字位数变化时标签宽度不跳。
 const TextStyle _extremumLabelStyle = TextStyle(
-  fontFamily: kMonoFamily,
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: 10,
   height: 1.1,
   color: kAppTextPrimary,
@@ -281,7 +283,8 @@ const TextStyle _extremumLabelStyle = TextStyle(
 
 /// 平均线标注：弱一档。平均值是参考，不该和极值抢注意力。
 const TextStyle _averageLabelStyle = TextStyle(
-  fontFamily: kMonoFamily,
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: 10,
   height: 1.1,
   color: kAppTextMuted,

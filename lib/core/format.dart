@@ -19,6 +19,21 @@ String formatDistance(double meters, DistanceUnit unit) {
       : '${(meters / 1000).toStringAsFixed(2)} km';
 }
 
+/// 距离拆成「数值 + 单位」，给历史卡片/详情大数字排版用。
+///
+/// 公里制保留一位小数（`42.6 km`），不足 1 公里时用米；英里制同理。
+({String value, String unit}) formatDistanceParts(double meters, DistanceUnit unit) {
+  if (unit == DistanceUnit.mile) {
+    final double miles = meters / _metersPerMile;
+    return miles < 0.1
+        ? (value: '${(meters * _feetPerMeter).round()}', unit: 'ft')
+        : (value: miles.toStringAsFixed(1), unit: 'mi');
+  }
+  return meters < 1000
+      ? (value: '${meters.round()}', unit: 'm')
+      : (value: (meters / 1000).toStringAsFixed(1), unit: 'km');
+}
+
 /// 速度数值，不含单位。
 String formatSpeedValue(double mps, DistanceUnit unit) => unit == DistanceUnit.mile
     ? (mps * 3600 / _metersPerMile).toStringAsFixed(1)
@@ -108,6 +123,35 @@ String formatChineseMonthDayWeekTime(DateTime t) {
       '${two(t.hour)}:${two(t.minute)}';
 }
 
+/// 历史条目的日期，形如 `09.21`。
+String formatMonthDayDot(int epochMs) {
+  final DateTime t = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(t.month)}.${two(t.day)}';
+}
+
+/// 中文星期，形如 `周一`。
+String formatChineseWeekday(int epochMs) {
+  const List<String> weekdays = <String>['一', '二', '三', '四', '五', '六', '日'];
+  final DateTime t = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  return '周${weekdays[t.weekday - 1]}';
+}
+
+/// 24 小时制时间，形如 `08:05`。
+String formatTimeHm(int epochMs) {
+  final DateTime t = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(t.hour)}:${two(t.minute)}';
+}
+
+/// 中文时长摘要，形如 `4 小时 31 分`。用于历史页眉的当月摘要。
+String formatChineseDuration(int seconds) {
+  final int safe = seconds < 0 ? 0 : seconds;
+  final int hours = safe ~/ 3600;
+  final int minutes = (safe % 3600) ~/ 60;
+  return hours > 0 ? '$hours 小时 $minutes 分' : '$minutes 分';
+}
+
 /// 日期时间文本，形如 `2026-09-21 08:05`。用本地时区。
 ///
 /// 不做「今年省略年份」的压缩：列表里跨年的记录混在一起时，省略年份会看不出
@@ -143,6 +187,17 @@ String formatPace(double speedMps, DistanceUnit unit) {
   // remainder 可能为 60（round 进位），归一化进位到整分。
   if (rest == 60) return (minutes: minutes + 1, seconds: 0);
   return (minutes: minutes, seconds: rest);
+}
+
+/// 由「每单位距离的秒数」直接生成配速文本，形如 `5'33"`。
+///
+/// 详情页的配速曲线纵轴是秒/公里（不是速度），标注不能再走 [formatPace]。
+String formatPaceSeconds(double secondsPerUnit) {
+  if (!secondsPerUnit.isFinite || secondsPerUnit <= 0) return '--';
+  final int minutes = secondsPerUnit ~/ 60;
+  int seconds = secondsPerUnit.remainder(60).round();
+  if (seconds == 60) return "${minutes + 1}'00\"";
+  return "$minutes'${seconds.toString().padLeft(2, '0')}\"";
 }
 
 /// 配速的口语念法，如 `5分30秒每公里`，供语音播报使用。

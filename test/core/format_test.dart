@@ -123,6 +123,36 @@ void main() {
     });
   });
 
+  group('历史 / 详情排版', () {
+    test('距离拆成数值与单位：公里一位小数，不足 1 公里用米', () {
+      expect(formatDistanceParts(25300, DistanceUnit.kilometer),
+          (value: '25.3', unit: 'km'));
+      expect(formatDistanceParts(842, DistanceUnit.kilometer),
+          (value: '842', unit: 'm'));
+      expect(formatDistanceParts(25300, DistanceUnit.mile),
+          (value: '15.7', unit: 'mi'));
+    });
+
+    test('日期 / 星期 / 时间', () {
+      final int ms = DateTime(2026, 9, 21, 8, 5).millisecondsSinceEpoch;
+      expect(formatMonthDayDot(ms), '09.21');
+      expect(formatChineseWeekday(ms), '周一');
+      expect(formatTimeHm(ms), '08:05');
+    });
+
+    test('中文时长摘要', () {
+      expect(formatChineseDuration(3600), '1 小时 0 分');
+      expect(formatChineseDuration(4 * 3600 + 31 * 60), '4 小时 31 分');
+      expect(formatChineseDuration(31 * 60), '31 分');
+    });
+
+    test('秒/单位距离生成配速文本', () {
+      expect(formatPaceSeconds(333.3), "5'33\"");
+      expect(formatPaceSeconds(360), "6'00\"");
+      expect(formatPaceSeconds(0), '--');
+    });
+  });
+
   group('formatDurationClock', () {
     test('始终输出 h:mm:ss，跨小时不改变宽度', () {
       expect(formatDurationClock(0), '00:00:00');
