@@ -56,6 +56,13 @@ class RouteMap extends StatelessWidget {
     // 轨迹统一跟随文字安全色：不再按速度分档着色（见 app/theme.dart）。
     final Color trackColor = context.palette.accentInk;
 
+    // 起终点直接取首段首点与末段末点：断口会把一条轨迹切成多段，这样取才和
+    // 画出来的线一致。不另外接收参数，避免两处取点口径分叉。
+    final RouteVertex first = segments.first.vertices.first;
+    final RouteVertex last = segments.last.vertices.last;
+    final LatLng start = LatLng(first.lat, first.lon);
+    final LatLng finish = LatLng(last.lat, last.lon);
+
     return SizedBox(
       height: height,
       child: FlutterMap(
@@ -108,18 +115,30 @@ class RouteMap extends StatelessWidget {
               child: _NorthBadge(),
             ),
           ),
-          if (gapEnds.isNotEmpty)
-            MarkerLayer(
-              markers: <Marker>[
-                for (final LatLng p in gapEnds)
-                  Marker(
-                    point: p,
-                    width: _GapEndDot.size,
-                    height: _GapEndDot.size,
-                    child: const _GapEndDot(),
-                  ),
-              ],
-            ),
+          MarkerLayer(
+            markers: <Marker>[
+              // 断口端点先挂：起终点是这一程的锚点，重合时压在上面。
+              for (final LatLng p in gapEnds)
+                Marker(
+                  point: p,
+                  width: _GapEndDot.size,
+                  height: _GapEndDot.size,
+                  child: const _GapEndDot(),
+                ),
+              Marker(
+                point: start,
+                width: _StartMarker.size,
+                height: _StartMarker.size,
+                child: const _StartMarker(),
+              ),
+              Marker(
+                point: finish,
+                width: _FinishMarker.size,
+                height: _FinishMarker.size,
+                child: const _FinishMarker(),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -155,9 +174,10 @@ class _NorthBadge extends StatelessWidget {
   }
 }
 
-/// 断口端点：一个小圆点，实心警告色 + 深色边。
+/// 断口端点：警告色空心环，不填充。
 ///
-/// 与轨迹的深色描边同源：底图明度不可控，浅色块自己也要带一圈边界。
+/// 原来用实心警告色圆点，加上起终点后两种「点」会混淆——实心块看起来像终点。
+/// 空心环只表示「线在这里断了」，与实心的终点、空心的起点环都不撞。
 class _GapEndDot extends StatelessWidget {
   const _GapEndDot();
 
@@ -165,10 +185,105 @@ class _GapEndDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    key: const Key('detail-gap-end'),
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: kAppWarning,
-      border: Border.all(color: kRouteCasing, width: 1.5),
+      border: Border.all(color: context.palette.warning, width: 1.5),
     ),
   );
+}
+
+/// 起点：18 dp 主题色空心环 +「起」。
+class _StartMarker extends StatelessWidget {
+  const _StartMarker();
+
+  static const double size = 18;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Semantics(
+      label: '起点',
+      child: Container(
+        key: const Key('detail-start-marker'),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: palette.accentInk, width: 2),
+        ),
+        child: Text(
+          '起',
+          style: TextStyle(
+            fontSize: 9,
+            height: 1,
+            fontWeight: FontWeight.w700,
+            color: palette.accentInk,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 终点：22 dp 主题色实心旗标 +「终」。
+///
+/// 画成旗而不是实心圆，是为了和「断口端点 / 起点环」这两种圆形标记分开：
+/// 一眼就能认出哪头是收尾。
+class _FinishMarker extends StatelessWidget {
+  const _FinishMarker();
+
+  static const double size = 22;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Semantics(
+      label: '终点',
+      child: SizedBox(
+        key: const Key('detail-finish-marker'),
+        width: size,
+        height: size,
+        child: Stack(
+          children: <Widget>[
+            // 旗杆。
+            Positioned(
+              left: 2.5,
+              top: 2,
+              bottom: 2,
+              child: Container(
+                width: 2,
+                decoration: BoxDecoration(
+                  color: palette.accentInk,
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ),
+            // 旗面。
+            Positioned(
+              left: 5,
+              top: 2,
+              child: Container(
+                width: 15,
+                height: 11,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.accentInk,
+                  borderRadius: BorderRadius.circular(1.5),
+                ),
+                child: Text(
+                  '终',
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: palette.onAccent,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

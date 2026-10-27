@@ -44,6 +44,8 @@ class RecordState {
     this.previewFix,
     this.currentAltitudeM,
     this.elevationGainM = 0,
+    this.headingDeg,
+    this.startPoint,
     this.lastCue,
     this.cueSeq = 0,
     this.selectedActivityType = ActivityType.cycling,
@@ -98,6 +100,14 @@ class RecordState {
 
   /// 本次骑行到此刻为止的累计爬升（米）。见设计文档 8.1 与 10.1。
   final double elevationGainM;
+
+  /// 当前朝向（度，0 为正北，顺时针）。还没建立时为 null，地图只画圆点。
+  ///
+  /// 只用于实时显示；不落库、不进 GPX（ADR-0002）。
+  final double? headingDeg;
+
+  /// 起点标记的位置。落位后不再移动；没落位时为 null。
+  final LocationFix? startPoint;
 
   /// 最近一条提示（每 1 公里 / 每 10 公里 / 速度跨档），供浮层横幅展示。
   ///
@@ -708,6 +718,8 @@ class RecordController extends Notifier<RecordState> {
       previewFix: _previewFix,
       currentAltitudeM: snap?.currentAltitudeM,
       elevationGainM: snap?.elevationGainM ?? 0,
+      headingDeg: snap?.headingDeg,
+      startPoint: snap?.startPoint,
       lastCue: _lastCue,
       cueSeq: _cueSeq,
       selectedActivityType: _selectedActivityType,

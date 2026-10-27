@@ -192,6 +192,8 @@ class HandlebarView extends StatelessWidget {
               points: state.liveTrack,
               breakIndexes: state.liveTrackBreaks,
               previewFix: state.previewFix,
+              startPoint: state.startPoint,
+              headingDeg: state.headingDeg,
               tileUrlTemplate: tileUrlTemplate,
               subdomains: kDefaultMapTileSubdomains,
               placeholderAlignment: const Alignment(0, -0.35),

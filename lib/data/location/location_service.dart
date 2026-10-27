@@ -77,6 +77,9 @@ class GeolocatorLocationPlatform implements LocationPlatform {
 ///
 /// iOS 在速度不可用时会给 `-1`，这里原样保留，由
 /// [RecordingSession] 判断是否可用。
+///
+/// 朝向为负表示本次没有方向（iOS 的无效值），置空交给界面画圆点；安卓静止时
+/// 常报 0（正北），这里不动它，由会话层的速度门槛挡掉（见 ADR-0001 的风险）。
 LocationFix toLocationFix(Position position) => LocationFix(
   tMs: position.timestamp.millisecondsSinceEpoch,
   lat: position.latitude,
@@ -84,6 +87,7 @@ LocationFix toLocationFix(Position position) => LocationFix(
   altitudeM: position.altitude,
   speedMps: position.speed,
   accuracyM: position.accuracy,
+  headingDeg: position.heading < 0 ? null : position.heading,
 );
 
 /// 按平台构造定位设置。抽成纯函数，两端配置都能在单测里断言。

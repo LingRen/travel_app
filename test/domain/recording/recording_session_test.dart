@@ -14,12 +14,16 @@ void main() {
     double? lon = 121.0,
     double? altitudeM,
     double? speedMps,
+    double? accuracyM,
+    double? headingDeg,
   }) => LocationFix(
     tMs: tMs,
     lat: lat,
     lon: lon,
     altitudeM: altitudeM,
     speedMps: speedMps,
+    accuracyM: accuracyM,
+    headingDeg: headingDeg,
   );
 
   group('RecordingSession 时长', () {
@@ -635,6 +639,117 @@ void main() {
       s.tick(1000);
       expect(s.snapshot.power, isNull);
       expect(s.snapshot.cadence, isNull);
+    });
+  });
+
+  group('RecordingSession 起点', () {
+    test('第一个通过精度门槛的落盘点落起点', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, accuracyM: 80));
+      expect(s.snapshot.startPoint, isNull, reason: '精度太差，不能落起点');
+
+      s.ingestFix(fixAt(2000, lat: 31.0001, accuracyM: 12));
+      expect(s.snapshot.startPoint!.lat, 31.0001);
+      expect(s.snapshot.startPoint!.accuracyM, 12);
+    });
+
+    test('精度为 null 视为达标（设备没给精度就不要卡起点）', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0));
+      expect(s.snapshot.startPoint, isNotNull);
+    });
+
+    test('落位后不再移动', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, accuracyM: 10));
+      final double lat = s.snapshot.startPoint!.lat!;
+
+      for (int i = 1; i <= 5; i++) {
+        s.ingestFix(fixAt(i * 3000, lat: 31.0 + i * 0.0001, accuracyM: 5));
+      }
+
+      expect(s.snapshot.startPoint!.lat, lat);
+    });
+
+    test('30 秒仍无达标点，用第一个带坐标的点兜底', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, accuracyM: 120));
+      expect(s.snapshot.startPoint, isNull);
+
+      s.ingestFix(fixAt(30000, lat: 31.0001, accuracyM: 120));
+      expect(s.snapshot.startPoint!.lat, 31.0, reason: '兜底用第一个带坐标的点');
+    });
+
+    test('没有坐标的点不落起点', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, lon: null, accuracyM: 3));
+      s.ingestFix(fixAt(30000, lon: null, accuracyM: 3));
+
+      expect(s.snapshot.startPoint, isNull);
+    });
+
+    test('崩溃恢复时按已落盘的点恢复起点', () {
+      final RecordingSession s = RecordingSession(
+        rideId: 1,
+        startedAtMs: 0,
+        recentTrack: <TrackPoint>[
+          TrackPoint(rideId: 1, tMs: 0, lat: 31.0, lon: 121.0, accuracyM: 90),
+          TrackPoint(
+            rideId: 1,
+            tMs: 2000,
+            lat: 31.0001,
+            lon: 121.0,
+            accuracyM: 8,
+          ),
+        ],
+      );
+
+      expect(s.snapshot.startPoint!.lat, 31.0001);
+    });
+  });
+
+  group('RecordingSession 朝向', () {
+    test('首个朝向取最近两个落盘点的方位角', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 3));
+      expect(s.snapshot.headingDeg, isNull, reason: '只有一个点时没有方向');
+
+      // 正东：经度增加。
+      s.ingestFix(fixAt(2000, lon: 121.0001, speedMps: 3));
+      expect(s.snapshot.headingDeg, closeTo(90, 0.5));
+    });
+
+    test('两个落盘点重合时算不出方向，仍为 null', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 3));
+      s.ingestFix(fixAt(2000, speedMps: 3));
+
+      expect(s.snapshot.headingDeg, isNull);
+    });
+
+    test('速度达标时采用上报朝向', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 3, headingDeg: 45));
+
+      expect(s.snapshot.headingDeg, closeTo(45, 1e-9));
+    });
+
+    test('停车后朝向冻结，不被静止时报的 0 度甩回正北', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 3, headingDeg: 45));
+      expect(s.snapshot.headingDeg, closeTo(45, 1e-9));
+
+      // 0.2 m/s 低于冻结门槛，安卓这时常报 0（正北）。
+      s.ingestFix(fixAt(2000, speedMps: 0.2, headingDeg: 0));
+      expect(s.snapshot.headingDeg, closeTo(45, 1e-9));
+    });
+
+    test('中间档保持上一次朝向，不采信也不冻结', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 3, headingDeg: 45));
+      s.ingestFix(fixAt(2000, speedMps: 0.8, headingDeg: 200));
+
+      expect(s.snapshot.headingDeg, closeTo(45, 1e-9));
     });
   });
 }

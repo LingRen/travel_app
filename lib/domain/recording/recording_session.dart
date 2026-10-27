@@ -1,6 +1,7 @@
 import '../analysis/constants.dart';
 import '../analysis/elevation.dart';
 import '../analysis/geo.dart';
+import '../analysis/heading.dart';
 import '../analysis/power.dart';
 import '../models/activity_type.dart';
 import '../models/location_fix.dart';
@@ -29,6 +30,8 @@ class RecordingSnapshot {
     required this.pointCount,
     this.currentAltitudeM,
     this.elevationGainM = 0,
+    this.headingDeg,
+    this.startPoint,
   });
 
   final RecordingPhase phase;
@@ -54,6 +57,16 @@ class RecordingSnapshot {
   /// 本次骑行到此刻为止的累计爬升（米）。口径与结算时的 `elevationGainOf` 一致
   /// （同样剔除跳变点、同样只累加超过阈值的上升），见设计文档 8.1。
   final double elevationGainM;
+
+  /// 当前朝向（度，0 为正北，顺时针）。还没建立时为 null，界面只画圆点。
+  ///
+  /// 只用于实时显示，不落库（ADR-0002）。
+  final double? headingDeg;
+
+  /// 起点标记的位置。还没落位时为 null。
+  ///
+  /// 落位后不再移动；只有 [RecordingSession._updateStartPoint] 会改它。
+  final LocationFix? startPoint;
 
   int get elapsedSeconds => elapsedMs ~/ 1000;
 }
@@ -94,13 +107,24 @@ class RecordingSession {
     // 要等新点攒够才慢慢长出来。走同一条抽稀路径，不另写一套。
     // 落盘点之间的真实断点按时间差还原（这批点没被抽稀过，2 秒一点）。
     TrackPoint? prev;
+    TrackPoint? firstPositioned;
+    TrackPoint? firstAccurate;
     for (final TrackPoint p in recentTrack) {
       _appendToLiveTrack(
         p,
         gpsLostBefore: prev != null && p.tMs - prev.tMs > kGpsGapMs,
       );
+      if (p.hasPosition) {
+        firstPositioned ??= p;
+        firstAccurate ??= _passesStartAccuracy(p.accuracyM) ? p : null;
+        _lastPositionedWritten = p;
+      }
       prev = p;
     }
+    // 起点要按已落盘的点恢复，不能空着等下一个落盘点：那样起点环会落在
+    // 「恢复后的当前位置」，看起来像从半路出发。没有达标点就用第一个带坐标的点。
+    final TrackPoint? recoveredStart = firstAccurate ?? firstPositioned;
+    if (recoveredStart != null) _startPoint = _fixOf(recoveredStart);
   }
 
   final int rideId;
@@ -133,6 +157,18 @@ class RecordingSession {
   LocationFix? _lastFix;
   TrackPoint? _lastWritten;
   int _pointCount = 0;
+
+  /// 当前朝向（度）。null 表示还没建立，界面只画圆点。
+  double? _currentHeadingDeg;
+
+  /// 起点标记。见 [RecordingSnapshot.startPoint]。
+  LocationFix? _startPoint;
+
+  /// 第一个带坐标的落盘点，起点兜底时用它。
+  LocationFix? _firstPositionedFix;
+
+  /// 最近一个带坐标的落盘点，用来算首个朝向的方位角。
+  TrackPoint? _lastPositionedWritten;
 
   /// 累计爬升（米）。口径与 `analysis/elevation.dart` 的 `elevationGainOf` 一致：
   /// 只累加超过 [kElevationGainThresholdM] 的上升，只认可信的高程点。
@@ -220,6 +256,8 @@ class RecordingSession {
     pointCount: _pointCount,
     currentAltitudeM: _currentAltitudeM,
     elevationGainM: _elevationGainM,
+    headingDeg: _currentHeadingDeg,
+    startPoint: _startPoint,
   );
 
   /// 取出并清空待落盘的点。返回非空列表时调用方应写库。
@@ -241,6 +279,11 @@ class RecordingSession {
     final double rawSpeed = _resolveSpeedMps(fix, segmentM);
     final bool wasStationary = _speedZeroed;
     _currentSpeedMps = _applySpeedDeadband(rawSpeed);
+    _currentHeadingDeg = resolveHeadingDeg(
+      currentDeg: _currentHeadingDeg,
+      reportedDeg: fix.headingDeg,
+      speedMps: _currentSpeedMps,
+    );
     _trackDistance(fix, prev, segmentM, wasStationary: wasStationary);
 
     _lastFix = fix;
@@ -249,6 +292,8 @@ class RecordingSession {
     _estimatedPower = _estimatePower();
 
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
+      // 起点只在真正落盘的点上判定：标记要落在画出来的那条线上。
+      _updateStartPoint(fix);
       // 落盘的速度同样过死区：结算里的移动/静止时长与平均速度都读这个值，
       // 写原始幻影速度的话，停车十分钟会被算成十分钟的移动时间。
       _write(
@@ -527,8 +572,59 @@ class RecordingSession {
     _lastWrittenMs = point.tMs;
     _pointCount++;
     _buffer.add(point);
+    if (point.hasPosition) _updateInitialHeading(point);
     _appendToLiveTrack(point, gpsLostBefore: gpsLostBefore);
   }
+
+  /// 起点落位：第一个通过精度门槛的落盘点，之后不再移动。
+  ///
+  /// 性能上只看落盘点（调用方只在 `shouldWriteTrackPoint` 为真时调它），标记才
+  /// 与画出来的轨迹线对得上。超过 [kStartPointFallbackMs] 仍没有达标点就取第一个
+  /// 带坐标的落盘点兜底——隧道、楼群起步不能永远没有起点。
+  void _updateStartPoint(LocationFix fix) {
+    if (!fix.hasPosition) return;
+    _firstPositionedFix ??= fix;
+    if (_startPoint != null) return;
+    if (_passesStartAccuracy(fix.accuracyM)) {
+      _startPoint = fix;
+      return;
+    }
+    if (fix.tMs - startedAtMs >= kStartPointFallbackMs) {
+      _startPoint = _firstPositionedFix;
+    }
+  }
+
+  static bool _passesStartAccuracy(double? accuracyM) =>
+      accuracyM == null || accuracyM <= kStartPointAccuracyM;
+
+  /// 首个朝向：拿最近两个落盘点的方位角，等上报朝向接管。
+  ///
+  /// 只有两个落盘点真的分开了，方位角才有意义——原地写点（时间触发）算出来
+  /// 全是 0，不能拿来当方向。
+  void _updateInitialHeading(TrackPoint point) {
+    final TrackPoint? prev = _lastPositionedWritten;
+    _lastPositionedWritten = point;
+    if (_currentHeadingDeg != null || prev == null) return;
+    if (haversineMeters(prev.lat!, prev.lon!, point.lat!, point.lon!) <= 0) {
+      return;
+    }
+    _currentHeadingDeg = bearingDegrees(
+      prev.lat!,
+      prev.lon!,
+      point.lat!,
+      point.lon!,
+    );
+  }
+
+  /// 从落盘点还原一个定位结果，供崩溃恢复时恢复起点标记。
+  LocationFix _fixOf(TrackPoint p) => LocationFix(
+    tMs: p.tMs,
+    lat: p.lat,
+    lon: p.lon,
+    altitudeM: p.altitudeM,
+    speedMps: p.speedMps,
+    accuracyM: p.accuracyM,
+  );
 
   /// 往实时轨迹里追加一个点，按距离或时间抽稀。只有带定位的点才进得来：
   /// 缩略图上画的是轨迹，隧道里那些纯传感器点没有坐标，接进去会变成假直线。

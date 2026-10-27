@@ -460,17 +460,25 @@ void main() {
     final MarkerLayer layer = tester.widget<MarkerLayer>(
       find.byType(MarkerLayer),
     );
-    expect(layer.markers.length, 2, reason: '断口两侧各一个端点标记');
+    // 断口两侧各一个端点，加上起终点各一个。
+    expect(layer.markers.length, 4);
+    expect(find.byKey(const Key('detail-gap-end')), findsNWidgets(2));
+    expect(find.byKey(const Key('detail-start-marker')), findsOneWidget);
+    expect(find.byKey(const Key('detail-finish-marker')), findsOneWidget);
+    expect(find.text('起'), findsOneWidget);
+    expect(find.text('终'), findsOneWidget);
   });
 
-  testWidgets('没有断口时不显示中断摘要', (WidgetTester tester) async {
+  testWidgets('没有断口时不显示中断摘要，起终点标记仍在', (WidgetTester tester) async {
     await pumpDetail(
       tester,
       detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
     expect(find.textContaining('信号中断'), findsNothing);
-    expect(find.byType(MarkerLayer), findsNothing);
+    expect(find.byKey(const Key('detail-gap-end')), findsNothing);
+    expect(find.byKey(const Key('detail-start-marker')), findsOneWidget);
+    expect(find.byKey(const Key('detail-finish-marker')), findsOneWidget);
   });
 
   // 横屏可用视口只有约 253dp（333 − 状态栏 − AppBar），固定 260dp 的地图比它还

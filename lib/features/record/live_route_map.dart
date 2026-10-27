@@ -2,10 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+// latlong2 也导出了同名 `Path`，这里要的是 dart:ui 的绘制路径，藏掉前者。
+import 'package:latlong2/latlong.dart' hide Path;
 
 import '../../app/theme.dart';
 import '../../domain/analysis/gcj02.dart';
+import '../../domain/analysis/heading.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/location_fix.dart';
 import '../../domain/models/track_point.dart';
@@ -28,6 +30,8 @@ class LiveRouteMap extends StatefulWidget {
     required this.tileUrlTemplate,
     this.breakIndexes = const <int>{},
     this.previewFix,
+    this.startPoint,
+    this.headingDeg,
     this.subdomains = const <String>[],
     this.height,
     this.placeholderAlignment = Alignment.center,
@@ -48,6 +52,13 @@ class LiveRouteMap extends StatefulWidget {
   /// 开始记录时的一次粗略定位。第一个真实轨迹点到达前用它把地图点亮，
   /// 并画一个圆点标出大致位置；有真实点后由上层置空。
   final LocationFix? previewFix;
+
+  /// 起点标记的位置。落位后不再移动，由 [RecordingSession] 判定（见设计文档
+  /// 9.4）；这里只负责画，不自己挑点。
+  final LocationFix? startPoint;
+
+  /// 当前朝向（度，0 为正北，顺时针）。null 表示还没建立，只画圆点不画箭头。
+  final double? headingDeg;
 
   /// 瓦片源，来自设置（设计文档 9.1 的对冲措施：接口失效时可换源）。
   final String tileUrlTemplate;
@@ -89,6 +100,18 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
   /// [LiveRouteMap.previewFix] 转换到当前瓦片坐标系后的位置。
   LatLng? _previewVertex;
 
+  /// [LiveRouteMap.startPoint] 转换到当前瓦片坐标系后的位置。
+  LatLng? _startVertex;
+
+  /// 箭头累计转过的角度。补间必须沿最短弧累加，见 [_updateHeading]。
+  double _unwrappedDeg = 0;
+
+  /// 上一拍的朝向，用来算最短弧差。与 [_unwrappedDeg] 分开保存：后者是连续
+  /// 展开的角度，可以直接除以 360 交给 [AnimatedRotation]。
+  double? _lastHeadingDeg;
+
+  double get _headingTurns => _unwrappedDeg / 360;
+
   /// 首次取景交给 `initialCameraFit`：它在拿到尺寸之后才生效，自己调
   /// `fitCamera` 有可能赶在布局之前，算出来的缩放级别是错的。
   CameraFit? _initialFit;
@@ -109,6 +132,8 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     super.initState();
     _rebuild(widget.points);
     _updatePreview(widget.previewFix);
+    _updateStart(widget.startPoint);
+    _updateHeading(widget.headingDeg);
     if (_vertices.length >= 2) {
       _fitted = LatLngBounds.fromPoints(_vertices);
       _initialFit = _fitFor(_fitted!);
@@ -121,9 +146,17 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
   @override
   void didUpdateWidget(LiveRouteMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // 朝向每秒都可能在变，但它只影响箭头，不该让折线重算。先把它接掉，
+    // 下面那组「轨迹没变就早退」照旧成立。
+    if (oldWidget.headingDeg != widget.headingDeg) {
+      _updateHeading(widget.headingDeg);
+    }
+    final bool startChanged = oldWidget.startPoint != widget.startPoint;
+    if (startChanged) _updateStart(widget.startPoint);
     // 没变就不重算：每秒重建一次折线会逼 flutter_map 重走一遍折线布局，
     // 而轨迹实际只在攒够 25 米时才多一个点。
-    if (identical(oldWidget.points, widget.points) &&
+    if (!startChanged &&
+        identical(oldWidget.points, widget.points) &&
         identical(oldWidget.breakIndexes, widget.breakIndexes) &&
         identical(oldWidget.previewFix, widget.previewFix)) {
       return;
@@ -159,6 +192,9 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
   LatLng? get _markerPoint =>
       _previewVertex ?? (_vertices.length == 1 ? _vertices.single : null);
 
+  /// 当前位置：轨迹的最后一个顶点。没有真实点时为空（此时只有粗略定位圆点）。
+  LatLng? get _currentVertex => _vertices.isEmpty ? null : _vertices.last;
+
   /// 换算到当前瓦片坐标系：口径与轨迹完全一致（GCJ-02 源才转）。
   LatLng _toMap(double lat, double lon) {
     if (!isGcj02TileSource(widget.tileUrlTemplate)) return LatLng(lat, lon);
@@ -171,6 +207,26 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     final double? lat = fix?.lat;
     final double? lon = fix?.lon;
     _previewVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
+  }
+
+  /// 把起点换算到当前瓦片坐标系，口径与轨迹完全一致。
+  void _updateStart(LocationFix? fix) {
+    final double? lat = fix?.lat;
+    final double? lon = fix?.lon;
+    _startVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
+  }
+
+  /// 把新的朝向接到连续角度上，交给 [AnimatedRotation] 补间。
+  ///
+  /// 不能直接用 `heading / 360` 当 `turns`：359° → 1° 会得到 -358°，箭头倒转
+  /// 一整圈。累计最短弧差后，同样的变化只有 +2°，箭头沿最短一侧转过去。
+  void _updateHeading(double? headingDeg) {
+    if (headingDeg == null) return;
+    final double? prev = _lastHeadingDeg;
+    _unwrappedDeg = prev == null
+        ? headingDeg
+        : _unwrappedDeg + shortestArcDelta(prev, headingDeg);
+    _lastHeadingDeg = headingDeg;
   }
 
   void _rebuild(List<TrackPoint> points) {
@@ -303,15 +359,37 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
         PolylineLayer<Object>(
           polylines: _polylinesWith(context.palette.accentInk),
         ),
-        if (_markerPoint != null)
+        if (_startVertex != null ||
+            _currentVertex != null ||
+            _previewVertex != null)
           MarkerLayer(
             markers: <Marker>[
-              Marker(
-                point: _markerPoint!,
-                width: 18,
-                height: 18,
-                child: const _PositionDot(),
-              ),
+              // 起点先挂、当前位置后挂：两者重合时箭头盖在环上，用户只看得到
+              // 一个朝向前方的箭头（spec 的「起步瞬间的重合」）。
+              if (_startVertex != null)
+                Marker(
+                  point: _startVertex!,
+                  width: _StartRing.size,
+                  height: _StartRing.size,
+                  child: const _StartRing(),
+                ),
+              if (_currentVertex != null)
+                Marker(
+                  point: _currentVertex!,
+                  width: _HeadingArrow.box,
+                  height: _HeadingArrow.box,
+                  // 还没建立朝向时只画圆点，不能凭空指一个方向。
+                  child: widget.headingDeg == null
+                      ? const _PositionDot()
+                      : _HeadingArrow(turns: _headingTurns),
+                )
+              else if (_previewVertex != null)
+                Marker(
+                  point: _previewVertex!,
+                  width: _PositionDot.size,
+                  height: _PositionDot.size,
+                  child: const _PositionDot(),
+                ),
             ],
           ),
         // 指北与比例尺只是参照，不吃手势。正常屏放在地图带中段，矮屏
@@ -438,16 +516,105 @@ class _MapScaleBar extends StatelessWidget {
   }
 }
 
-/// 当前位置的指示点：强调色圆点加白边，和轨迹线区分开。
+/// 粗略定位 / 朝向尚未建立时的位置点：12 dp 半透明墨色圆点。
+///
+/// 不用主题色，也不加白边：它只表示「大概在这儿」，不该和轨迹末端抢注意力。
 class _PositionDot extends StatelessWidget {
   const _PositionDot();
 
+  static const double size = 12;
+
   @override
   Widget build(BuildContext context) => Container(
+    key: const Key('map-position-dot'),
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: context.palette.accent,
-      border: Border.all(color: Colors.white, width: 2),
+      color: context.palette.ink.withValues(alpha: 0.55),
     ),
   );
+}
+
+/// 记录页的起点：18 dp 主题色空心环，无字。
+///
+/// 不带字是为了小屏地图带不挤（起点环、箭头、指北与比例尺会同时出现）。
+class _StartRing extends StatelessWidget {
+  const _StartRing();
+
+  static const double size = 18;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('map-start-marker'),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: context.palette.accentInk, width: 2),
+    ),
+  );
+}
+
+/// 当前位置箭头：22 dp 实心三角，深墨填充 + 1.5 dp 纸色描边。
+///
+/// 用墨色而不是主题色：脚下的轨迹就是主题色，同色会融成一片。描边用纸色，
+/// 让箭头在深色底图与彩色瓦片上都立得住（与轨迹的 [kRouteCasing] 同一角色）。
+class _HeadingArrow extends StatelessWidget {
+  const _HeadingArrow({required this.turns});
+
+  /// 视觉尺寸（三角形本身）。
+  static const double size = 22;
+
+  /// 标记盒子：比三角形大一圈，旋转时不裁角。
+  static const double box = 28;
+
+  /// 连续展开的圈数。见 `_LiveRouteMapState._updateHeading`。
+  final double turns;
+
+  @override
+  Widget build(BuildContext context) => AnimatedRotation(
+    key: const Key('map-heading-arrow'),
+    turns: turns,
+    duration: const Duration(milliseconds: 200),
+    curve: Curves.easeOut,
+    child: CustomPaint(
+      size: const Size(box, box),
+      painter: _HeadingArrowPainter(
+        fill: context.palette.ink,
+        casing: context.palette.paper,
+      ),
+    ),
+  );
+}
+
+class _HeadingArrowPainter extends CustomPainter {
+  const _HeadingArrowPainter({required this.fill, required this.casing});
+
+  final Color fill;
+  final Color casing;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset center = size.center(Offset.zero);
+    final double half = _HeadingArrow.size / 2;
+    // 尖端朝上（0° ＝ 正北），底边带一个内凹，像导航箭头。
+    final Path path = Path()
+      ..moveTo(center.dx, center.dy - half)
+      ..lineTo(center.dx + half * 0.72, center.dy + half * 0.78)
+      ..lineTo(center.dx, center.dy + half * 0.42)
+      ..lineTo(center.dx - half * 0.72, center.dy + half * 0.78)
+      ..close();
+
+    // 先描一圈比填充宽 3 的边，再被填充盖住内侧，净剩 1.5 dp 的纸色轮廓。
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = casing
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(path, Paint()..color = fill);
+  }
+
+  @override
+  bool shouldRepaint(_HeadingArrowPainter old) =>
+      old.fill != fill || old.casing != casing;
 }

@@ -98,6 +98,7 @@ Position fakePosition({
   double altitude = 12.5,
   double speed = 6.5,
   double accuracy = 4.0,
+  double heading = 87.0,
 }) => Position(
   latitude: latitude,
   longitude: longitude,
@@ -105,7 +106,7 @@ Position fakePosition({
   altitude: altitude,
   altitudeAccuracy: 1.5,
   accuracy: accuracy,
-  heading: 87.0,
+  heading: heading,
   headingAccuracy: 2.0,
   speed: speed,
   speedAccuracy: 0.5,
@@ -142,6 +143,20 @@ void main() {
       final LocationFix fix = toLocationFix(fakePosition(speed: -1));
 
       expect(fix.speedMps, -1.0);
+    });
+
+    test('朝向原样映射，只落在内存字段 headingDeg', () {
+      final LocationFix fix = toLocationFix(fakePosition(heading: 87));
+
+      expect(fix.headingDeg, 87.0);
+    });
+
+    test('负朝向表示没有方向，置空而不是取绝对值', () {
+      expect(toLocationFix(fakePosition(heading: -1)).headingDeg, isNull);
+    });
+
+    test('安卓静止时报的 0 度保留，由会话层的速度门槛挡掉', () {
+      expect(toLocationFix(fakePosition(heading: 0)).headingDeg, 0.0);
     });
 
     test('时间戳取自 Position.timestamp 而不是当前时间', () {
