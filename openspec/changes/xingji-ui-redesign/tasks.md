@@ -13,7 +13,7 @@
 - [x] 2.2 新增 `lib/app/cover_gate.dart`：首帧后 1.2 秒自动退场，点击立即跳过，淡出 300ms；`MediaQuery.disableAnimations` 时停留 600ms 且不淡出。验证：新增 `test/app/cover_gate_test.dart` 用 `FakeAsync` 覆盖自动、点击、减少动态效果三条时序。
 - [x] 2.3 将 `lib/app/app.dart` 的 `home` 改为 `CoverGate(child: RecoveryGate(child: HomeShell()))`，封面结束后才构建恢复提示。验证：`test/app/app_test.dart` 与 `test/app/recovery_gate_test.dart` 通过，未结束会话的提示出现在封面之后。
 - [x] 2.4 在 `lib/app/home_shell.dart` 用 `PaperNavBar` 替换 `NavigationBar`，历史 tab 包一层 `Navigator`，外层接 `NavigatorPopHandler`；详情在历史 tab 内推入且底栏保持可见。验证：`test/app/home_shell_test.dart` 覆盖四 tab 切换、状态保留、详情推入与系统返回。
-- [ ] 2.5 更新 `README.md` 的应用名、定位与概览段落为「行迹」、多运动与纸本主题，删除「骑行 App / 深色」的旧描述。验证：通读 README 无旧品牌与深色表述，命令与路径仍可执行。
+- [x] 2.5 更新 `README.md` 的应用名、定位与概览段落为「行迹」、多运动与纸本主题，删除「骑行 App / 深色」的旧描述。验证：通读 README 无旧品牌与深色表述，命令与路径仍可执行。
 
 ## 3. 运动类型、选择与筛选
 
@@ -22,7 +22,7 @@
 - [x] 3.3 新增 `ActivityTypeChip` 与 `ActivityTypeSheet`，接入 `showPaperSheet`；当前项显示朱砂实心印章、对勾与「当前」，选择后调用 `recordController.selectActivityType`。验证：`test/features/activity/activity_type_sheet_test.dart` 覆盖打开、当前项标识与切换回调。
 - [x] 3.4 在设置仓储保存 `lastActivityType`，冷启动待机页恢复；无值或损坏时回退骑行。验证：`test/data/settings_repository_test.dart` 覆盖持久化与回退，`test/features/record/record_views_test.dart` 断言待机页浮标与「开始登山」文案。
 - [x] 3.5 新增 `SportFilterTrigger` 与 `SportFilterSheet`，历史与统计各用独立 filter provider，选项为全部运动 + 五种类型；筛选只改查看范围。验证：`test/features/activity/sport_filter_sheet_test.dart` 断言两页筛选互不影响，切换前后记录数量与汇总值不变。
-- [ ] 3.6 更新 `docs/superpowers/specs/2026-09-21-cycling-app-design.md` 的运动类型、筛选与类型说明段落，改为五种类型与共用筛选面板。验证：文档内不再出现「四种类型」或「步频 / 步数」承诺。
+- [x] 3.6 更新 `docs/superpowers/specs/2026-09-21-cycling-app-design.md` 的运动类型、筛选与类型说明段落，改为五种类型与共用筛选面板。验证：文档内不再出现「四种类型」或「步频 / 步数」承诺。
 
 ## 4. 记录页
 
@@ -34,7 +34,7 @@
 - [x] 4.6 提示横幅浮在上下浮层之间，出现与收起不挤压读数；配速类型的整公里提示使用配速口径且不播报速度档。验证：`test/features/record/record_views_test.dart` 与 `test/domain/recording/cue_detector_test.dart` 覆盖布局不变与配速文案。
 - [x] 4.7 新增结算页：显示「记录已保存」、距离、时长、写入历史说明与「完成」；完成后回到待机并保留上次类型。验证：`test/features/record/record_views_test.dart` 断言结算内容与完成后的待机态。
 - [x] 4.8 定位权限、定位服务与连续写入失败的错误显示在动作区上方，附原因与下一步入口。验证：`test/features/record/record_views_test.dart` 覆盖权限被拒与服务关闭。
-- [ ] 4.9 更新 `README.md` 的记录页段落为纸本 HUD、五类型、按类型主读数与筛选口径。验证：文档描述与 4.1–4.8 的实现一致，无旧「深色浮层」表述。
+- [x] 4.9 更新 `README.md` 的记录页段落为纸本 HUD、五类型、按类型主读数与筛选口径。验证：文档描述与 4.1–4.8 的实现一致，无旧「深色浮层」表述。
 
 ## 5. 历史与单次详情
 
@@ -47,7 +47,7 @@
 - [x] 5.7 详情曲线按类型命名：骑行「速度」，配速类型「配速」；心率区间条保留；踏频 / 功率区块只在骑行且有数据时出现。验证：`test/features/detail/detail_page_test.dart` 断言跑步与登山不出现踏频 / 功率及下滑提示。
 - [x] 5.8 详情不展示天气、地点名称或路线名，无数据时不保留占位。验证：`test/features/detail/detail_page_test.dart` 断言无天气 / 地点文案与空白占位。
 - [x] 5.9 详情地图竖屏 260dp、矮视口 45% 高度；信号中断段数与总时长显示在地图下方；GPX 导出入口与失败提示保留。验证：`test/features/detail/detail_page_test.dart` 覆盖横屏高度、中断摘要与导出失败。
-- [ ] 5.10 更新 `README.md` 的历史、详情与 GPX 段落，改为月份分组、纸本条目与按类型读数。验证：文档描述与 5.1–5.9 一致，无「卡片列表」旧描述。
+- [x] 5.10 更新 `README.md` 的历史、详情与 GPX 段落，改为月份分组、纸本条目与按类型读数。验证：文档描述与 5.1–5.9 一致，无「卡片列表」旧描述。
 
 ## 6. 统计
 
@@ -57,7 +57,7 @@
 - [x] 6.4 将 `lib/features/stats/trend_chart.dart` 从折线改为柱形：柱色 `accentInk`、顶部圆角 2、1/2/5 纵轴最多四档、横轴日期竖排、点按显示日期与距离。验证：`test/features/stats/trend_chart_test.dart` 覆盖月 / 周 / 年桶数与点按提示。
 - [x] 6.5 个人最佳改为 01–04 编号（最远距离、最快均速 / 最快配速、单次爬升、单次时长），功率最佳按适用性追加；配速类型用 `formatPace`。验证：`test/features/stats/stats_page_test.dart` 覆盖骑行、跑步与无记录。
 - [x] 6.6 统计页底部显示「统计口径 · 剔除停车空档」与「本机计算」，不出现云端或同步文案。验证：`test/features/stats/stats_page_test.dart` 断言页脚文本。
-- [ ] 6.7 更新 `README.md` 的长期统计段落，改为三项主读数、柱形趋势、类型化个人最佳。验证：文档描述与 6.1–6.6 一致。
+- [x] 6.7 更新 `README.md` 的长期统计段落，改为三项主读数、柱形趋势、类型化个人最佳。验证：文档描述与 6.1–6.6 一致。
 
 ## 7. 设置与平台
 
@@ -68,7 +68,7 @@
 - [x] 7.5 数据分组保留导出备份、恢复确认与中文错误提示，显示上次备份时间（如有）。验证：`test/features/settings/settings_page_test.dart` 与 `test/data/export/backup_test.dart` 覆盖导出、确认恢复与失败提示。
 - [x] 7.6 关于分组显示「行迹 XINGJI · 1.0.0」与「数据仅存本机」，不出现账号、云同步或社交入口；调试工具只在 `kDebugMode` 显示。验证：`test/features/settings/settings_page_test.dart` 断言关于文本与 release 下无调试分组。
 - [x] 7.7 将 Android `android/app/src/main/AndroidManifest.xml` 的 `android:label` 与 iOS `ios/Runner/Info.plist` 的 `CFBundleDisplayName` 改为「行迹」，并确认状态栏深色图标。验证：`grep` 两个平台配置得到「行迹」，真机冷启动标题与状态栏符合纸本主题。
-- [ ] 7.8 更新 `README.md` 的设置、主题色与平台段落，以及旧设计文档的主题 / 强调色段落，改为纸本唯一主题与四色颜料。验证：文档中不再出现深色主题、薄荷 / 天青 / 紫罗兰三色描述。
+- [x] 7.8 更新 `README.md` 的设置、主题色与平台段落，以及旧设计文档的主题 / 强调色段落，改为纸本唯一主题与四色颜料。验证：文档中不再出现深色主题、薄荷 / 天青 / 紫罗兰三色描述。
 
 ## 8. 集成验收
 
