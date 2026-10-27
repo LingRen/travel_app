@@ -212,7 +212,7 @@ void main() {
     await tester.tap(tab('设置'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsPage), findsOneWidget);
-    expect(find.text('个人参数'), findsOneWidget);
+    expect(find.text('本 机 设 置'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

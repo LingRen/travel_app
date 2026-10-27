@@ -9,10 +9,14 @@ import '../../data/export/backup.dart';
 import '../../data/export/backup_store.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
+import 'settings_providers.dart';
 
 /// 备份与恢复区块。见设计文档 10.5 与 12。
 class BackupSection extends ConsumerStatefulWidget {
-  const BackupSection({super.key});
+  const BackupSection({this.showHeader = true, super.key});
+
+  /// 放进底部面板时由 PaperSheet 提供标题，这里不再重复一条。
+  final bool showHeader;
 
   @override
   ConsumerState<BackupSection> createState() => _BackupSectionState();
@@ -28,11 +32,13 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Divider(height: 1),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-          child: Text('备份与恢复', style: kSectionTextStyle),
-        ),
+        if (widget.showHeader) ...<Widget>[
+          const Divider(height: 1),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
+            child: Text('备份与恢复', style: kSectionTextStyle),
+          ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
           child: Row(
@@ -86,6 +92,9 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
             bytes,
             fileName: 'cycling_backup_${DateTime.now().millisecondsSinceEpoch}.zip',
           );
+      final int exportedAt = ref.read(nowProvider)();
+      await ref.read(settingsRepositoryProvider).saveLastBackupAt(exportedAt);
+      ref.invalidate(lastBackupAtProvider);
       _setMessage('已导出 ${rides.length} 条记录', isError: false);
     } catch (error) {
       _setMessage('导出失败：$error', isError: true);

@@ -4,253 +4,451 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../app/theme.dart';
+import '../../app/ui/page_header.dart';
+import '../../app/ui/paper_sheet.dart';
+import '../../core/format.dart';
+import '../../data/ble/ble_scanner.dart';
 import '../../data/ble/sensor_monitor.dart';
 import '../../data/mock_ride_seeder.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
+import '../record/device_picker_sheet.dart';
 import 'backup_section.dart';
+import 'settings_providers.dart';
 
 /// 设置页。见设计文档 10.5。
-class SettingsPage extends ConsumerStatefulWidget {
+///
+/// 页眉 + 五组「行」：身体、传感器、地图与外观、数据、关于。没有卡片、没有
+/// 全局保存按钮——每一行点开底部面板，确认后立即写库；主题色与距离单位点选即存。
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
-  ConsumerState<SettingsPage> createState() => _SettingsPageState();
-}
-
-class _SettingsPageState extends ConsumerState<SettingsPage> {
-  late final TextEditingController _maxHr;
-  late final TextEditingController _weight;
-  late final TextEditingController _tileUrl;
-
-  DistanceUnit _unit = DistanceUnit.kilometer;
-  String? _error;
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _maxHr = TextEditingController();
-    _weight = TextEditingController();
-    _tileUrl = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _maxHr.dispose();
-    _weight.dispose();
-    _tileUrl.dispose();
-    super.dispose();
-  }
-
-  /// 只在第一次拿到设置时填进输入框，之后不覆盖用户正在输入的内容。
-  void _fillOnce(AppSettings settings) {
-    if (_loaded) return;
-    _loaded = true;
-    _maxHr.text = '${settings.maxHeartRate}';
-    _weight.text = settings.weightKg.toStringAsFixed(1);
-    _tileUrl.text = settings.mapTileUrlTemplate;
-    _unit = settings.distanceUnit;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // riverpod 3 的 `AsyncValue` 没有 `valueOrNull`，用 `.value`（可为 null）。
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppSettings? settings = ref.watch(appSettingsProvider).value;
     if (settings == null) {
       return const Scaffold(
-        appBar: null,
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    _fillOnce(settings);
+    final AppPalette palette = context.palette;
+    final DateTime now =
+        DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)());
+    final int? lastBackup = ref.watch(lastBackupAtProvider).value;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          const _SectionLabel('个人参数', leadingDivider: false),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                TextField(
-                  controller: _maxHr,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '最大心率（bpm）',
-                    helperText: '用于心率区间划分，可参考 220 − 年龄',
-                  ),
-                ),
-                const SizedBox(height: kSpaceM),
-                TextField(
-                  controller: _weight,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: '体重（kg）',
-                    helperText: '仅用于估算卡路里，结果仅供参考',
-                  ),
-                ),
-                const SizedBox(height: kSpaceL),
-                SegmentedButton<DistanceUnit>(
-                  segments: const <ButtonSegment<DistanceUnit>>[
-                    ButtonSegment<DistanceUnit>(
-                      value: DistanceUnit.kilometer,
-                      label: Text('公里'),
-                    ),
-                    ButtonSegment<DistanceUnit>(
-                      value: DistanceUnit.mile,
-                      label: Text('英里'),
-                    ),
-                  ],
-                  selected: <DistanceUnit>{_unit},
-                  onSelectionChanged: (Set<DistanceUnit> selected) =>
-                      setState(() => _unit = selected.first),
-                ),
-                const SizedBox(height: kSpaceL),
-                TextField(
-                  controller: _tileUrl,
-                  decoration: const InputDecoration(
-                    labelText: '地图瓦片源',
-                    helperText: '高德接口失效时可换成 OSM 或自建源，无需重新发版',
-                  ),
-                ),
-                const SizedBox(height: kSpaceL),
-                FilledButton(onPressed: _save, child: const Text('保存')),
-                if (_error != null) ...<Widget>[
-                  const SizedBox(height: kSpaceM),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Icon(
-                        Icons.error_outline,
-                        size: 16,
-                        color: kAppDanger,
-                      ),
-                      const SizedBox(width: kSpaceS),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: kAppDanger,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            PageHeader(
+              eyebrow: '本 机 设 置',
+              date: formatChineseYearMonth(now),
+              title: '设置',
+              subtitle: '身体、传感器与这一册的样貌',
             ),
-          ),
-          const SizedBox(height: kSpaceXl),
-          const _AppearanceSection(),
-          const SizedBox(height: kSpaceXl),
-          // 传感器与备份两块自带标题和分隔线（备份块的标题文本被测试依赖，
-          // 必须留在 BackupSection 内部），这里不再套分组标签。
-          const _SensorSection(),
-          const SizedBox(height: kSpaceXl),
-          const BackupSection(),
-          const SizedBox(height: kSpaceXxl),
-          if (kDebugMode) ...<Widget>[
-            const _DebugSection(),
-            const SizedBox(height: kSpaceXxl),
+            Divider(height: 1, color: palette.hairline),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: <Widget>[
+                  const _GroupHeader(
+                    '身 体',
+                    hint: '用于心率区间与功率估算',
+                  ),
+                  _SettingsRow(
+                    key: const Key('settings-max-hr'),
+                    label: '最大心率',
+                    value: '${settings.maxHeartRate} bpm',
+                    onTap: () => _editHeartRate(context, ref, settings),
+                  ),
+                  _SettingsRow(
+                    key: const Key('settings-weight'),
+                    label: '体重',
+                    value: '${settings.weightKg.toStringAsFixed(1)} kg',
+                    onTap: () => _editWeight(context, ref, settings),
+                  ),
+                  _SettingsRow(
+                    key: const Key('settings-unit'),
+                    label: '距离单位',
+                    value: _unitLabel(settings.distanceUnit),
+                    onTap: () => _editUnit(context, ref, settings),
+                    showDivider: false,
+                  ),
+                  const _GroupHeader('传 感 器', hint: '点击配对'),
+                  const _SensorSection(),
+                  const _GroupHeader('地 图 与 外 观', hint: '点选即生效'),
+                  _SettingsRow(
+                    key: const Key('settings-tile'),
+                    label: '地图瓦片',
+                    value: _tileLabel(settings.mapTileUrlTemplate),
+                    onTap: () => _editTileUrl(context, ref, settings),
+                  ),
+                  _ThemeSection(settings: settings),
+                  const _GroupHeader('数 据', hint: '仅存本机'),
+                  _SettingsRow(
+                    key: const Key('settings-backup'),
+                    label: '备份与恢复',
+                    value: lastBackup == null
+                        ? '导出 / 恢复'
+                        : '上次 ${formatMonthDayDot(lastBackup)}',
+                    onTap: () => _openBackup(context),
+                    showDivider: false,
+                  ),
+                  const _GroupHeader('关 于'),
+                  const _AboutRow(),
+                  if (kDebugMode) ...<Widget>[
+                    const SizedBox(height: kSpaceXl),
+                    const _DebugSection(),
+                  ],
+                  const SizedBox(height: kSpaceXxl),
+                ],
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Future<void> _save() async {
-    final int? hr = int.tryParse(_maxHr.text.trim());
-    final double? weight = double.tryParse(_weight.text.trim());
-    final String tileUrl = _tileUrl.text.trim();
+  Future<void> _editHeartRate(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final String? value = await _showTextSheet(
+      context,
+      title: '最大心率',
+      helper: '用于心率区间划分，可参考 220 − 年龄',
+      initial: '${settings.maxHeartRate}',
+      label: '最大心率（bpm）',
+      keyboardType: TextInputType.number,
+      validate: (String text) {
+        final int? hr = int.tryParse(text);
+        if (hr == null ||
+            hr < kMinPlausibleMaxHeartRate ||
+            hr > kMaxPlausibleMaxHeartRate) {
+          return '需要是 $kMinPlausibleMaxHeartRate~$kMaxPlausibleMaxHeartRate 之间的整数';
+        }
+        return null;
+      },
+    );
+    if (value == null) return;
+    await _save(ref, settings.copyWith(maxHeartRate: int.parse(value)));
+  }
 
-    if (hr == null ||
-        hr < kMinPlausibleMaxHeartRate ||
-        hr > kMaxPlausibleMaxHeartRate) {
-      setState(() => _error =
-          '最大心率需要是 $kMinPlausibleMaxHeartRate~$kMaxPlausibleMaxHeartRate 之间的整数');
-      return;
-    }
-    if (weight == null || weight <= 0) {
-      setState(() => _error = '体重需要是大于 0 的数字');
-      return;
-    }
-    if (tileUrl.isEmpty) {
-      setState(() => _error = '地图瓦片源不能为空');
-      return;
-    }
+  Future<void> _editWeight(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final String? value = await _showTextSheet(
+      context,
+      title: '体重',
+      helper: '仅用于估算卡路里与功率，结果仅供参考',
+      initial: settings.weightKg.toStringAsFixed(1),
+      label: '体重（kg）',
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      validate: (String text) {
+        final double? weight = double.tryParse(text);
+        if (weight == null || weight <= 0) return '需要是大于 0 的数字';
+        return null;
+      },
+    );
+    if (value == null) return;
+    await _save(ref, settings.copyWith(weightKg: double.parse(value)));
+  }
 
-    setState(() => _error = null);
-    await ref.read(settingsRepositoryProvider).save(AppSettings(
-          maxHeartRate: hr,
-          weightKg: weight,
-          distanceUnit: _unit,
-          mapTileUrlTemplate: tileUrl,
-          // 主题色不在这几个输入框里，保存时必须带上当前值，否则会被重置回默认。
-          accent: ref.read(appSettingsProvider).value?.accent ??
-              ThemeAccent.cinnabar,
-        ));
+  Future<void> _editTileUrl(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final String? value = await _showTextSheet(
+      context,
+      title: '地图瓦片源',
+      helper: '高德接口失效时可换成 OSM 或自建源，无需重新发版',
+      initial: settings.mapTileUrlTemplate,
+      label: '瓦片地址',
+      keyboardType: TextInputType.url,
+      validate: (String text) {
+        if (text.isEmpty) return '瓦片源不能为空';
+        final Uri? uri = Uri.tryParse(text);
+        if (uri == null ||
+            (uri.scheme != 'http' && uri.scheme != 'https') ||
+            uri.host.isEmpty) {
+          return '需要是 http(s) 地址';
+        }
+        return null;
+      },
+    );
+    if (value == null) return;
+    await _save(ref, settings.copyWith(mapTileUrlTemplate: value));
+  }
+
+  Future<void> _editUnit(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final DistanceUnit? unit = await showPaperSheet<DistanceUnit>(
+      context: context,
+      builder: (BuildContext sheetContext) => PaperSheet(
+        title: '距离单位',
+        subtitle: '影响记录、历史与统计的读数',
+        onClose: () => Navigator.of(sheetContext).pop(),
+        child: Column(
+          children: <Widget>[
+            for (final DistanceUnit value in DistanceUnit.values)
+              _ChoiceRow(
+                key: Key('unit-${value.name}'),
+                label: _unitLabel(value),
+                selected: value == settings.distanceUnit,
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (unit == null || unit == settings.distanceUnit) return;
+    await _save(ref, settings.copyWith(distanceUnit: unit));
+  }
+
+  Future<void> _openBackup(BuildContext context) => showPaperSheet<void>(
+        context: context,
+        builder: (BuildContext sheetContext) => PaperSheet(
+          title: '备份与恢复',
+          subtitle: '导出一份归档，或从归档恢复全部记录',
+          onClose: () => Navigator.of(sheetContext).pop(),
+          child: const BackupSection(showHeader: false),
+        ),
+      );
+
+  Future<void> _save(WidgetRef ref, AppSettings settings) async {
+    await ref.read(settingsRepositoryProvider).save(settings);
     ref.invalidate(appSettingsProvider);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('设置已保存')),
+  }
+
+  static Future<String?> _showTextSheet(
+    BuildContext context, {
+    required String title,
+    required String helper,
+    required String initial,
+    required String label,
+    required TextInputType keyboardType,
+    required String? Function(String) validate,
+  }) =>
+      showPaperSheet<String>(
+        context: context,
+        builder: (BuildContext sheetContext) => PaperSheet(
+          title: title,
+          subtitle: helper,
+          onClose: () => Navigator.of(sheetContext).pop(),
+          child: _TextEditForm(
+            initial: initial,
+            label: label,
+            keyboardType: keyboardType,
+            validate: validate,
+          ),
+        ),
+      );
+
+  static String _unitLabel(DistanceUnit unit) =>
+      unit == DistanceUnit.mile ? '英里' : '公里';
+
+  static String _tileLabel(String url) {
+    if (url == kDefaultMapTileUrlTemplate) return '高德 · 宣纸';
+    final Uri? uri = Uri.tryParse(url);
+    return uri != null && uri.host.isNotEmpty ? uri.host : '自定义源';
+  }
+}
+
+/// 分组标题：疏排小标题 + 右侧说明。上方不需要线——上一行的底边线已经分隔。
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader(this.title, {this.hint});
+
+  final String title;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceXl, kSpaceL, kSpaceS),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              title,
+              style: kLabelTextStyle.copyWith(
+                color: palette.muted,
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+          if (hint != null)
+            Text(
+              hint!,
+              style: kLabelTextStyle.copyWith(
+                color: palette.muted,
+                letterSpacing: 0,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-/// 分组标签。上方一条从边到边的细线把这一组和上一组分开——原来靠 40px 高的
-/// Divider 撑开间距，三组之间只剩留白，扫一眼分不清哪几行是同属一组。
-/// 第一组不画线：AppBar 自带一条底边线，再画一条就叠成两像素粗。
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text, {this.leadingDivider = true});
+/// 一行「标签 + 当前值 + 尖括号」。点开底部编辑面板。
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.showDivider = true,
+    super.key,
+  });
 
-  final String text;
-  final bool leadingDivider;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  final bool showDivider;
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          if (leadingDivider) const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-            child: Text(text, style: kSectionTextStyle),
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Column(
+      children: <Widget>[
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: kSpaceL,
+              vertical: kSpaceM,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: kFontSubtitle,
+                      color: palette.ink,
+                    ),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: kFontMeta,
+                    color: palette.muted,
+                    fontFeatures: kTabularFigures,
+                  ),
+                ),
+                const SizedBox(width: kSpaceS),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: palette.muted,
+                ),
+              ],
+            ),
           ),
-        ],
-      );
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            indent: kSpaceL,
+            endIndent: kSpaceL,
+            color: palette.hairline,
+          ),
+      ],
+    );
+  }
 }
 
-/// 主题色选择。见设计文档 10.5。点选即存即生效，无需点「保存」——它不在那几个
-/// 输入框里，单独即时提交比攒着一起保存更顺。
-class _AppearanceSection extends ConsumerWidget {
-  const _AppearanceSection();
+class _AboutRow extends StatelessWidget {
+  const _AboutRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        kSpaceL,
+        kSpaceM,
+        kSpaceL,
+        kSpaceM,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              '行迹 XINGJI · 1.0.0',
+              style: TextStyle(
+                fontSize: 12,
+                color: palette.muted,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          Text(
+            '数据仅存本机',
+            style: TextStyle(fontSize: 12, color: palette.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 主题色：四颗颜料点 + 名称，选中项带对勾与「当前 {颜料}」。
+class _ThemeSection extends ConsumerWidget {
+  const _ThemeSection({required this.settings});
+
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ThemeAccent current =
-        ref.watch(appSettingsProvider).value?.accent ?? ThemeAccent.cinnabar;
+    final AppPalette palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Divider(height: 1),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-          child: Text('外观', style: kSectionTextStyle),
-        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
-          child: Text(
-            '主题色只用在「正在发生 / 可交互 / 已选中」的地方，不参与数据着色。',
-            style: kMutedTextStyle.copyWith(fontSize: 12),
+          padding: const EdgeInsets.fromLTRB(
+            kSpaceL,
+            kSpaceM,
+            kSpaceL,
+            0,
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '主题色',
+                  style: TextStyle(
+                    fontSize: kFontSubtitle,
+                    color: palette.ink,
+                  ),
+                ),
+              ),
+              Text(
+                '当前 ${settings.accent.label}',
+                style: TextStyle(
+                  fontSize: kFontMeta,
+                  color: palette.muted,
+                ),
+              ),
+            ],
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+          padding: const EdgeInsets.fromLTRB(
+            kSpaceL,
+            kSpaceS,
+            kSpaceL,
+            kSpaceM,
+          ),
           child: Row(
             children: <Widget>[
               for (final ThemeAccent accent in ThemeAccent.values)
@@ -258,12 +456,18 @@ class _AppearanceSection extends ConsumerWidget {
                   child: _AccentDot(
                     key: Key('accent-${accent.dbValue}'),
                     accent: accent,
-                    selected: accent == current,
+                    selected: accent == settings.accent,
                     onTap: () => _pick(ref, accent),
                   ),
                 ),
             ],
           ),
+        ),
+        Divider(
+          height: 1,
+          indent: kSpaceL,
+          endIndent: kSpaceL,
+          color: palette.hairline,
         ),
       ],
     );
@@ -271,7 +475,7 @@ class _AppearanceSection extends ConsumerWidget {
 
   Future<void> _pick(WidgetRef ref, ThemeAccent accent) async {
     final AppSettings? current = ref.read(appSettingsProvider).value;
-    if (current == null) return;
+    if (current == null || current.accent == accent) return;
     await ref
         .read(settingsRepositoryProvider)
         .save(current.copyWith(accent: accent));
@@ -279,11 +483,6 @@ class _AppearanceSection extends ConsumerWidget {
   }
 }
 
-/// 一颗主题色：色点 + 名称。选中时描白圈并压一枚对勾。
-///
-/// 名称必须写出来——只给一个色点，用户分不清哪个是「薄荷」哪个是「天青」，
-/// 读屏用户靠 [Semantics.label] 能听懂，视觉用户没有标签就只能靠猜。名称也是
-/// 色觉障碍用户唯一能用的区分方式。
 class _AccentDot extends StatelessWidget {
   const _AccentDot({
     required this.accent,
@@ -297,54 +496,58 @@ class _AccentDot extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        label: accent.label,
-        selected: selected,
-        button: true,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(kSpaceXs),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accent.color,
-                    border: Border.all(
-                      color: selected ? kAppTextPrimary : kAppHairline,
-                      width: selected ? 2 : 1,
-                    ),
-                  ),
-                  child: selected
-                      ? Icon(
-                          Icons.check,
-                          size: 20,
-                          color: context.palette.onAccent,
-                        )
-                      : null,
-                ),
-                const SizedBox(height: kSpaceXs),
-                Text(
-                  accent.label,
-                  style: kLabelTextStyle.copyWith(
-                    color: selected ? kAppTextPrimary : kAppTextMuted,
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Semantics(
+      label: accent.label,
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(kSpaceXs),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.color,
+                  border: Border.all(
+                    color: selected ? palette.ink : palette.hairline,
+                    width: selected ? 2 : 1,
                   ),
                 ),
-              ],
-            ),
+                child: selected
+                    ? Icon(
+                        Icons.check,
+                        size: 20,
+                        color: palette.onAccent,
+                      )
+                    : null,
+              ),
+              const SizedBox(height: kSpaceXs),
+              Text(
+                accent.label,
+                style: kLabelTextStyle.copyWith(
+                  color: selected ? palette.ink : palette.muted,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
-/// 传感器配对管理。见设计文档 10.5。
+/// 传感器配对管理。三行：已连接显示设备名与状态/断开，未连接显示「+ 未连接」。
 class _SensorSection extends ConsumerStatefulWidget {
   const _SensorSection();
 
@@ -375,6 +578,20 @@ class _SensorSectionState extends ConsumerState<_SensorSection> {
     });
   }
 
+  Future<void> _connect(SensorKind kind) async {
+    final DiscoveredDevice? device =
+        await showModalBottomSheet<DiscoveredDevice>(
+      context: context,
+      builder: (BuildContext context) => DevicePickerSheet(kind: kind),
+    );
+    if (device == null) return;
+    await ref.read(sensorPairingProvider).save(
+          kind,
+          PairedSensor(id: device.device.id, name: device.name),
+        );
+    await _reload();
+  }
+
   Future<void> _clear(SensorKind kind) async {
     await ref.read(sensorPairingProvider).clear(kind);
     await _reload();
@@ -382,76 +599,271 @@ class _SensorSectionState extends ConsumerState<_SensorSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: kSpaceL),
+        child: SizedBox(
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    const Map<SensorKind, String> labels = <SensorKind, String>{
+      SensorKind.heartRate: '心率',
+      SensorKind.cadence: '踏频',
+      SensorKind.power: '功率',
+    };
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Divider(height: 1),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
-          child: Text('传感器配对', style: kSectionTextStyle),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
-          child: Text(
-            '连接成功后会自动记住设备，下次开始记录时自动重连。',
-            style: kMutedTextStyle.copyWith(fontSize: 12),
+        for (final SensorKind kind in SensorKind.values)
+          _SensorRow(
+            key: Key('sensor-${kind.name}'),
+            label: labels[kind]!,
+            paired: _paired[kind],
+            onTap: _paired[kind] == null ? () => _connect(kind) : null,
+            onDisconnect: _paired[kind] == null ? null : () => _clear(kind),
+            showDivider: kind != SensorKind.power,
           ),
-        ),
-        const SizedBox(height: kSpaceM),
-        if (!_loaded)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: kSpaceL),
-            child: SizedBox(
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
-            child: Column(
-              children: <Widget>[
-                _row('心率', SensorKind.heartRate),
-                const SizedBox(height: kSpaceS),
-                _row('踏频', SensorKind.cadence),
-                const SizedBox(height: kSpaceS),
-                _row('功率', SensorKind.power),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _row(String label, SensorKind kind) {
-    final PairedSensor? paired = _paired[kind];
-    return Row(
-      children: <Widget>[
-        SizedBox(width: 56, child: Text(label, style: kLabelTextStyle)),
-        Expanded(
-          child: Text(
-            paired == null
-                ? '未配对'
-                : (paired.name.isEmpty ? paired.id : paired.name),
-            style: TextStyle(
-              fontSize: 13,
-              color: paired == null ? kAppTextMuted : context.palette.accent,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (paired != null)
-          TextButton(onPressed: () => _clear(kind), child: const Text('解除')),
       ],
     );
   }
 }
 
-/// 调试区块：只在 debug 构建里出现（见 `kDebugMode`），用来在真机上铺一批
-/// 模拟骑行看排版，以及看够了之后一键清场。
-///
-/// 不放进 release：这不是用户功能，留着只会让人误以为 App 自带样例数据。
+class _SensorRow extends StatelessWidget {
+  const _SensorRow({
+    required this.label,
+    required this.paired,
+    required this.onTap,
+    required this.onDisconnect,
+    required this.showDivider,
+    super.key,
+  });
+
+  final String label;
+  final PairedSensor? paired;
+  final VoidCallback? onTap;
+  final VoidCallback? onDisconnect;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    final bool connected = paired != null;
+    return Column(
+      children: <Widget>[
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: kSpaceL,
+              vertical: kSpaceM,
+            ),
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: kFontSubtitle,
+                      color: palette.ink,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Row(
+                    children: <Widget>[
+                      if (connected)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: palette.accentInk,
+                          ),
+                        )
+                      else
+                        Icon(
+                          Icons.add,
+                          size: 16,
+                          color: palette.accentInk,
+                        ),
+                      const SizedBox(width: kSpaceS),
+                      if (connected)
+                        Flexible(
+                          child: Text(
+                            paired!.name.isEmpty ? paired!.id : paired!.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: kFontMeta,
+                              color: palette.ink,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (connected) ...<Widget>[
+                  Text(
+                    '已连接',
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.accentInk,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onDisconnect,
+                    style: TextButton.styleFrom(
+                      foregroundColor: palette.muted,
+                      minimumSize: const Size(44, 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: kSpaceS,
+                      ),
+                    ),
+                    child: const Text('断开'),
+                  ),
+                ] else ...<Widget>[
+                  Text(
+                    '未连接',
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.muted,
+                    ),
+                  ),
+                  const SizedBox(width: kSpaceXs),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: palette.muted,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            indent: kSpaceL,
+            endIndent: kSpaceL,
+            color: palette.hairline,
+          ),
+      ],
+    );
+  }
+}
+
+/// 编辑面板里的输入 + 保存。校验失败时留在面板内显示错误。
+class _TextEditForm extends StatefulWidget {
+  const _TextEditForm({
+    required this.initial,
+    required this.label,
+    required this.keyboardType,
+    required this.validate,
+  });
+
+  final String initial;
+  final String label;
+  final TextInputType keyboardType;
+  final String? Function(String) validate;
+
+  @override
+  State<_TextEditForm> createState() => _TextEditFormState();
+}
+
+class _TextEditFormState extends State<_TextEditForm> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final String text = _controller.text.trim();
+    final String? error = widget.validate(text);
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: widget.keyboardType,
+            decoration: InputDecoration(
+              labelText: widget.label,
+              errorText: _error,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: kSpaceL),
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: _submit,
+              child: const Text('保存'),
+            ),
+          ),
+        ],
+      );
+}
+
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: kSpaceM),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: kFontSubtitle,
+                  color: palette.ink,
+                ),
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check, size: 20, color: palette.accentInk),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 调试区块：只在 debug 构建里出现（见 `kDebugMode`）。
 class _DebugSection extends ConsumerStatefulWidget {
   const _DebugSection();
 
@@ -497,7 +909,9 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : _clear,
-                  style: OutlinedButton.styleFrom(foregroundColor: kAppDanger),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.palette.danger,
+                  ),
                   child: const Text('清空全部记录'),
                 ),
               ),
@@ -507,7 +921,10 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
         if (_message != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
-            child: Text(_message!, style: kMutedTextStyle.copyWith(fontSize: 13)),
+            child: Text(
+              _message!,
+              style: kMutedTextStyle.copyWith(fontSize: 13),
+            ),
           ),
       ],
     );

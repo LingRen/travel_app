@@ -61,13 +61,13 @@
 
 ## 7. 设置与平台
 
-- [ ] 7.1 重做 `lib/features/settings/settings_page.dart` 页眉与五个分组：身体、传感器、地图与外观、数据、关于；分组用发丝线与疏排小标题，不使用卡片。验证：`test/features/settings/settings_page_test.dart` 断言分组顺序与页眉。
-- [ ] 7.2 身体参数改为「标签 + 当前值」行 + 底部编辑面板：最大心率 100–230 整数校验、体重与瓦片源校验、确认后立即保存、取消不改变；距离单位行内切换。验证：`test/features/settings/settings_page_test.dart` 覆盖合法保存、非法输入不关闭与单位即时生效。
-- [ ] 7.3 传感器三行显示设备名与已连接 / 未连接；未连接行打开设备面板，已连接行提供断开并回到未连接。验证：`test/features/settings/settings_page_test.dart` 覆盖心率已连接、踏频未连接与断开。
-- [ ] 7.4 地图与外观分组提供瓦片源行与四颗主题色点，色点带名称、当前项对勾与「当前 {颜料}」，点击立即保存并整树重着色。验证：`test/features/settings/settings_page_test.dart` 覆盖选择青瓷、重启后保持与不依赖保存按钮。
-- [ ] 7.5 数据分组保留导出备份、恢复确认与中文错误提示，显示上次备份时间（如有）。验证：`test/features/settings/settings_page_test.dart` 与 `test/data/export/backup_test.dart` 覆盖导出、确认恢复与失败提示。
-- [ ] 7.6 关于分组显示「行迹 XINGJI · 1.0.0」与「数据仅存本机」，不出现账号、云同步或社交入口；调试工具只在 `kDebugMode` 显示。验证：`test/features/settings/settings_page_test.dart` 断言关于文本与 release 下无调试分组。
-- [ ] 7.7 将 Android `android/app/src/main/AndroidManifest.xml` 的 `android:label` 与 iOS `ios/Runner/Info.plist` 的 `CFBundleDisplayName` 改为「行迹」，并确认状态栏深色图标。验证：`grep` 两个平台配置得到「行迹」，真机冷启动标题与状态栏符合纸本主题。
+- [x] 7.1 重做 `lib/features/settings/settings_page.dart` 页眉与五个分组：身体、传感器、地图与外观、数据、关于；分组用发丝线与疏排小标题，不使用卡片。验证：`test/features/settings/settings_page_test.dart` 断言分组顺序与页眉。
+- [x] 7.2 身体参数改为「标签 + 当前值」行 + 底部编辑面板：最大心率 100–230 整数校验、体重与瓦片源校验、确认后立即保存、取消不改变；距离单位行内切换。验证：`test/features/settings/settings_page_test.dart` 覆盖合法保存、非法输入不关闭与单位即时生效。
+- [x] 7.3 传感器三行显示设备名与已连接 / 未连接；未连接行打开设备面板，已连接行提供断开并回到未连接。验证：`test/features/settings/settings_page_test.dart` 覆盖心率已连接、踏频未连接与断开。
+- [x] 7.4 地图与外观分组提供瓦片源行与四颗主题色点，色点带名称、当前项对勾与「当前 {颜料}」，点击立即保存并整树重着色。验证：`test/features/settings/settings_page_test.dart` 覆盖选择青瓷、重启后保持与不依赖保存按钮。
+- [x] 7.5 数据分组保留导出备份、恢复确认与中文错误提示，显示上次备份时间（如有）。验证：`test/features/settings/settings_page_test.dart` 与 `test/data/export/backup_test.dart` 覆盖导出、确认恢复与失败提示。
+- [x] 7.6 关于分组显示「行迹 XINGJI · 1.0.0」与「数据仅存本机」，不出现账号、云同步或社交入口；调试工具只在 `kDebugMode` 显示。验证：`test/features/settings/settings_page_test.dart` 断言关于文本与 release 下无调试分组。
+- [x] 7.7 将 Android `android/app/src/main/AndroidManifest.xml` 的 `android:label` 与 iOS `ios/Runner/Info.plist` 的 `CFBundleDisplayName` 改为「行迹」，并确认状态栏深色图标。验证：`grep` 两个平台配置得到「行迹」，真机冷启动标题与状态栏符合纸本主题。
 - [ ] 7.8 更新 `README.md` 的设置、主题色与平台段落，以及旧设计文档的主题 / 强调色段落，改为纸本唯一主题与四色颜料。验证：文档中不再出现深色主题、薄荷 / 天青 / 紫罗兰三色描述。
 
 ## 8. 集成验收

@@ -2,6 +2,9 @@ import 'dart:typed_data';
 
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
+import 'package:cycling_app/app/ui/paper_sheet.dart';
+import 'package:cycling_app/data/ble/ble_platform.dart';
+import 'package:cycling_app/data/ble/ble_scanner.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/export/backup.dart';
 import 'package:cycling_app/data/export/backup_io.dart';
@@ -26,10 +29,10 @@ const AppSettings _settings = AppSettings(
   mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
 );
 
-/// 内存版设置仓储：记录最后一次 save 的内容。
 class _FakeSettingsRepository implements SettingsRepository {
   AppSettings saved = _settings;
   int saveCalls = 0;
+  int? lastBackupAtMs;
 
   @override
   Future<AppSettings> load() async => saved;
@@ -40,14 +43,20 @@ class _FakeSettingsRepository implements SettingsRepository {
     saveCalls++;
   }
 
-  /// 记录页换类型时写回的「上次选择」。设置页自己不写这个键。
+  @override
+  Future<int?> lastBackupAt() async => lastBackupAtMs;
+
+  @override
+  Future<void> saveLastBackupAt(int epochMs) async {
+    lastBackupAtMs = epochMs;
+  }
+
   @override
   Future<void> saveLastActivityType(ActivityType type) async {
     saved = saved.copyWith(lastActivityType: type);
   }
 }
 
-/// 内存版配对仓储。
 class _FakeSensorPairing implements SensorPairingRepository {
   final Map<SensorKind, PairedSensor> stored = <SensorKind, PairedSensor>{};
 
@@ -65,7 +74,20 @@ class _FakeSensorPairing implements SensorPairingRepository {
   }
 }
 
-/// 内存版备份数据源。
+class _FakeBleScanner implements BleScanner {
+  @override
+  Future<bool> isAdapterOn() async => true;
+
+  @override
+  Future<BleDeviceHandle?> deviceById(String id) async => null;
+
+  @override
+  Future<List<DiscoveredDevice>> scan({
+    Duration timeout = const Duration(seconds: 10),
+  }) async =>
+      const <DiscoveredDevice>[];
+}
+
 class _FakeBackupStore implements BackupStore {
   _FakeBackupStore({this.rides = const <Workout>[]});
 
@@ -98,7 +120,6 @@ class _FakeBackupStore implements BackupStore {
   }
 }
 
-/// 内存版文件 IO：导出只记录字节，选文件返回预设内容。
 class _FakeBackupIo implements BackupIo {
   Uint8List? pickResult;
   Uint8List? exported;
@@ -138,7 +159,6 @@ Uint8List wrongVersionArchive() => buildBackupArchive(
       schemaVersion: kBackupSchemaVersion + 1,
     );
 
-/// 备份区当前渲染出的全部文本，用来断言「有没有多出一条提示」。
 List<String> backupSectionTexts(WidgetTester tester) => tester
     .widgetList<Text>(
       find.descendant(
@@ -160,7 +180,12 @@ void main() {
     pairing = _FakeSensorPairing();
     store = _FakeBackupStore(
       rides: const <Workout>[
-        Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished, title: '晨骑'),
+        Workout(
+          id: 1,
+          startedAtMs: 1000,
+          status: WorkoutStatus.finished,
+          title: '晨骑',
+        ),
       ],
     );
     io = _FakeBackupIo();
@@ -170,6 +195,7 @@ void main() {
         overrides: <Override>[
           settingsRepositoryProvider.overrideWithValue(settings),
           sensorPairingProvider.overrideWithValue(pairing),
+          bleScannerProvider.overrideWithValue(_FakeBleScanner()),
           backupStoreProvider.overrideWithValue(store),
           backupIoProvider.overrideWithValue(io),
           appSettingsProvider
@@ -178,10 +204,6 @@ void main() {
         child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
       );
 
-  /// 设置页是全项目最长的 `ListView`：个人参数 4 个控件 + 保存按钮 + 传感器配对区
-  /// + 备份区，默认 800x600 的测试视口只构建前几屏，页面下半部分的「保存」「解除」
-  /// 「导出备份」「恢复备份」根本不会被 build，`find.text` 会假失败。参考
-  /// `pumpStats` 的做法把视口调高。
   Future<void> pumpSettings(
     WidgetTester tester, {
     AppSettings current = _settings,
@@ -193,86 +215,217 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('显示当前设置值', (WidgetTester tester) async {
+  Future<void> openRow(WidgetTester tester, String key) async {
+    await tester.tap(find.byKey(Key(key)));
+    await tester.pumpAndSettle();
+  }
+
+  Finder sheetTextField() => find.descendant(
+        of: find.byType(PaperSheet),
+        matching: find.byType(TextField),
+      );
+
+  Future<void> saveSheet(WidgetTester tester) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(PaperSheet),
+        matching: find.text('保存'),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> closeSheet(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openBackup(WidgetTester tester) async {
+    await openRow(tester, 'settings-backup');
+  }
+
+  testWidgets('显示页眉、五个分组与当前设置值', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    expect(find.text('190'), findsOneWidget);
-    expect(find.text('70.0'), findsOneWidget);
+    expect(find.text('本 机 设 置'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('身体、传感器与这一册的样貌'), findsOneWidget);
+    // 五个分组按从上到下的顺序出现。
+    final List<String> groups = <String>[
+      '身 体',
+      '传 感 器',
+      '地 图 与 外 观',
+      '数 据',
+      '关 于',
+    ];
+    double previous = -1;
+    for (final String group in groups) {
+      final double y = tester.getTopLeft(find.text(group)).dy;
+      expect(y, greaterThan(previous), reason: group);
+      previous = y;
+    }
+
+    expect(find.text('最大心率'), findsOneWidget);
+    expect(find.text('190 bpm'), findsOneWidget);
+    expect(find.text('体重'), findsOneWidget);
+    expect(find.text('70.0 kg'), findsOneWidget);
+    expect(find.text('距离单位'), findsOneWidget);
     expect(find.text('公里'), findsOneWidget);
-    expect(find.text(kDefaultMapTileUrlTemplate), findsOneWidget);
+    expect(find.text('地图瓦片'), findsOneWidget);
+    expect(find.text('高德 · 宣纸'), findsOneWidget);
+    expect(find.text('行迹 XINGJI · 1.0.0'), findsOneWidget);
+    expect(find.text('数据仅存本机'), findsOneWidget);
   });
 
-  testWidgets('改最大心率后保存写回仓储', (WidgetTester tester) async {
+  testWidgets('修改最大心率后立即保存', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    await tester.tap(find.text('190'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '175');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await openRow(tester, 'settings-max-hr');
+    expect(find.byType(PaperSheet), findsOneWidget);
+    await tester.enterText(sheetTextField(), '175');
+    await saveSheet(tester);
 
     expect(settings.saveCalls, 1);
     expect(settings.saved.maxHeartRate, 175);
-    // `_save` 末尾会 `ref.invalidate(appSettingsProvider)`，而本测试里该 provider
-    // 被 `overrideWithValue` 覆盖。riverpod 3 允许这样 invalidate，不该抛异常。
-    expect(tester.takeException(), isNull);
+    expect(find.byType(PaperSheet), findsNothing);
   });
 
-  testWidgets('越界的最大心率不保存，给出提示', (WidgetTester tester) async {
+  testWidgets('越界最大心率不关闭面板，给出提示', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    await tester.tap(find.text('190'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '999');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await openRow(tester, 'settings-max-hr');
+    await tester.enterText(sheetTextField(), '999');
+    await saveSheet(tester);
 
     expect(settings.saveCalls, 0);
-    expect(find.textContaining('最大心率'), findsWidgets);
+    expect(find.byType(PaperSheet), findsOneWidget);
+    expect(find.textContaining('100~230'), findsOneWidget);
+    await closeSheet(tester);
+    expect(find.byType(PaperSheet), findsNothing);
   });
 
-  testWidgets('没有配对传感器时显示未配对，并提供连接入口', (WidgetTester tester) async {
+  testWidgets('体重与瓦片源校验，取消不写库', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    expect(find.textContaining('未配对'), findsNWidgets(3)); // 心率 + 踏频 + 功率
+    await openRow(tester, 'settings-weight');
+    await tester.enterText(sheetTextField(), '0');
+    await saveSheet(tester);
+    expect(settings.saveCalls, 0);
+    expect(find.textContaining('大于 0'), findsOneWidget);
+    await closeSheet(tester);
+
+    await openRow(tester, 'settings-tile');
+    await tester.enterText(sheetTextField(), 'not a url');
+    await saveSheet(tester);
+    expect(settings.saveCalls, 0);
+    expect(find.textContaining('http(s)'), findsOneWidget);
+    await closeSheet(tester);
   });
 
-  testWidgets('功率计的配对状态与另外两种传感器一起显示', (WidgetTester tester) async {
-    pairing.stored[SensorKind.power] =
-        const PairedSensor(id: 'CC:03', name: 'ASSIOMA');
-
+  testWidgets('修改体重与瓦片源后立即保存', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    expect(find.textContaining('ASSIOMA'), findsOneWidget);
-    expect(find.text('解除'), findsOneWidget);
+    await openRow(tester, 'settings-weight');
+    await tester.enterText(sheetTextField(), '68.5');
+    await saveSheet(tester);
+    expect(settings.saved.weightKg, 68.5);
+
+    await openRow(tester, 'settings-tile');
+    await tester.enterText(
+      sheetTextField(),
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    );
+    await saveSheet(tester);
+    expect(
+      settings.saved.mapTileUrlTemplate,
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    );
   });
 
-  testWidgets('已配对的传感器显示名字与解除按钮', (WidgetTester tester) async {
+  testWidgets('距离单位行内切换并立即保存', (WidgetTester tester) async {
+    await pumpSettings(tester);
+
+    await openRow(tester, 'settings-unit');
+    await tester.tap(find.byKey(const Key('unit-mile')));
+    await tester.pumpAndSettle();
+
+    expect(settings.saveCalls, 1);
+    expect(settings.saved.distanceUnit, DistanceUnit.mile);
+  });
+
+  testWidgets('未连接传感器行打开设备面板', (WidgetTester tester) async {
+    await pumpSettings(tester);
+
+    expect(find.text('未连接'), findsNWidgets(3));
+    await openRow(tester, 'sensor-heartRate');
+
+    expect(find.text('选择心率设备'), findsOneWidget);
+    expect(find.text('没有发现设备'), findsOneWidget);
+    // 关闭底部面板。
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.text('选择心率设备'), findsNothing);
+  });
+
+  testWidgets('已配对传感器显示设备名与已连接，断开后回到未连接',
+      (WidgetTester tester) async {
     pairing.stored[SensorKind.heartRate] =
         const PairedSensor(id: 'AA:01', name: 'FIT 3');
 
     await pumpSettings(tester);
 
     expect(find.textContaining('FIT 3'), findsOneWidget);
-    expect(find.text('解除'), findsOneWidget);
-  });
-
-  testWidgets('点解除后清掉配对并刷新界面', (WidgetTester tester) async {
-    pairing.stored[SensorKind.heartRate] =
-        const PairedSensor(id: 'AA:01', name: 'FIT 3');
-
-    await pumpSettings(tester);
-    expect(find.textContaining('FIT 3'), findsOneWidget);
-
-    await tester.tap(find.text('解除'));
+    expect(find.text('已连接'), findsOneWidget);
+    await tester.tap(find.text('断开'));
     await tester.pumpAndSettle();
 
     expect(pairing.stored.containsKey(SensorKind.heartRate), isFalse);
     expect(find.textContaining('FIT 3'), findsNothing);
+    expect(find.text('未连接'), findsNWidgets(3));
   });
 
-  testWidgets('点导出备份会把归档交给 IO 层', (WidgetTester tester) async {
+  testWidgets('四颗主题色带名称与当前标记，点选即保存', (WidgetTester tester) async {
     await pumpSettings(tester);
+
+    for (final ThemeAccent accent in ThemeAccent.values) {
+      expect(find.byKey(Key('accent-${accent.dbValue}')), findsOneWidget);
+      expect(find.text(accent.label), findsOneWidget);
+    }
+    expect(find.text('当前 朱砂'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('accent-cinnabar')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('accent-celadon')));
+    await tester.pumpAndSettle();
+
+    expect(settings.saveCalls, 1);
+    expect(settings.saved.accent, ThemeAccent.celadon);
+  });
+
+  testWidgets('以青瓷启动时当前标记与对勾落在青瓷上', (WidgetTester tester) async {
+    await pumpSettings(
+      tester,
+      current: _settings.copyWith(accent: ThemeAccent.celadon),
+    );
+
+    expect(find.text('当前 青瓷'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('accent-celadon')),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('导出备份写入文件并记录上次备份时间', (WidgetTester tester) async {
+    await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('导出备份'));
     await tester.pumpAndSettle();
@@ -280,9 +433,14 @@ void main() {
     expect(io.exportCalls, 1);
     expect(io.exported, isNotNull);
     expect(io.exportedFileName, endsWith('.zip'));
-    // 归档能被解回来，说明内容是真的。
+    expect(settings.lastBackupAtMs, isNotNull);
     final BackupPayload payload = parseBackupArchive(io.exported!);
     expect(payload.rides.single.title, '晨骑');
+    expect(find.textContaining('已导出'), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('上次'), findsOneWidget);
   });
 
   testWidgets('导出的归档包含轨迹点', (WidgetTester tester) async {
@@ -290,14 +448,12 @@ void main() {
       TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4.0),
       TrackPoint(rideId: 1, tMs: 2000, lat: 31.001, lon: 121.0, speedMps: 5.0),
     ];
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('导出备份'));
     await tester.pumpAndSettle();
 
-    // 只断言「rides 在里面」杀不掉「导出时漏掉 listPoints」这种数据完整性变异：
-    // 必须真的把轨迹点读回来核对内容与条数。
     expect(store.listPointsCalls, 1);
     final BackupPayload payload = parseBackupArchive(io.exported!);
     expect(payload.points, hasLength(2));
@@ -307,10 +463,10 @@ void main() {
     expect(payload.manifest.rideCount, 1);
   });
 
-  testWidgets('导出失败时显示提示而不是崩溃', (WidgetTester tester) async {
+  testWidgets('导出失败时显示中文提示', (WidgetTester tester) async {
     io.exportError = StateError('磁盘满了');
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('导出备份'));
     await tester.pumpAndSettle();
@@ -319,10 +475,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('用户取消选文件时不弹确认框也不写库', (WidgetTester tester) async {
+  testWidgets('恢复取消选文件时不弹确认框也不写库', (WidgetTester tester) async {
     io.pickResult = null;
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('恢复备份'));
     await tester.pumpAndSettle();
@@ -330,18 +486,14 @@ void main() {
     expect(io.pickCalls, 1);
     expect(find.text('确认恢复？'), findsNothing);
     expect(store.applied, isNull);
-    // 取消必须是「什么都不做」：若把 `bytes == null` 的 return 去掉，空字节会走进
-    // `parseBackupArchive`，抛出的 `BackupFormatException`（「归档里没有 manifest.json」）
-    // 会被 `on BackupFormatException` 接住并渲染成提示。只断言「不弹框、不写库」
-    // 杀不掉这个变异，所以这里直接钉死备份区渲染出的全部文本。
-    expect(backupSectionTexts(tester), <String>['备份与恢复', '导出备份', '恢复备份']);
+    expect(backupSectionTexts(tester), <String>['导出备份', '恢复备份']);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('归档版本不匹配时说明原因，且不写库', (WidgetTester tester) async {
     io.pickResult = wrongVersionArchive();
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('恢复备份'));
     await tester.pumpAndSettle();
@@ -353,12 +505,11 @@ void main() {
 
   testWidgets('确认框里取消则不写库', (WidgetTester tester) async {
     io.pickResult = emptyArchive();
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('恢复备份'));
     await tester.pumpAndSettle();
-
     expect(find.text('确认恢复？'), findsOneWidget);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
@@ -366,29 +517,10 @@ void main() {
     expect(store.applied, isNull);
   });
 
-  testWidgets('点确认框外面关掉不写库', (WidgetTester tester) async {
-    io.pickResult = emptyArchive();
-
-    await pumpSettings(tester);
-
-    await tester.tap(find.text('恢复备份'));
-    await tester.pumpAndSettle();
-    expect(find.text('确认恢复？'), findsOneWidget);
-
-    // 点对话框外的遮罩：`showDialog` 返回 null，而不是 true/false。这是唯一能区分
-    // `_confirm(payload) ?? false` 与 `?? true` 的路径——点「取消」返回的是 false，
-    // `false ?? true` 仍然是 false，杀不掉这个变异。
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle();
-
-    expect(find.text('确认恢复？'), findsNothing);
-    expect(store.applied, isNull);
-  });
-
   testWidgets('确认后按替换语义写回备份', (WidgetTester tester) async {
     io.pickResult = emptyArchive();
-
     await pumpSettings(tester);
+    await openBackup(tester);
 
     await tester.tap(find.text('恢复备份'));
     await tester.pumpAndSettle();
@@ -400,57 +532,15 @@ void main() {
     expect(find.textContaining('恢复完成'), findsOneWidget);
   });
 
-  testWidgets('外观分组列出每一组主题色，并给当前色打勾', (WidgetTester tester) async {
+  testWidgets('关于区不出现账号、云同步或社交入口', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    for (final ThemeAccent accent in ThemeAccent.values) {
-      expect(find.byKey(Key('accent-${accent.dbValue}')), findsOneWidget);
-      // 名称写出来，色觉障碍用户与不知道色名的用户都能分辨。
-      expect(find.text(accent.label), findsOneWidget);
+    expect(find.text('行迹 XINGJI · 1.0.0'), findsOneWidget);
+    expect(find.text('数据仅存本机'), findsOneWidget);
+    for (final String word in <String>['账号', '云同步', '社交', '登录']) {
+      expect(find.textContaining(word), findsNothing, reason: word);
     }
-    // 默认是朱砂，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
-    // 分段也带对勾，所以必须限定在圆点内部去找）。
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('accent-cinnabar')),
-        matching: find.byIcon(Icons.check),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('accent-celadon')),
-        matching: find.byIcon(Icons.check),
-      ),
-      findsNothing,
-    );
-  });
-
-  testWidgets('点选主题色圆点即存即生效，不需要点保存', (WidgetTester tester) async {
-    await pumpSettings(tester);
-
-    // 默认是朱砂，这里点另一组，确保验证的是「切换」而不是「点已选中的那颗」。
-    await tester.tap(find.byKey(const Key('accent-celadon')));
-    await tester.pumpAndSettle();
-
-    expect(settings.saveCalls, 1);
-    expect(settings.saved.accent, ThemeAccent.celadon);
-    // 其余设置项不能被这次点选改动。
-    expect(settings.saved.maxHeartRate, _settings.maxHeartRate);
-    expect(settings.saved.weightKg, _settings.weightKg);
-  });
-
-  testWidgets('保存个人参数时保留当前主题色，不重置回默认', (WidgetTester tester) async {
-    final AppSettings indigo = _settings.copyWith(accent: ThemeAccent.indigo);
-    await pumpSettings(tester, current: indigo);
-
-    await tester.tap(find.text('190'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '175');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-
-    expect(settings.saved.maxHeartRate, 175);
-    expect(settings.saved.accent, ThemeAccent.indigo);
+    // debug 构建下有调试工具；release 由 kDebugMode 门控（见源码）。
+    expect(find.text('调试（仅 debug 构建）'), findsOneWidget);
   });
 }

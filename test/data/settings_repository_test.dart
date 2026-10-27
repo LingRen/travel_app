@@ -75,6 +75,12 @@ void main() {
     expect((await repo.load()).accent, ThemeAccent.celadon);
   });
 
+  test('上次备份时间可保存与读取', () async {
+    expect(await repo.lastBackupAt(), isNull);
+    await repo.saveLastBackupAt(1729900000000);
+    expect(await repo.lastBackupAt(), 1729900000000);
+  });
+
   test('旧主题值映射到新颜料', () async {
     for (final (String raw, ThemeAccent want) in <(String, ThemeAccent)>[
       ('mint', ThemeAccent.celadon),

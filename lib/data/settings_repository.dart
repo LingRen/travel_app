@@ -161,6 +161,16 @@ class SettingsRepository {
     // 该字段只由 [saveLastActivityType] 写入。
   }
 
+  /// 上次导出备份的时间（epoch ms）。没有导出过时返回 null。
+  Future<int?> lastBackupAt() async {
+    final String? raw = await _dao.getString('last_backup_at');
+    return int.tryParse(raw ?? '');
+  }
+
+  /// 记住上次成功导出备份的时间，供设置页「数据」分组显示。
+  Future<void> saveLastBackupAt(int epochMs) =>
+      _dao.setString('last_backup_at', '$epochMs');
+
   /// 记住记录页这次选中的运动类型，下次冷启动沿用。
   Future<void> saveLastActivityType(ActivityType type) async {
     await _dao.setString('last_activity_type', type.dbValue);
