@@ -51,12 +51,12 @@
 
 ## 6. 统计
 
-- [ ] 6.1 重做 `lib/features/stats/stats_page.dart` 页眉：「长 期 统 计」「二〇二六 · 十月」「里程」、记录总数、按月摘要与「全部运动 ⌄」；筛选无记录时显示空态与「查看全部运动」。验证：`test/features/stats/stats_page_test.dart` 断言页眉、筛选与空态。
-- [ ] 6.2 周 / 月 / 年切换只更新累计与趋势，个人最佳始终基于当前筛选的全部历史。验证：`test/features/stats/stats_page_test.dart` 断言切到年后累计变化而最佳不变。
-- [ ] 6.3 累计读数改为距离、时长、爬升三项主指标；功率次级行仅在骑行或全部运动且存在功率记录时出现。验证：`test/features/stats/stats_page_test.dart` 覆盖全部、跑步、空范围三种情况。
-- [ ] 6.4 将 `lib/features/stats/trend_chart.dart` 从折线改为柱形：柱色 `accentInk`、顶部圆角 2、1/2/5 纵轴最多四档、横轴日期竖排、点按显示日期与距离。验证：`test/features/stats/trend_chart_test.dart` 覆盖月 / 周 / 年桶数与点按提示。
-- [ ] 6.5 个人最佳改为 01–04 编号（最远距离、最快均速 / 最快配速、单次爬升、单次时长），功率最佳按适用性追加；配速类型用 `formatPace`。验证：`test/features/stats/stats_page_test.dart` 覆盖骑行、跑步与无记录。
-- [ ] 6.6 统计页底部显示「统计口径 · 剔除停车空档」与「本机计算」，不出现云端或同步文案。验证：`test/features/stats/stats_page_test.dart` 断言页脚文本。
+- [x] 6.1 重做 `lib/features/stats/stats_page.dart` 页眉：「长 期 统 计」「二〇二六 · 十月」「里程」、记录总数、按月摘要与「全部运动 ⌄」；筛选无记录时显示空态与「查看全部运动」。验证：`test/features/stats/stats_page_test.dart` 断言页眉、筛选与空态。
+- [x] 6.2 周 / 月 / 年切换只更新累计与趋势，个人最佳始终基于当前筛选的全部历史。验证：`test/features/stats/stats_page_test.dart` 断言切到年后累计变化而最佳不变。
+- [x] 6.3 累计读数改为距离、时长、爬升三项主指标；功率次级行仅在骑行或全部运动且存在功率记录时出现。验证：`test/features/stats/stats_page_test.dart` 覆盖全部、跑步、空范围三种情况。
+- [x] 6.4 将 `lib/features/stats/trend_chart.dart` 从折线改为柱形：柱色 `accentInk`、顶部圆角 2、1/2/5 纵轴最多四档、横轴日期竖排、点按显示日期与距离。验证：`test/features/stats/trend_chart_test.dart` 覆盖月 / 周 / 年桶数与点按提示。
+- [x] 6.5 个人最佳改为 01–04 编号（最远距离、最快均速 / 最快配速、单次爬升、单次时长），功率最佳按适用性追加；配速类型用 `formatPace`。验证：`test/features/stats/stats_page_test.dart` 覆盖骑行、跑步与无记录。
+- [x] 6.6 统计页底部显示「统计口径 · 剔除停车空档」与「本机计算」，不出现云端或同步文案。验证：`test/features/stats/stats_page_test.dart` 断言页脚文本。
 - [ ] 6.7 更新 `README.md` 的长期统计段落，改为三项主读数、柱形趋势、类型化个人最佳。验证：文档描述与 6.1–6.6 一致。
 
 ## 7. 设置与平台

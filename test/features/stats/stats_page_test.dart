@@ -30,6 +30,7 @@ Workout ride(
   int y,
   int m,
   int d, {
+  String? title,
   double distanceM = 10000,
   double? avgPowerW,
   int? maxPowerW,
@@ -37,6 +38,7 @@ Workout ride(
 }) =>
     Workout(
       id: id,
+      title: title,
       startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
       endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
       status: WorkoutStatus.finished,
@@ -118,10 +120,9 @@ void main() {
       ride(2, 2026, 9, 24),
     ]);
 
-    expect(totalsValue(tester, 'distance'), '20.00 km');
+    expect(totalsValue(tester, 'distance'), '20.0');
     expect(totalsValue(tester, 'duration'), '1:00:00');
-    expect(totalsValue(tester, 'gain'), '200 m');
-    expect(totalsValue(tester, 'count'), '2');
+    expect(totalsValue(tester, 'gain'), '200');
   });
 
   testWidgets('范围外的骑行不计入累计', (WidgetTester tester) async {
@@ -129,10 +130,9 @@ void main() {
       ride(1, 2026, 9, 20), // 上周日，不在 09-21..09-27 内
     ]);
 
-    expect(totalsValue(tester, 'distance'), '0 m');
-    expect(totalsValue(tester, 'gain'), '0 m');
+    expect(totalsValue(tester, 'distance'), '0');
+    expect(totalsValue(tester, 'gain'), '0');
     expect(totalsValue(tester, 'duration'), '00:00');
-    expect(totalsValue(tester, 'count'), '0');
   });
 
   testWidgets('切到「年」后累计包含全年的骑行', (WidgetTester tester) async {
@@ -140,12 +140,12 @@ void main() {
       ride(1, 2026, 3, 15),
       ride(2, 2026, 9, 24),
     ]);
-    expect(totalsValue(tester, 'distance'), '10.00 km');
+    expect(totalsValue(tester, 'distance'), '10.0');
 
     await tester.tap(find.text('年'));
     await tester.pumpAndSettle();
 
-    expect(totalsValue(tester, 'distance'), '20.00 km');
+    expect(totalsValue(tester, 'distance'), '20.0');
   });
 
   testWidgets('切到「月」后累计包含整月的骑行', (WidgetTester tester) async {
@@ -153,46 +153,49 @@ void main() {
       ride(1, 2026, 9, 2),
       ride(2, 2026, 9, 24),
     ]);
-    expect(totalsValue(tester, 'distance'), '10.00 km');
+    expect(totalsValue(tester, 'distance'), '10.0');
 
     await tester.tap(find.text('月'));
     await tester.pumpAndSettle();
 
-    expect(totalsValue(tester, 'distance'), '20.00 km');
+    expect(totalsValue(tester, 'distance'), '20.0');
   });
 
-  testWidgets('渲染趋势折线', (WidgetTester tester) async {
+  testWidgets('渲染趋势柱形', (WidgetTester tester) async {
     await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
     expect(find.byType(TrendChart), findsOneWidget);
     final TrendChart chart = tester.widget<TrendChart>(find.byType(TrendChart));
     expect(chart.trend.buckets.length, 7);
 
-    // 上面两条只断言入参，把 `TrendChart.build` 掏空也照样通过。下面直接读
-    // `fl_chart` 收到的数据，证明折线真的被喂了这 7 个桶。
-    expect(find.byType(LineChart), findsOneWidget);
-    final LineChartData data =
-        tester.widget<LineChart>(find.byType(LineChart)).data;
-    expect(data.lineBarsData.single.spots.length, chart.trend.buckets.length);
-    expect(data.minX, 0);
-    expect(data.maxX, 6); // 7 个桶 → 0..6
+    // 直接读 fl_chart 收到的数据，证明 7 个桶真的变成了 7 根柱子。
+    expect(find.byType(BarChart), findsOneWidget);
+    final BarChartData data =
+        tester.widget<BarChart>(find.byType(BarChart)).data;
+    expect(data.barGroups.length, chart.trend.buckets.length);
     // 09-22 是本周第 2 个桶（下标 1），距离 10000 m → 10 km。
-    expect(data.lineBarsData.single.spots[1].y, 10.0);
+    expect(data.barGroups[1].barRods.single.toY, 10.0);
+    expect(data.barGroups[1].barRods.single.color, isNotNull);
+    expect(
+      data.barGroups[1].barRods.single.borderRadius,
+      const BorderRadius.vertical(top: Radius.circular(2)),
+    );
   });
 
   testWidgets('触摸读数保留两位小数，并标出日期与单位', (WidgetTester tester) async {
     await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 12500)]);
 
-    final LineChartData data =
-        tester.widget<LineChart>(find.byType(LineChart)).data;
-    final LineChartBarData bar = data.lineBarsData.single;
-    // fl_chart 默认的 tooltip 直接印 `touchedSpot.y.toString()`：距离不是整数时
-    // 就甩出一长串小数（真机验证看到的就是这个）。直接调构建函数，钉住两位
-    // 小数、日期与单位。
-    final List<LineTooltipItem?> items = data.lineTouchData.touchTooltipData
-        .getTooltipItems(<LineBarSpot>[LineBarSpot(bar, 0, bar.spots[1])]);
-
-    final LineTooltipItem item = items.single!;
+    final BarChartData data =
+        tester.widget<BarChart>(find.byType(BarChart)).data;
+    final BarChartGroupData group = data.barGroups[1];
+    // fl_chart 默认的 tooltip 直接印 `rod.toY.toString()`：距离不是整数时会
+    // 甩出一长串小数。直接调构建函数，钉住两位小数、日期与单位。
+    final BarTooltipItem item = data.barTouchData.touchTooltipData.getTooltipItem(
+      group,
+      1,
+      group.barRods.single,
+      0,
+    )!;
     expect(item.text, '09-22', reason: '先标出是哪个日期桶');
     // 12500 米 → 12.5 km，两位小数要补成 12.50；用 toString() 时是 12.5。
     expect(item.children!.single.text!.trim(), '12.50 km');
@@ -211,16 +214,20 @@ void main() {
     );
 
     // 10000 米 = 6.21 英里；100 米 = 328 英尺。
-    expect(totalsValue(tester, 'distance'), '6.21 mi');
-    expect(totalsValue(tester, 'gain'), '328 ft');
-    expect(find.text('距离趋势（mi）'), findsOneWidget);
+    expect(totalsValue(tester, 'distance'), '6.2');
+    expect(totalsValue(tester, 'gain'), '328');
+    expect(find.text('距 离 · 按日'), findsOneWidget);
+    expect(find.text('mi'), findsWidgets);
     // 个人最佳里的爬升同样跟着换。
     expect(find.text('328 ft'), findsWidgets);
 
     // 纵轴数值也要换：只换标题的话会出现「标题写 mi、轴上还是 km 的数」。
-    final LineChartData data =
-        tester.widget<LineChart>(find.byType(LineChart)).data;
-    expect(data.lineBarsData.single.spots[1].y, closeTo(10000 / 1609.344, 1e-6));
+    final BarChartData data =
+        tester.widget<BarChart>(find.byType(BarChart)).data;
+    expect(
+      data.barGroups[1].barRods.single.toY,
+      closeTo(10000 / 1609.344, 1e-6),
+    );
   });
 
   testWidgets('渲染个人最佳卡片，四项都显示', (WidgetTester tester) async {
@@ -236,12 +243,12 @@ void main() {
     expect(card.bests.longestDistanceM!.value, 30000);
 
     expect(find.text('最远距离'), findsOneWidget);
-    expect(find.text('30.00 km'), findsOneWidget);
-    expect(find.text('最长时长'), findsOneWidget);
+    expect(find.text('30.0 km'), findsOneWidget);
+    expect(find.text('单次时长'), findsOneWidget);
     expect(find.text('30:00'), findsOneWidget);
-    expect(find.text('最快移动均速'), findsOneWidget);
+    expect(find.text('最快均速'), findsOneWidget);
     expect(find.text('21.2 km/h'), findsOneWidget);
-    expect(find.text('最大爬升'), findsOneWidget);
+    expect(find.text('单次爬升'), findsOneWidget);
     expect(find.text('100 m'), findsOneWidget);
     // 这两次骑行都没配功率计，不能凭空多出一行 0 W 的「最佳」。
     // 累计矩阵里本来就有「最高功率」这一格，所以要限定在个人最佳卡片里找。
@@ -269,14 +276,94 @@ void main() {
     expect(card.bests.longestDistanceM!.value, 40000);
   });
 
-  testWidgets('没有任何记录时不崩溃', (WidgetTester tester) async {
+  testWidgets('没有任何记录时显示空态而不是一排零', (WidgetTester tester) async {
     await pumpStats(tester, rides: const <Workout>[]);
 
-    expect(totalsValue(tester, 'distance'), '0 m');
-    expect(totalsValue(tester, 'gain'), '0 m');
-    expect(totalsValue(tester, 'count'), '0');
-    expect(find.text('还没有可统计的记录'), findsOneWidget);
+    expect(find.text('还没有运动记录'), findsOneWidget);
+    expect(find.byKey(const Key('totals-distance')), findsNothing);
+    expect(find.byType(TrendChart), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('页眉显示记录总数、范围摘要与筛选入口', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Workout>[
+      ride(1, 2026, 9, 22, title: '晨骑'),
+      ride(2, 2026, 9, 24, title: '夜骑'),
+    ]);
+
+    expect(find.text('长 期 统 计'), findsOneWidget);
+    expect(find.text('里程'), findsOneWidget);
+    expect(find.text('共 2 次'), findsOneWidget);
+    expect(find.text('按周归拢 · 本周 2 次'), findsOneWidget);
+    expect(find.byKey(const Key('sport-filter-trigger')), findsOneWidget);
+    expect(find.byKey(const Key('stats-range-week')), findsOneWidget);
+  });
+
+  testWidgets('筛选空态提供「查看全部运动」', (WidgetTester tester) async {
+    await pumpStats(tester, rides: const <Workout>[]);
+
+    await selectFilter(tester, 'sport-filter-running');
+    expect(find.text('还没有跑步记录'), findsOneWidget);
+    expect(find.byKey(const Key('stats-show-all')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('stats-show-all')));
+    await tester.pumpAndSettle();
+    expect(find.text('还没有运动记录'), findsOneWidget);
+    expect(find.byKey(const Key('stats-show-all')), findsNothing);
+  });
+
+  testWidgets('个人最佳按 01–04 编号并标出日期与标题', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Workout>[
+      ride(1, 2026, 9, 22, title: '晨骑', distanceM: 30000),
+      ride(2, 2026, 9, 24, title: '夜骑', distanceM: 10000),
+    ]);
+
+    expect(find.text('01'), findsOneWidget);
+    expect(find.text('02'), findsOneWidget);
+    expect(find.text('03'), findsOneWidget);
+    expect(find.text('04'), findsOneWidget);
+    expect(find.text('最远距离'), findsOneWidget);
+    expect(find.text('最快均速'), findsOneWidget);
+    expect(find.text('单次爬升'), findsOneWidget);
+    expect(find.text('单次时长'), findsOneWidget);
+    expect(find.text('09.22 · 晨骑'), findsNWidgets(4));
+  });
+
+  testWidgets('配速筛选下个人最佳改为最快配速', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Workout>[
+      ride(1, 2026, 9, 22, title: '夜跑', activityType: ActivityType.running),
+    ]);
+
+    await selectFilter(tester, 'sport-filter-running');
+    expect(find.text('最快配速'), findsOneWidget);
+    expect(find.text('最快均速'), findsNothing);
+    // 5.88 m/s → 1000/5.88 ≈ 170 s = 2'50"。
+    expect(find.textContaining("2'50\""), findsOneWidget);
+  });
+
+  testWidgets('页脚写明统计口径与本机计算', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
+
+    expect(find.text('统计口径 · 剔除停车空档'), findsOneWidget);
+    expect(find.text('本机计算'), findsOneWidget);
+    expect(find.textContaining('云端'), findsNothing);
+    expect(find.textContaining('同步'), findsNothing);
+  });
+
+  testWidgets('月 / 年视图的柱数跟着范围变化', (WidgetTester tester) async {
+    await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
+
+    BarChartData data() =>
+        tester.widget<BarChart>(find.byType(BarChart)).data;
+    expect(data().barGroups.length, 7);
+
+    await tester.tap(find.text('月'));
+    await tester.pumpAndSettle();
+    expect(data().barGroups.length, 30);
+
+    await tester.tap(find.text('年'));
+    await tester.pumpAndSettle();
+    expect(data().barGroups.length, 12);
   });
 
   group('功率', () {
@@ -340,18 +427,15 @@ void main() {
         ride(2, 2026, 9, 23, activityType: ActivityType.running, distanceM: 5000),
         ride(3, 2026, 9, 24, activityType: ActivityType.running, distanceM: 3000),
       ]);
-      expect(totalsValue(tester, 'distance'), '18.00 km');
-      expect(totalsValue(tester, 'count'), '3');
+      expect(totalsValue(tester, 'distance'), '18.0');
 
       await selectFilter(tester, 'sport-filter-running');
 
-      expect(totalsValue(tester, 'distance'), '8.00 km');
-      expect(totalsValue(tester, 'count'), '2');
+      expect(totalsValue(tester, 'distance'), '8.0');
 
       await selectFilter(tester, 'sport-filter-all');
 
-      expect(totalsValue(tester, 'distance'), '18.00 km');
-      expect(totalsValue(tester, 'count'), '3');
+      expect(totalsValue(tester, 'distance'), '18.0');
     });
 
     testWidgets('选「跑步」隐藏功率行，「全部」里有功率记录时显示', (WidgetTester tester) async {
@@ -389,8 +473,8 @@ void main() {
       // （旧实现没给 interval，fl_chart 自己算出 0.5 的步长）。
       await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 2000)]);
 
-      final LineChartData data =
-          tester.widget<LineChart>(find.byType(LineChart)).data;
+      final BarChartData data =
+          tester.widget<BarChart>(find.byType(BarChart)).data;
       // 轴顶取步长的整数倍，2.4 向上补到 3。
       expect(data.maxY, 3);
 
@@ -412,8 +496,8 @@ void main() {
     testWidgets('轴顶落在步长序列上', (WidgetTester tester) async {
       await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 1400)]);
 
-      final LineChartData data =
-          tester.widget<LineChart>(find.byType(LineChart)).data;
+      final BarChartData data =
+          tester.widget<BarChart>(find.byType(BarChart)).data;
       final SideTitles titles = data.titlesData.leftTitles.sideTitles;
       final double interval = titles.interval!;
 
