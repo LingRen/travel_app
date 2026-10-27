@@ -44,7 +44,7 @@ void main() {
     expect(palette.paper, const Color(0xFFF5F0E5));
     expect(palette.sheet, const Color(0xFFFCF9F2));
     expect(palette.ink, const Color(0xFF1D1B17));
-    expect(palette.muted, const Color(0xFF746D60));
+    expect(palette.muted, const Color(0xFF6B6458));
     expect(palette.hairline, const Color(0xFFD8CEBB));
     expect(palette.accent, ThemeAccent.cinnabar.color);
     expect(palette.accentInk, ThemeAccent.cinnabar.inkColor);
@@ -63,6 +63,23 @@ void main() {
         _contrastRatio(kMutedInk, background),
         greaterThanOrEqualTo(4.5),
         reason: '次级墨对 ${background.toARGB32().toRadixString(16)}',
+      );
+    }
+  });
+
+  test('次级墨压在半透明纸色层上仍够 4.5:1', () {
+    // 记录页顶部读数区是把纸色以 0.94 的不透明度压在地图上的，底图偏灰时
+    // 实际底色比纸底暗。旧值 746D60 在 120 灰底盘上只有 4.23:1，强光下更糊。
+    for (final int gray in <int>[255, 230, 180, 120]) {
+      final Color backdrop = Color.fromARGB(255, gray, gray, gray);
+      final Color composed = Color.alphaBlend(
+        kPaper.withValues(alpha: 0.94),
+        backdrop,
+      );
+      expect(
+        _contrastRatio(kMutedInk, composed),
+        greaterThanOrEqualTo(4.5),
+        reason: '次级墨压在 $gray 灰地图上',
       );
     }
   });

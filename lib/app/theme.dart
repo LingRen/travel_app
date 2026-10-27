@@ -22,8 +22,10 @@ const Color kSheet = Color(0xFFFCF9F2);
 /// 墨：正文与主读数。
 const Color kInk = Color(0xFF1D1B17);
 
-/// 次级墨：标签、说明、未选中态。
-const Color kMutedInk = Color(0xFF746D60);
+/// 次级墨：标签、说明、未选中态。压在地图上的纸色层并非不透明，
+/// 旧值 746D60 在最暗的地图区域只剩 4.23:1；加深到 6B6458 后最差 4.83:1，
+/// 仍明显弱于正文，不至于抢读数。
+const Color kMutedInk = Color(0xFF6B6458);
 
 /// 发丝线：只用于分区，不用阴影代替。
 const Color kHairlineColor = Color(0xFFD8CEBB);
