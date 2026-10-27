@@ -13,7 +13,10 @@ const Map<int, double> kZoneMet = <int, double>{
 ///
 /// `kcal = Σ(MET_i × 体重kg × 该区间小时数)`。这是参考值，不是精确测量。
 /// 无心率数据或体重非正数时返回 null，UI 显示为「—」。
-double? estimateCalories({required HrZoneBreakdown zones, required double weightKg}) {
+double? estimateCalories({
+  required HrZoneBreakdown zones,
+  required double weightKg,
+}) {
   if (weightKg <= 0) return null;
   if (zones.totalSeconds <= 0) return null;
   double kcal = 0;

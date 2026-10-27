@@ -64,9 +64,9 @@ enum DistanceUnit {
   final String dbValue;
 
   static DistanceUnit fromDb(String? value) => DistanceUnit.values.firstWhere(
-        (DistanceUnit u) => u.dbValue == value,
-        orElse: () => DistanceUnit.kilometer,
-      );
+    (DistanceUnit u) => u.dbValue == value,
+    orElse: () => DistanceUnit.kilometer,
+  );
 }
 
 const int kDefaultMaxHeartRate = 190;
@@ -113,15 +113,14 @@ class AppSettings {
     String? mapTileUrlTemplate,
     ThemeAccent? accent,
     ActivityType? lastActivityType,
-  }) =>
-      AppSettings(
-        maxHeartRate: maxHeartRate ?? this.maxHeartRate,
-        weightKg: weightKg ?? this.weightKg,
-        distanceUnit: distanceUnit ?? this.distanceUnit,
-        mapTileUrlTemplate: mapTileUrlTemplate ?? this.mapTileUrlTemplate,
-        accent: accent ?? this.accent,
-        lastActivityType: lastActivityType ?? this.lastActivityType,
-      );
+  }) => AppSettings(
+    maxHeartRate: maxHeartRate ?? this.maxHeartRate,
+    weightKg: weightKg ?? this.weightKg,
+    distanceUnit: distanceUnit ?? this.distanceUnit,
+    mapTileUrlTemplate: mapTileUrlTemplate ?? this.mapTileUrlTemplate,
+    accent: accent ?? this.accent,
+    lastActivityType: lastActivityType ?? this.lastActivityType,
+  );
 }
 
 /// 类型化的设置读写。存储值损坏或越界时回退到默认值，不让 UI 崩掉。
@@ -139,12 +138,16 @@ class SettingsRepository {
 
     return AppSettings(
       maxHeartRate:
-          (hr != null && hr >= kMinPlausibleMaxHeartRate && hr <= kMaxPlausibleMaxHeartRate)
-              ? hr
-              : kDefaultMaxHeartRate,
+          (hr != null &&
+              hr >= kMinPlausibleMaxHeartRate &&
+              hr <= kMaxPlausibleMaxHeartRate)
+          ? hr
+          : kDefaultMaxHeartRate,
       weightKg: (weight != null && weight > 0) ? weight : kDefaultWeightKg,
       distanceUnit: DistanceUnit.fromDb(raw['distance_unit']),
-      mapTileUrlTemplate: tileUrl.isEmpty ? kDefaultMapTileUrlTemplate : tileUrl,
+      mapTileUrlTemplate: tileUrl.isEmpty
+          ? kDefaultMapTileUrlTemplate
+          : tileUrl,
       accent: ThemeAccent.fromDb(raw['accent_theme']),
       lastActivityType: ActivityType.fromDb(raw['last_activity_type']),
     );

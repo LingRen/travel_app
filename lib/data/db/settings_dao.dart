@@ -18,11 +18,10 @@ class SettingsDao {
   }
 
   Future<void> setString(String key, String value) async {
-    await _db.insert(
-      'settings',
-      <String, Object?>{'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db.insert('settings', <String, Object?>{
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// 删除一个键。键不存在时静默返回。

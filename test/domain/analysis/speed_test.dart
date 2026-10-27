@@ -23,7 +23,10 @@ void main() {
     });
 
     test('全部为空时返回 null', () {
-      expect(maxSmoothedSpeed(<double?>[null, null], kSpeedFilterWindow), isNull);
+      expect(
+        maxSmoothedSpeed(<double?>[null, null], kSpeedFilterWindow),
+        isNull,
+      );
     });
   });
 
@@ -45,15 +48,19 @@ void main() {
     });
 
     test('超过 10 秒的 GPS 断点两个区间都不计入', () {
-      final MovingStats s =
-          splitMovingStationary(<TrackPoint>[_p(0, 5.0), _p(15000, 5.0)], kStationarySpeedMps);
+      final MovingStats s = splitMovingStationary(<TrackPoint>[
+        _p(0, 5.0),
+        _p(15000, 5.0),
+      ], kStationarySpeedMps);
       expect(s.movingSeconds, 0);
       expect(s.stationarySeconds, 0);
     });
 
     test('缺速度的区间不计入', () {
-      final MovingStats s =
-          splitMovingStationary(<TrackPoint>[_p(0, null), _p(1000, null)], kStationarySpeedMps);
+      final MovingStats s = splitMovingStationary(<TrackPoint>[
+        _p(0, null),
+        _p(1000, null),
+      ], kStationarySpeedMps);
       expect(s.movingSeconds, 0);
       expect(s.stationarySeconds, 0);
     });
@@ -85,7 +92,8 @@ void main() {
   });
 }
 
-TrackPoint _p(int tMs, double? speed) => TrackPoint(rideId: 1, tMs: tMs, speedMps: speed);
+TrackPoint _p(int tMs, double? speed) =>
+    TrackPoint(rideId: 1, tMs: tMs, speedMps: speed);
 
 TrackPoint _pos(int tMs, double lat, double lon, double? speed) =>
     TrackPoint(rideId: 1, tMs: tMs, lat: lat, lon: lon, speedMps: speed);

@@ -17,10 +17,14 @@ void main() {
     final List<Map<String, Object?>> tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
     );
-    final Set<String> names =
-        tables.map((Map<String, Object?> r) => r['name'] as String).toSet();
+    final Set<String> names = tables
+        .map((Map<String, Object?> r) => r['name'] as String)
+        .toSet();
 
-    expect(names, containsAll(<String>['workouts', 'track_points', 'settings']));
+    expect(
+      names,
+      containsAll(<String>['workouts', 'track_points', 'settings']),
+    );
   });
 
   test('track_points 上有 (ride_id, t_ms) 索引', () async {
@@ -30,8 +34,9 @@ void main() {
     final List<Map<String, Object?>> indexes = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'track_points'",
     );
-    final Set<String> names =
-        indexes.map((Map<String, Object?> r) => r['name'] as String).toSet();
+    final Set<String> names = indexes
+        .map((Map<String, Object?> r) => r['name'] as String)
+        .toSet();
 
     expect(names, contains('idx_track_points_ride_t'));
   });
@@ -58,7 +63,8 @@ void main() {
 
   test('v2 → v3 迁移：rides 改名 workouts 并补 activity_type 默认骑行', () async {
     // 手工建一个 v2 库（老 schema 的 rides 表），再用 onUpgrade 路径升级。
-    final String path = '${Directory.systemTemp.path}/migrate_v2_v3_${DateTime.now().microsecondsSinceEpoch}.db';
+    final String path =
+        '${Directory.systemTemp.path}/migrate_v2_v3_${DateTime.now().microsecondsSinceEpoch}.db';
     final Database v2 = await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
@@ -80,11 +86,16 @@ void main() {
               t_ms INTEGER NOT NULL
             )
           ''');
-          await db.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+          await db.execute(
+            'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+          );
         },
       ),
     );
-    await v2.insert('rides', <String, Object?>{'started_at': 1000, 'status': 'finished'});
+    await v2.insert('rides', <String, Object?>{
+      'started_at': 1000,
+      'status': 'finished',
+    });
     await v2.close();
 
     // 用同一路径重开 → 触发 onUpgrade 到当前版本。
@@ -134,11 +145,16 @@ void main() {
               lon REAL
             )
           ''');
-          await db.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+          await db.execute(
+            'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+          );
         },
       ),
     );
-    await v1.insert('rides', <String, Object?>{'started_at': 1000, 'status': 'finished'});
+    await v1.insert('rides', <String, Object?>{
+      'started_at': 1000,
+      'status': 'finished',
+    });
     await v1.close();
 
     // 用同一路径重开 → 触发 onUpgrade 从 v1 升到当前版本。
@@ -154,10 +170,12 @@ void main() {
     expect(rows.single['started_at'], 1000);
 
     // 先执行了 v1→v2 分支（补功率列），再执行 v2→v3 分支（改名）。
-    final List<Map<String, Object?>> trackCols =
-        await v3.rawQuery('PRAGMA table_info(track_points)');
-    final Set<String> colNames =
-        trackCols.map((Map<String, Object?> r) => r['name'] as String).toSet();
+    final List<Map<String, Object?>> trackCols = await v3.rawQuery(
+      'PRAGMA table_info(track_points)',
+    );
+    final Set<String> colNames = trackCols
+        .map((Map<String, Object?> r) => r['name'] as String)
+        .toSet();
     expect(colNames, contains('power_w'));
   });
 }

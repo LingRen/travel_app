@@ -9,8 +9,7 @@ TrackPoint pt(
   double? lat = 31.0,
   double? lon = 121.0,
   double? speed,
-}) =>
-    TrackPoint(rideId: 1, tMs: tMs, lat: lat, lon: lon, speedMps: speed);
+}) => TrackPoint(rideId: 1, tMs: tMs, lat: lat, lon: lon, speedMps: speed);
 
 void main() {
   group('基本行为', () {
@@ -39,7 +38,10 @@ void main() {
         pt(1000, lat: 39.90760, lon: 116.39133, speed: 6),
       ]);
 
-      final ({double lat, double lon}) expected = wgs84ToGcj02(39.90750, 116.39123);
+      final ({double lat, double lon}) expected = wgs84ToGcj02(
+        39.90750,
+        116.39123,
+      );
       expect(segs.single.vertices.first.lat, closeTo(expected.lat, 1e-9));
       expect(segs.single.vertices.first.lon, closeTo(expected.lon, 1e-9));
     });
@@ -56,13 +58,10 @@ void main() {
 
     // 瓦片源不是 GCJ-02（OSM、Carto）时必须原样输出，否则轨迹整体偏几百米。
     test('toGcj02 为 false 时坐标原样输出', () {
-      final List<RouteSegment> segs = buildRouteSegments(
-        <TrackPoint>[
-          pt(0, lat: 31.23042, lon: 121.47370, speed: 5),
-          pt(1000, lat: 31.23052, lon: 121.47380, speed: 6),
-        ],
-        toGcj02: false,
-      );
+      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
+        pt(0, lat: 31.23042, lon: 121.47370, speed: 5),
+        pt(1000, lat: 31.23052, lon: 121.47380, speed: 6),
+      ], toGcj02: false);
 
       expect(segs.single.vertices.first.lat, 31.23042);
       expect(segs.single.vertices.first.lon, 121.47370);
@@ -78,10 +77,14 @@ void main() {
         pt(1000, lat: 31.23052, lon: 121.47380, speed: 6),
       ];
 
-      final RouteVertex converted =
-          buildRouteSegments(points).single.vertices.first;
-      final RouteVertex raw =
-          buildRouteSegments(points, toGcj02: false).single.vertices.first;
+      final RouteVertex converted = buildRouteSegments(points)
+          .single
+          .vertices
+          .first;
+      final RouteVertex raw = buildRouteSegments(
+        points,
+        toGcj02: false,
+      ).single.vertices.first;
 
       expect(converted.lat, isNot(raw.lat));
       expect(converted.lon, isNot(raw.lon));
@@ -95,8 +98,10 @@ void main() {
         pt(1000, lat: 39.90760, lon: 116.39133, speed: 6),
       ]);
 
-      final ({double lat, double lon}) expected =
-          wgs84ToGcj02(39.90750, 116.39123);
+      final ({double lat, double lon}) expected = wgs84ToGcj02(
+        39.90750,
+        116.39123,
+      );
       expect(segs.single.vertices.first.lat, closeTo(expected.lat, 1e-9));
     });
   });
@@ -235,8 +240,10 @@ void main() {
           pt(i * 1000, lat: 31.0 + i * 0.0001, speed: 5),
       ];
 
-      final List<RouteSegment> segs =
-          buildRouteSegments(points, maxVerticesPerSegment: 10);
+      final List<RouteSegment> segs = buildRouteSegments(
+        points,
+        maxVerticesPerSegment: 10,
+      );
 
       for (final RouteSegment s in segs) {
         expect(s.vertices.length, lessThanOrEqualTo(10));
@@ -250,8 +257,10 @@ void main() {
           pt(i * 1000, lat: 31.0 + i * 0.0001, speed: 5),
       ];
 
-      final List<RouteSegment> segs =
-          buildRouteSegments(points, maxVerticesPerSegment: 10);
+      final List<RouteSegment> segs = buildRouteSegments(
+        points,
+        maxVerticesPerSegment: 10,
+      );
 
       expect(segs.length, greaterThan(1));
       for (int i = 1; i < segs.length; i++) {
@@ -323,14 +332,11 @@ void main() {
   // 轨迹切成一截截——真机上看到的「断断续续」。断点改由采集侧显式标记。
   group('抽稀轨迹的显式断点', () {
     test('点了 breakBefore 就不按时间间隔断开', () {
-      final List<RouteSegment> segs = buildRouteSegments(
-        <TrackPoint>[
-          pt(0, speed: 5),
-          pt(15000, lat: 31.0001, speed: 5),
-          pt(30000, lat: 31.0002, speed: 5),
-        ],
-        breakBefore: const <int>{},
-      );
+      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
+        pt(0, speed: 5),
+        pt(15000, lat: 31.0001, speed: 5),
+        pt(30000, lat: 31.0002, speed: 5),
+      ], breakBefore: const <int>{});
 
       expect(segs.length, 1, reason: '15 秒间隔是抽稀的产物，不是丢信号');
       expect(segs.single.vertices.length, 3);
@@ -374,15 +380,12 @@ void main() {
 
     test('显式断点模式下跳变仍然断开', () {
       // 1 秒跨 0.01 度 ≈ 1113 米，远超 30 m/s。
-      final List<RouteSegment> segs = buildRouteSegments(
-        <TrackPoint>[
-          pt(0, speed: 5),
-          pt(1000, lat: 31.0, speed: 5),
-          pt(2000, lat: 31.01, speed: 5),
-          pt(3000, lat: 31.0101, speed: 5),
-        ],
-        breakBefore: const <int>{},
-      );
+      final List<RouteSegment> segs = buildRouteSegments(<TrackPoint>[
+        pt(0, speed: 5),
+        pt(1000, lat: 31.0, speed: 5),
+        pt(2000, lat: 31.01, speed: 5),
+        pt(3000, lat: 31.0101, speed: 5),
+      ], breakBefore: const <int>{});
 
       expect(segs.length, 2);
     });

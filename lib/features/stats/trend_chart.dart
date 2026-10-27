@@ -9,7 +9,19 @@ import '../../domain/analysis/trend.dart';
 /// Y 轴刻度步长：1 / 2 / 5 序列，最多 4 条刻度线。
 double niceAxisInterval(double maxY) {
   const List<double> candidates = <double>[
-    0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000,
+    0.1,
+    0.2,
+    0.5,
+    1,
+    2,
+    5,
+    10,
+    20,
+    50,
+    100,
+    200,
+    500,
+    1000,
   ];
   for (final double candidate in candidates) {
     if (maxY / candidate <= 4) return candidate;
@@ -42,8 +54,10 @@ class TrendChart extends StatelessWidget {
       for (final TrendBucket bucket in trend.buckets)
         distanceInUnit(bucket.distanceM, unit),
     ];
-    final double maxY =
-        values.fold<double>(0, (double m, double v) => v > m ? v : m);
+    final double maxY = values.fold<double>(
+      0,
+      (double m, double v) => v > m ? v : m,
+    );
     final double interval = niceAxisInterval(maxY <= 0 ? 1 : maxY * 1.2);
     final double axisMax =
         ((maxY <= 0 ? 1 : maxY * 1.2) / interval).ceil() * interval;
@@ -54,8 +68,8 @@ class TrendChart extends StatelessWidget {
         builder: (BuildContext context, BoxConstraints constraints) {
           // 图表左右各留 40dp 给纵轴；柱宽不超过绘图区的 60%，桶多时收到 4dp。
           final double plotWidth = (constraints.maxWidth - 40).clamp(80.0, 1e9);
-          final double barWidth =
-              (plotWidth / trend.buckets.length * 0.6).clamp(4.0, 24.0);
+          final double barWidth = (plotWidth / trend.buckets.length * 0.6)
+              .clamp(4.0, 24.0);
 
           return BarChart(
             BarChartData(
@@ -66,38 +80,36 @@ class TrendChart extends StatelessWidget {
                 show: true,
                 drawVerticalLine: false,
                 horizontalInterval: interval,
-                getDrawingHorizontalLine: (double value) => FlLine(
-                  color: palette.hairline,
-                  strokeWidth: 1,
-                ),
+                getDrawingHorizontalLine: (double value) =>
+                    FlLine(color: palette.hairline, strokeWidth: 1),
               ),
               borderData: FlBorderData(show: false),
               barTouchData: BarTouchData(
                 touchTooltipData: BarTouchTooltipData(
-                  getTooltipColor: (BarChartGroupData _) =>
-                      palette.sheet,
+                  getTooltipColor: (BarChartGroupData _) => palette.sheet,
                   maxContentWidth: 220,
                   fitInsideHorizontally: true,
                   fitInsideVertically: true,
-                  getTooltipItem: (
-                    BarChartGroupData group,
-                    int groupIndex,
-                    BarChartRodData rod,
-                    int rodIndex,
-                  ) {
-                    final TrendBucket bucket = trend.buckets[group.x];
-                    return BarTooltipItem(
-                      bucket.label,
-                      _tooltipLabelStyle(palette),
-                      children: <TextSpan>[
-                        TextSpan(
-                          text:
-                              '  ${rod.toY.toStringAsFixed(2)} ${distanceUnitLabel(unit)}',
-                          style: _tooltipValueStyle(palette),
-                        ),
-                      ],
-                    );
-                  },
+                  getTooltipItem:
+                      (
+                        BarChartGroupData group,
+                        int groupIndex,
+                        BarChartRodData rod,
+                        int rodIndex,
+                      ) {
+                        final TrendBucket bucket = trend.buckets[group.x];
+                        return BarTooltipItem(
+                          bucket.label,
+                          _tooltipLabelStyle(palette),
+                          children: <TextSpan>[
+                            TextSpan(
+                              text:
+                                  '  ${rod.toY.toStringAsFixed(2)} ${distanceUnitLabel(unit)}',
+                              style: _tooltipValueStyle(palette),
+                            ),
+                          ],
+                        );
+                      },
                 ),
               ),
               titlesData: FlTitlesData(
@@ -108,10 +120,8 @@ class TrendChart extends StatelessWidget {
                     showTitles: true,
                     reservedSize: 40,
                     interval: interval,
-                    getTitlesWidget: (double value, TitleMeta meta) => Text(
-                      axisLabel(value),
-                      style: _axisLabelStyle(palette),
-                    ),
+                    getTitlesWidget: (double value, TitleMeta meta) =>
+                        Text(axisLabel(value), style: _axisLabelStyle(palette)),
                   ),
                 ),
                 bottomTitles: AxisTitles(
@@ -162,33 +172,33 @@ class TrendChart extends StatelessWidget {
 }
 
 TextStyle _bottomLabelStyle(AppPalette palette) => TextStyle(
-      fontFamily: kMonoFamily,
-      fontFamilyFallback: kMonoFallback,
-      fontSize: 9,
-      color: palette.muted,
-      fontFeatures: kTabularFigures,
-    );
+  fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
+  fontSize: 9,
+  color: palette.muted,
+  fontFeatures: kTabularFigures,
+);
 
 TextStyle _axisLabelStyle(AppPalette palette) => TextStyle(
-      fontFamily: kMonoFamily,
-      fontFamilyFallback: kMonoFallback,
-      fontSize: 10,
-      color: palette.muted,
-      fontFeatures: kTabularFigures,
-    );
+  fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
+  fontSize: 10,
+  color: palette.muted,
+  fontFeatures: kTabularFigures,
+);
 
 TextStyle _tooltipLabelStyle(AppPalette palette) => TextStyle(
-      fontFamily: kMonoFamily,
-      fontFamilyFallback: kMonoFallback,
-      fontSize: 10,
-      color: palette.muted,
-      fontFeatures: kTabularFigures,
-    );
+  fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
+  fontSize: 10,
+  color: palette.muted,
+  fontFeatures: kTabularFigures,
+);
 
 TextStyle _tooltipValueStyle(AppPalette palette) => TextStyle(
-      fontFamily: kMonoFamily,
-      fontFamilyFallback: kMonoFallback,
-      fontSize: 12,
-      color: palette.ink,
-      fontFeatures: kTabularFigures,
-    );
+  fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
+  fontSize: 12,
+  color: palette.ink,
+  fontFeatures: kTabularFigures,
+);

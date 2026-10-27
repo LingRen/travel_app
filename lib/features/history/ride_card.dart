@@ -39,19 +39,16 @@ class WorkoutCard extends ConsumerWidget {
     final String title = (rawTitle == null || rawTitle.isEmpty)
         ? '${ride.activityType.label}记录'
         : rawTitle;
-    final ({String value, String unit}) distance =
-        formatDistanceParts(s?.distanceM ?? 0, unit);
+    final ({String value, String unit}) distance = formatDistanceParts(
+      s?.distanceM ?? 0,
+      unit,
+    );
     final bool usesPace = ride.activityType.usesPace;
 
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          kSpaceL,
-          kSpaceM,
-          kSpaceL,
-          kSpaceM,
-        ),
+        padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -146,17 +143,14 @@ class WorkoutCard extends ConsumerWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _Stat(
-                    label: '时长',
-                    value: formatDuration(s.durationS),
-                  ),
+                  _Stat(label: '时长', value: formatDuration(s.durationS)),
                   const SizedBox(width: kSpaceS),
                   _Stat(
                     label: usesPace ? '配速' : '均速',
                     value: usesPace
                         ? formatPace(s.movingAvgSpeedMps, unit)
                         : '${formatSpeedValue(s.movingAvgSpeedMps, unit)} '
-                            '${speedUnitLabel(unit)}',
+                              '${speedUnitLabel(unit)}',
                   ),
                   const SizedBox(width: kSpaceS),
                   _Stat(
@@ -167,9 +161,7 @@ class WorkoutCard extends ConsumerWidget {
                   _Stat(
                     label: ride.activityType.supportsPower ? '功率' : null,
                     value: ride.activityType.supportsPower
-                        ? (s.avgPowerW == null
-                            ? '—'
-                            : formatPower(s.avgPowerW))
+                        ? (s.avgPowerW == null ? '—' : formatPower(s.avgPowerW))
                         : null,
                   ),
                 ],

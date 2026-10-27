@@ -38,7 +38,10 @@ void main() {
 
   test('GPS 跳变不计入距离', () {
     final WorkoutSummary s = computeSummary(
-      points: <TrackPoint>[_p(0, 121.47, speed: 5.0), _p(1000, 122.47, lat: 32.23, speed: 5.0)],
+      points: <TrackPoint>[
+        _p(0, 121.47, speed: 5.0),
+        _p(1000, 122.47, lat: 32.23, speed: 5.0),
+      ],
       durationS: 1,
       maxHeartRate: 190,
       weightKg: 70,
@@ -57,12 +60,9 @@ void main() {
       final double t = i * 2.0;
       double alt = t < 60 ? 100 : 100 + (t - 60) * (30 / 240);
       if (i == 20) alt = 106;
-      points.add(_p(
-        i * 2000,
-        121.4700 + i * 0.00013,
-        alt: alt,
-        speed: i == 30 ? 30 : 5,
-      ));
+      points.add(
+        _p(i * 2000, 121.4700 + i * 0.00013, alt: alt, speed: i == 30 ? 30 : 5),
+      );
     }
     final WorkoutSummary s = computeSummary(
       points: points,
@@ -94,8 +94,7 @@ void main() {
   test('起步那一段仍算里程，不被静止判定吞掉', () {
     // 前两点停着（抖动不计），第三点动起来：这一小段位移是真的，不能因为
     // 起点速度为 0 就一起丢掉。
-    final double segment =
-        haversineMeters(31.23, 121.4701, 31.23, 121.4702);
+    final double segment = haversineMeters(31.23, 121.4701, 31.23, 121.4702);
     final List<TrackPoint> points = <TrackPoint>[
       _p(0, 121.4700, speed: 0),
       _p(1000, 121.4701, speed: 0),
@@ -166,13 +165,12 @@ TrackPoint _p(
   double? alt,
   double? speed,
   int? hr,
-}) =>
-    TrackPoint(
-      rideId: 1,
-      tMs: tMs,
-      lat: lat,
-      lon: lon,
-      altitudeM: alt,
-      speedMps: speed,
-      hr: hr,
-    );
+}) => TrackPoint(
+  rideId: 1,
+  tMs: tMs,
+  lat: lat,
+  lon: lon,
+  altitudeM: alt,
+  speedMps: speed,
+  hr: hr,
+);

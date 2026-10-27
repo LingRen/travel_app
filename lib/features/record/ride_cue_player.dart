@@ -28,7 +28,11 @@ class TtsRideCuePlayer implements RideCuePlayer {
   final TtsService _tts;
 
   @override
-  Future<void> speak(List<RideCue> cues, DistanceUnit unit, ActivityType type) async {
+  Future<void> speak(
+    List<RideCue> cues,
+    DistanceUnit unit,
+    ActivityType type,
+  ) async {
     for (final RideCue cue in cues) {
       try {
         await _tts.speak(rideCueSpeechText(cue, unit, type));
@@ -45,10 +49,10 @@ class TtsRideCuePlayer implements RideCuePlayer {
 }
 
 /// 提示播报器。抽成 provider 是为了让 widget 测试注入假实现。
-final Provider<RideCuePlayer> rideCuePlayerProvider = Provider<RideCuePlayer>(
-  (Ref ref) {
-    final RideCuePlayer player = TtsRideCuePlayer(SystemTtsService());
-    ref.onDispose(player.dispose);
-    return player;
-  },
-);
+final Provider<RideCuePlayer> rideCuePlayerProvider = Provider<RideCuePlayer>((
+  Ref ref,
+) {
+  final RideCuePlayer player = TtsRideCuePlayer(SystemTtsService());
+  ref.onDispose(player.dispose);
+  return player;
+});

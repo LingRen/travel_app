@@ -23,15 +23,63 @@ class MockWorkoutPlan {
 /// 形状），上个月与上上个月各留几条（年粒度才有第二、第三个非零月）。
 ///
 /// 日期与时刻都写死，不随机：真机上生成两次应当看到同一批数据。
-List<MockWorkoutPlan> mockWorkoutPlan({required int nowMs, int seed = 20260923}) {
+List<MockWorkoutPlan> mockWorkoutPlan({
+  required int nowMs,
+  int seed = 20260923,
+}) {
   const List<int> dayOffsets = <int>[
-    0, 1, 3, 5, 7, 9, 12, 14, 16, 20, 24, 30, 38, 47, 58, 70,
+    0,
+    1,
+    3,
+    5,
+    7,
+    9,
+    12,
+    14,
+    16,
+    20,
+    24,
+    30,
+    38,
+    47,
+    58,
+    70,
   ];
   const List<int> hours = <int>[
-    6, 18, 7, 17, 6, 19, 8, 18, 7, 16, 6, 17, 9, 18, 7, 15,
+    6,
+    18,
+    7,
+    17,
+    6,
+    19,
+    8,
+    18,
+    7,
+    16,
+    6,
+    17,
+    9,
+    18,
+    7,
+    15,
   ];
   const List<int> minutes = <int>[
-    38, 52, 27, 61, 45, 33, 58, 41, 24, 66, 36, 49, 31, 55, 43, 29,
+    38,
+    52,
+    27,
+    61,
+    45,
+    33,
+    58,
+    41,
+    24,
+    66,
+    36,
+    49,
+    31,
+    55,
+    43,
+    29,
   ];
 
   final DateTime today = DateTime.fromMillisecondsSinceEpoch(nowMs);
@@ -50,10 +98,9 @@ List<MockWorkoutPlan> mockWorkoutPlan({required int nowMs, int seed = 20260923})
     if (startedAtMs > nowMs) {
       startedAtMs -= const Duration(days: 1).inMilliseconds;
     }
-    plan.add(MockWorkoutPlan(
-      startedAtMs: startedAtMs,
-      durationS: minutes[i] * 60,
-    ));
+    plan.add(
+      MockWorkoutPlan(startedAtMs: startedAtMs, durationS: minutes[i] * 60),
+    );
   }
   return plan;
 }
@@ -115,10 +162,10 @@ List<TrackPoint> generateMockPoints({
     );
     final double altitude =
         altBase + altAmp * math.sin(t / 120 + phase) + noise() * 0.5;
-    final int hr =
-        (118 + 26 * math.sin(t / 330 + phase * 3) + noise() * 1.5).round();
-    final int cadence =
-        (74 + 16 * math.sin(t / 260 + phase) + noise() * 1.2).round();
+    final int hr = (118 + 26 * math.sin(t / 330 + phase * 3) + noise() * 1.5)
+        .round();
+    final int cadence = (74 + 16 * math.sin(t / 260 + phase) + noise() * 1.2)
+        .round();
     // 功率跟速度挂钩：骑行功率大致随速度线性上升，再叠一点起伏与噪声。
     //
     // 挂钩用的是「趋势速度」而不是上面那条带 GPS 毛刺的瞬时速度：功率计测的是
@@ -136,18 +183,20 @@ List<TrackPoint> generateMockPoints({
     lat += step * math.cos(heading) / 111320;
     lon += step * math.sin(heading) / (111320 * math.cos(lat * math.pi / 180));
 
-    points.add(TrackPoint(
-      rideId: rideId,
-      tMs: tMs,
-      lat: lat,
-      lon: lon,
-      altitudeM: altitude,
-      speedMps: speed,
-      accuracyM: 5 + (noise() + 1) * 3,
-      hr: hr.clamp(92, 184),
-      cadence: cadence.clamp(42, 116),
-      powerW: power.clamp(0, 700),
-    ));
+    points.add(
+      TrackPoint(
+        rideId: rideId,
+        tMs: tMs,
+        lat: lat,
+        lon: lon,
+        altitudeM: altitude,
+        speedMps: speed,
+        accuracyM: 5 + (noise() + 1) * 3,
+        hr: hr.clamp(92, 184),
+        cadence: cadence.clamp(42, 116),
+        powerW: power.clamp(0, 700),
+      ),
+    );
   }
   return points;
 }

@@ -72,29 +72,25 @@ void main() {
   /// 只 override 各页面在 `build` / `initState` 阶段真正读到的 provider：设置页的
   /// 保存、备份导出与恢复都只在点按钮时才读仓储，本文件不点，因此不需要它们。
   Future<void> pumpShell(WidgetTester tester) => tester.pumpWidget(
-        ProviderScope(
-          overrides: <Override>[
-            appSettingsProvider.overrideWithValue(
-              const AsyncValue<AppSettings>.data(_testSettings),
-            ),
-            historyRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
-            finishedRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
-            // 历史页每张卡片各自 watch 自己那次的轨迹点。
-            ridePointsProvider(_ride.id!).overrideWith(
-              (Ref ref) => const <TrackPoint>[],
-            ),
-            // 点卡片进入详情时详情页会读整份详情；不 override 就会去碰数据库。
-            rideDetailProvider(_ride.id!).overrideWith(
-              (Ref ref) => const WorkoutDetail(
-                ride: _ride,
-                points: <TrackPoint>[],
-              ),
-            ),
-            sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
-          ],
-          child: MaterialApp(theme: buildAppTheme(), home: const HomeShell()),
+    ProviderScope(
+      overrides: <Override>[
+        appSettingsProvider.overrideWithValue(
+          const AsyncValue<AppSettings>.data(_testSettings),
         ),
-      );
+        historyRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
+        finishedRidesProvider.overrideWith((Ref ref) => const <Workout>[_ride]),
+        // 历史页每张卡片各自 watch 自己那次的轨迹点。
+        ridePointsProvider(_ride.id!)
+            .overrideWith((Ref ref) => const <TrackPoint>[]),
+        // 点卡片进入详情时详情页会读整份详情；不 override 就会去碰数据库。
+        rideDetailProvider(_ride.id!).overrideWith(
+          (Ref ref) => const WorkoutDetail(ride: _ride, points: <TrackPoint>[]),
+        ),
+        sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
+      ],
+      child: MaterialApp(theme: buildAppTheme(), home: const HomeShell()),
+    ),
+  );
 
   int stackIndex(WidgetTester tester) =>
       tester.widget<IndexedStack>(find.byType(IndexedStack)).index!;
@@ -103,16 +99,16 @@ void main() {
       tester.widget<PaperNavBar>(find.byType(PaperNavBar)).selectedIndex;
 
   List<String> tabLabels(WidgetTester tester) {
-    final PaperNavBar bar = tester.widget<PaperNavBar>(find.byType(PaperNavBar));
+    final PaperNavBar bar = tester.widget<PaperNavBar>(
+      find.byType(PaperNavBar),
+    );
     return bar.items.map((PaperNavItem item) => item.label).toList();
   }
 
   /// 底部导航里的 tab 按钮。「历史」等文本在页面页眉里也会出现，必须限定在
   /// `PaperNavBar` 内才不会撞上。
-  Finder tab(String label) => find.descendant(
-        of: find.byType(PaperNavBar),
-        matching: find.text(label),
-      );
+  Finder tab(String label) =>
+      find.descendant(of: find.byType(PaperNavBar), matching: find.text(label));
 
   testWidgets('底部四个 tab 顺序为 记录/历史/统计/设置（设计文档 10）', (WidgetTester tester) async {
     await pumpShell(tester);
@@ -192,7 +188,9 @@ void main() {
     expect(find.byType(SettingsPage), findsNothing);
   });
 
-  testWidgets('切到历史 / 统计 / 设置三个 tab 各自渲染真实页面且不抛异常', (WidgetTester tester) async {
+  testWidgets('切到历史 / 统计 / 设置三个 tab 各自渲染真实页面且不抛异常', (
+    WidgetTester tester,
+  ) async {
     await pumpShell(tester);
 
     // 只断言 tab 标签的话，四个 tab 全指向同一个占位页也照样通过；必须逐个断言

@@ -63,14 +63,14 @@ class GeolocatorLocationPlatform implements LocationPlatform {
   Future<bool> openLocationSettings() => Geolocator.openLocationSettings();
 
   @override
-  Stream<Position> positionStream({required LocationSettings locationSettings}) =>
-      Geolocator.getPositionStream(locationSettings: locationSettings);
+  Stream<Position> positionStream({
+    required LocationSettings locationSettings,
+  }) => Geolocator.getPositionStream(locationSettings: locationSettings);
 
   @override
   Future<Position> getCurrentPosition({
     required LocationSettings locationSettings,
-  }) =>
-      Geolocator.getCurrentPosition(locationSettings: locationSettings);
+  }) => Geolocator.getCurrentPosition(locationSettings: locationSettings);
 }
 
 /// 把 geolocator 的定位结果翻译成 domain 层的 [LocationFix]。
@@ -78,13 +78,13 @@ class GeolocatorLocationPlatform implements LocationPlatform {
 /// iOS 在速度不可用时会给 `-1`，这里原样保留，由
 /// [RecordingSession] 判断是否可用。
 LocationFix toLocationFix(Position position) => LocationFix(
-      tMs: position.timestamp.millisecondsSinceEpoch,
-      lat: position.latitude,
-      lon: position.longitude,
-      altitudeM: position.altitude,
-      speedMps: position.speed,
-      accuracyM: position.accuracy,
-    );
+  tMs: position.timestamp.millisecondsSinceEpoch,
+  lat: position.latitude,
+  lon: position.longitude,
+  altitudeM: position.altitude,
+  speedMps: position.speed,
+  accuracyM: position.accuracy,
+);
 
 /// 按平台构造定位设置。抽成纯函数，两端配置都能在单测里断言。
 LocationSettings buildLocationSettings({required bool isAndroid}) {

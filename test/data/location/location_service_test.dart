@@ -66,7 +66,9 @@ class FakeLocationPlatform implements LocationPlatform {
   }
 
   @override
-  Stream<Position> positionStream({required LocationSettings locationSettings}) {
+  Stream<Position> positionStream({
+    required LocationSettings locationSettings,
+  }) {
     capturedSettings = locationSettings;
     return controller.stream;
   }
@@ -96,19 +98,18 @@ Position fakePosition({
   double altitude = 12.5,
   double speed = 6.5,
   double accuracy = 4.0,
-}) =>
-    Position(
-      latitude: latitude,
-      longitude: longitude,
-      timestamp: DateTime.fromMillisecondsSinceEpoch(tMs, isUtc: true),
-      altitude: altitude,
-      altitudeAccuracy: 1.5,
-      accuracy: accuracy,
-      heading: 87.0,
-      headingAccuracy: 2.0,
-      speed: speed,
-      speedAccuracy: 0.5,
-    );
+}) => Position(
+  latitude: latitude,
+  longitude: longitude,
+  timestamp: DateTime.fromMillisecondsSinceEpoch(tMs, isUtc: true),
+  altitude: altitude,
+  altitudeAccuracy: 1.5,
+  accuracy: accuracy,
+  heading: 87.0,
+  headingAccuracy: 2.0,
+  speed: speed,
+  speedAccuracy: 0.5,
+);
 
 void main() {
   group('toLocationFix', () {
@@ -166,8 +167,9 @@ void main() {
         LocationPermission.whileInUse,
         LocationPermission.always,
       ]) {
-        final FakeLocationPlatform platform =
-            FakeLocationPlatform(permission: permission);
+        final FakeLocationPlatform platform = FakeLocationPlatform(
+          permission: permission,
+        );
         expect(
           await LocationService(platform: platform).hasPermission(),
           isTrue,
@@ -182,8 +184,9 @@ void main() {
         LocationPermission.denied,
         LocationPermission.deniedForever,
       ]) {
-        final FakeLocationPlatform platform =
-            FakeLocationPlatform(permission: permission);
+        final FakeLocationPlatform platform = FakeLocationPlatform(
+          permission: permission,
+        );
         expect(
           await LocationService(platform: platform).hasPermission(),
           isFalse,
@@ -201,8 +204,9 @@ void main() {
         permission: LocationPermission.denied,
       );
 
-      final LocationReadiness readiness =
-          await LocationService(platform: platform).checkReadiness();
+      final LocationReadiness readiness = await LocationService(
+        platform: platform,
+      ).checkReadiness();
 
       expect(readiness, LocationReadiness.serviceDisabled);
       expect(platform.checkPermissionCalls, 0);
@@ -210,8 +214,9 @@ void main() {
     });
 
     test('权限为 whileInUse 时返回 ready，不再申请', () async {
-      final FakeLocationPlatform platform =
-          FakeLocationPlatform(permission: LocationPermission.whileInUse);
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.whileInUse,
+      );
 
       expect(
         await LocationService(platform: platform).checkReadiness(),
@@ -221,8 +226,9 @@ void main() {
     });
 
     test('权限为 always 时返回 ready', () async {
-      final FakeLocationPlatform platform =
-          FakeLocationPlatform(permission: LocationPermission.always);
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.always,
+      );
 
       expect(
         await LocationService(platform: platform).checkReadiness(),
@@ -257,8 +263,9 @@ void main() {
     });
 
     test('权限被永久拒绝时返回 permissionDeniedForever，且不再弹窗申请', () async {
-      final FakeLocationPlatform platform =
-          FakeLocationPlatform(permission: LocationPermission.deniedForever);
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.deniedForever,
+      );
 
       expect(
         await LocationService(platform: platform).checkReadiness(),
@@ -283,21 +290,26 @@ void main() {
 
   group('系统设置跳转', () {
     test('openAppSettings 委托给平台并返回其结果', () async {
-      final FakeLocationPlatform platform =
-          FakeLocationPlatform(appSettingsResult: false);
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        appSettingsResult: false,
+      );
 
-      expect(await LocationService(platform: platform).openAppSettings(),
-          isFalse);
+      expect(
+        await LocationService(platform: platform).openAppSettings(),
+        isFalse,
+      );
       expect(platform.openAppSettingsCalls, 1);
     });
 
     test('openLocationSettings 委托给平台并返回其结果', () async {
-      final FakeLocationPlatform platform =
-          FakeLocationPlatform(locationSettingsResult: true);
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        locationSettingsResult: true,
+      );
 
       expect(
-          await LocationService(platform: platform).openLocationSettings(),
-          isTrue);
+        await LocationService(platform: platform).openLocationSettings(),
+        isTrue,
+      );
       expect(platform.openLocationSettingsCalls, 1);
     });
   });
@@ -337,7 +349,11 @@ void main() {
   group('quickPreviewFix', () {
     test('用中精度一次性请求，并把 Position 翻译成 LocationFix', () async {
       final FakeLocationPlatform platform = FakeLocationPlatform()
-        ..currentPosition = fakePosition(latitude: 30.6, longitude: 104.0, tMs: 5000);
+        ..currentPosition = fakePosition(
+          latitude: 30.6,
+          longitude: 104.0,
+          tMs: 5000,
+        );
       final LocationService service = LocationService(platform: platform);
 
       final LocationFix? fix = await service.quickPreviewFix();

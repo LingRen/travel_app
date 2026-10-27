@@ -39,7 +39,7 @@ enum ActivityType {
   bool get supportsSpeedTierCue => !usesPace;
 
   static ActivityType fromDb(String? value) => ActivityType.values.firstWhere(
-        (ActivityType a) => a.dbValue == value,
-        orElse: () => ActivityType.cycling,
-      );
+    (ActivityType a) => a.dbValue == value,
+    orElse: () => ActivityType.cycling,
+  );
 }

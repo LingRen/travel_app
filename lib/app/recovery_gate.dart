@@ -27,8 +27,9 @@ class _RecoveryGateState extends ConsumerState<RecoveryGate> {
     if (_checked) return;
     _checked = true;
 
-    final List<Workout> unfinished =
-        await ref.read(workoutRepositoryProvider).findUnfinished();
+    final List<Workout> unfinished = await ref
+        .read(workoutRepositoryProvider)
+        .findUnfinished();
     if (!mounted || unfinished.isEmpty) return;
 
     final Workout ride = unfinished.first;

@@ -19,7 +19,8 @@ List<TrackPoint> buildPoints(int count, {int stepMs = 1000, int? gapAfter}) {
         tMs: (gapAfter != null && i > gapAfter)
             ? i * stepMs + kGpsGapMs + 1
             : i * stepMs,
-        lat: 31.0 + i * 0.0001 + ((gapAfter != null && i > gapAfter) ? 0.01 : 0),
+        lat:
+            31.0 + i * 0.0001 + ((gapAfter != null && i > gapAfter) ? 0.01 : 0),
         lon: 121.0,
         speedMps: i.toDouble(),
         hr: 100 + i,
@@ -32,8 +33,10 @@ void main() {
   group('buildCurve 基本行为', () {
     test('速度曲线取平滑后的速度，x 是相对首点的秒数', () {
       final List<TrackPoint> points = buildPoints(5);
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.speed);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.speed,
+      );
 
       expect(curve.length, 5);
       expect(curve.first.xSeconds, 0);
@@ -49,7 +52,11 @@ void main() {
         buildPoints(3),
         metric: CurveMetric.heartRate,
       );
-      expect(curve.map((CurveSample s) => s.y).toList(), <double>[101, 101, 101]);
+      expect(curve.map((CurveSample s) => s.y).toList(), <double>[
+        101,
+        101,
+        101,
+      ]);
     });
 
     test('踏频曲线做滑动平均，不是逐点原始值', () {
@@ -65,9 +72,15 @@ void main() {
         for (int i = 0; i < 3; i++)
           TrackPoint(rideId: 1, tMs: i * 1000, powerW: 200 + i * 10),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.power);
-      expect(curve.map((CurveSample s) => s.y).toList(), <double>[210, 210, 210]);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.power,
+      );
+      expect(curve.map((CurveSample s) => s.y).toList(), <double>[
+        210,
+        210,
+        210,
+      ]);
     });
 
     test('速度曲线对尖峰做滑动平均，毛刺被削弱', () {
@@ -78,8 +91,10 @@ void main() {
         for (int i = 0; i < 7; i++)
           TrackPoint(rideId: 1, tMs: i * 1000, speedMps: i == 3 ? 10.0 : 0.0),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.speed);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.speed,
+      );
       expect(curve.length, 7);
       expect(curve[3].y, closeTo(10 / 7, 1e-6));
     });
@@ -93,8 +108,10 @@ void main() {
         for (int i = 0; i < 40; i++)
           TrackPoint(rideId: 1, tMs: i * 1000, speedMps: i.isEven ? 4.0 : 6.0),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.speed);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.speed,
+      );
 
       // 窗口内 4 与 6 各占一半，中点落回真实的 5 m/s。
       expect(curve[20].y, closeTo(5.0, 0.3));
@@ -109,8 +126,10 @@ void main() {
         const TrackPoint(rideId: 1, tMs: 1000), // 没有心率
         const TrackPoint(rideId: 1, tMs: 2000, hr: 120),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
       expect(curve.length, 2, reason: '中间没有心率的点不该被平滑补出一个值');
       // 两个有点的位置被同一个窗口覆盖，都取两点均值 110。
       expect(curve.map((CurveSample s) => s.y).toList(), <double>[110, 110]);
@@ -123,8 +142,10 @@ void main() {
         for (int i = 0; i < 10; i++)
           TrackPoint(rideId: 1, tMs: i * 1000, cadence: i < 5 ? null : 80 + i),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.cadence);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.cadence,
+      );
       expect(curve.length, 5, reason: '只有后 5 个点有踏频，前 5 个点不能凭空补出值');
       // x 是相对首个有效点的秒数，所以首个采样点仍是 0。
       expect(curve.first.xSeconds, 0);
@@ -139,8 +160,10 @@ void main() {
   group('buildCurve 断点分段', () {
     test('时间间隔超过 kGpsGapMs 时 segment 递增', () {
       final List<TrackPoint> points = buildPoints(6, gapAfter: 2);
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
 
       // 前 3 个点（下标 0,1,2）同段；下标 3 起时间跳变，进入新段。
       expect(curve[0].segment, 0);
@@ -154,8 +177,10 @@ void main() {
         const TrackPoint(rideId: 1, tMs: 1000, hr: 100),
         const TrackPoint(rideId: 1, tMs: 500, hr: 110), // 时间倒流
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
       expect(curve[0].segment, 0);
       expect(curve[1].segment, 1);
     });
@@ -165,8 +190,10 @@ void main() {
         const TrackPoint(rideId: 1, tMs: 1000, hr: 100),
         const TrackPoint(rideId: 1, tMs: 1000, hr: 110), // 时间没前进
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
       expect(curve[0].segment, 0);
       expect(curve[1].segment, 1);
     });
@@ -176,8 +203,10 @@ void main() {
         const TrackPoint(rideId: 1, tMs: 0, hr: 100),
         const TrackPoint(rideId: 1, tMs: kGpsGapMs, hr: 110),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
       expect(curve[1].segment, 0);
     });
 
@@ -186,7 +215,13 @@ void main() {
     test('时间超过 kGpsGapMs 但几乎没位移时不递增 segment', () {
       final List<TrackPoint> points = <TrackPoint>[
         const TrackPoint(rideId: 1, tMs: 0, lat: 31.0, lon: 121.0, hr: 100),
-        const TrackPoint(rideId: 1, tMs: 1000, lat: 31.00002, lon: 121.0, hr: 101),
+        const TrackPoint(
+          rideId: 1,
+          tMs: 1000,
+          lat: 31.00002,
+          lon: 121.0,
+          hr: 101,
+        ),
         // 15 秒后原地（约 10 米）恢复定位。
         const TrackPoint(
           rideId: 1,
@@ -196,8 +231,10 @@ void main() {
           hr: 102,
         ),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.heartRate);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.heartRate,
+      );
 
       expect(curve.map((CurveSample s) => s.segment).toList(), <int>[0, 0, 0]);
     });
@@ -255,12 +292,8 @@ void main() {
     const double maxX = 10;
     const double maxY = 100;
 
-    List<CurveArc> arcsOf(List<CurveSample> samples) => curveArcs(
-          samples,
-          drawnCurveSegments(samples),
-          maxX: maxX,
-          maxY: maxY,
-        );
+    List<CurveArc> arcsOf(List<CurveSample> samples) =>
+        curveArcs(samples, drawnCurveSegments(samples), maxX: maxX, maxY: maxY);
 
     test('每个连接点对生成一段，弧数与折线段数一致', () {
       final List<CurveSample> samples = buildCurve(
@@ -287,8 +320,20 @@ void main() {
       // 中间那个点是控制点，不是端点：这是它「被抹圆」的原因，也是
       // 「曲线仍然穿过它所在高度」这句话的边界——它作为控制点时，曲线
       // 在 x=0.5 处的高度由三个点共同决定，不再等于 0.4。
-      expect(arcs.first.control1, const CurvePoint(0 + (0.5 - 0) / kCurveTensionDivisor, 0.1 + (0.4 - 0.1) / kCurveTensionDivisor));
-      expect(arcs.last.control1, const CurvePoint(0.5 + (1 - 0) / kCurveTensionDivisor, 0.4 + (0.2 - 0.1) / kCurveTensionDivisor));
+      expect(
+        arcs.first.control1,
+        const CurvePoint(
+          0 + (0.5 - 0) / kCurveTensionDivisor,
+          0.1 + (0.4 - 0.1) / kCurveTensionDivisor,
+        ),
+      );
+      expect(
+        arcs.last.control1,
+        const CurvePoint(
+          0.5 + (1 - 0) / kCurveTensionDivisor,
+          0.4 + (0.2 - 0.1) / kCurveTensionDivisor,
+        ),
+      );
     });
 
     test('相邻两段的切线连续：前一段的末控制点与后一段的首控制点共线于采样点', () {
@@ -330,12 +375,21 @@ void main() {
       // 第 2 段的切线邻居是它自己那一侧的第 3 点，而不是断口另一侧的第 1 点。
       final CurvePoint p2 = const CurvePoint(6 / maxX, 80 / maxY);
       final CurvePoint p3 = const CurvePoint(1, 0.2);
-      expect(arcs.last.control1, CurvePoint(p2.x + (p3.x - p2.x) / kCurveTensionDivisor, p2.y + (p3.y - p2.y) / kCurveTensionDivisor));
+      expect(
+        arcs.last.control1,
+        CurvePoint(
+          p2.x + (p3.x - p2.x) / kCurveTensionDivisor,
+          p2.y + (p3.y - p2.y) / kCurveTensionDivisor,
+        ),
+      );
 
       // 对照组：若真的借用了断口另一侧的第 1 点，控制点会落在别处。
       final CurvePoint p1 = const CurvePoint(0.5, 0.1);
       expect(
-        CurvePoint(p2.x + (p3.x - p1.x) / kCurveTensionDivisor, p2.y + (p3.y - p1.y) / kCurveTensionDivisor),
+        CurvePoint(
+          p2.x + (p3.x - p1.x) / kCurveTensionDivisor,
+          p2.y + (p3.y - p1.y) / kCurveTensionDivisor,
+        ),
         isNot(arcs.last.control1),
       );
     });
@@ -372,8 +426,10 @@ void main() {
         for (int i = 0; i < 7; i++)
           TrackPoint(rideId: 1, tMs: i * 1000, speedMps: i == 3 ? 10.0 : 0.0),
       ];
-      final List<CurveSample> curve =
-          buildCurve(points, metric: CurveMetric.speed);
+      final List<CurveSample> curve = buildCurve(
+        points,
+        metric: CurveMetric.speed,
+      );
 
       expect(curveExtremes(curve)!.maxY, closeTo(10 / 7, 1e-6));
     });

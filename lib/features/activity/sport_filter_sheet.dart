@@ -19,48 +19,45 @@ class SportFilterSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PaperSheet(
-        title: '筛选运动类型',
-        subtitle: '查看某一类运动的记录与统计',
-        onClose: () => Navigator.of(context).maybePop(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _FilterRow(
-              key: const Key('sport-filter-all'),
-              seal: '全',
-              label: '全部运动',
-              description: '所有记录',
-              selected: current == null,
-              onTap: () {
-                onSelected(null);
-                Navigator.of(context).maybePop();
-              },
-            ),
-            for (final ActivityType type in ActivityType.values) ...<Widget>[
-              const Divider(height: 1),
-              _FilterRow(
-                key: Key('sport-filter-${type.dbValue}'),
-                seal: activityTypeSeal(type),
-                label: type.label,
-                description: activityTypeDescription(type),
-                selected: current == type,
-                onTap: () {
-                  onSelected(type);
-                  Navigator.of(context).maybePop();
-                },
-              ),
-            ],
-            const SizedBox(height: kSpaceL),
-            const Divider(height: 1),
-            const SizedBox(height: kSpaceM),
-            Text(
-              '筛选仅改变查看范围，不修改数据',
-              style: kMutedTextStyle.copyWith(fontSize: 12),
-            ),
-          ],
+    title: '筛选运动类型',
+    subtitle: '查看某一类运动的记录与统计',
+    onClose: () => Navigator.of(context).maybePop(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _FilterRow(
+          key: const Key('sport-filter-all'),
+          seal: '全',
+          label: '全部运动',
+          description: '所有记录',
+          selected: current == null,
+          onTap: () {
+            onSelected(null);
+            Navigator.of(context).maybePop();
+          },
         ),
-      );
+        for (final ActivityType type in ActivityType.values) ...<Widget>[
+          const Divider(height: 1),
+          _FilterRow(
+            key: Key('sport-filter-${type.dbValue}'),
+            seal: activityTypeSeal(type),
+            label: type.label,
+            description: activityTypeDescription(type),
+            selected: current == type,
+            onTap: () {
+              onSelected(type);
+              Navigator.of(context).maybePop();
+            },
+          ),
+        ],
+        const SizedBox(height: kSpaceL),
+        const Divider(height: 1),
+        const SizedBox(height: kSpaceM),
+        Text('筛选仅改变查看范围，不修改数据', style: kMutedTextStyle.copyWith(fontSize: 12)),
+      ],
+    ),
+  );
 }
 
 class _FilterRow extends StatelessWidget {

@@ -38,7 +38,17 @@ const Workout _finished = Workout(
 );
 
 const List<TrackPoint> _points = <TrackPoint>[
-  TrackPoint(id: 1, rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, altitudeM: 10, speedMps: 5, hr: 140, cadence: 80),
+  TrackPoint(
+    id: 1,
+    rideId: 1,
+    tMs: 1000,
+    lat: 31.0,
+    lon: 121.0,
+    altitudeM: 10,
+    speedMps: 5,
+    hr: 140,
+    cadence: 80,
+  ),
   TrackPoint(id: 2, rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, hr: 145),
   TrackPoint(id: 3, rideId: 1, tMs: 3000), // GPS 丢失，只有传感器
 ];
@@ -66,10 +76,11 @@ void main() {
       );
 
       final Archive archive = ZipDecoder().decodeBytes(bytes);
-      expect(
-        archive.files.map((ArchiveFile f) => f.name).toSet(),
-        <String>{'manifest.json', 'workouts.json', 'track_points.jsonl'},
-      );
+      expect(archive.files.map((ArchiveFile f) => f.name).toSet(), <String>{
+        'manifest.json',
+        'workouts.json',
+        'track_points.jsonl',
+      });
     });
 
     test('manifest 写出 schema 版本、导出时间与条数', () {
@@ -98,8 +109,13 @@ void main() {
       );
 
       final Archive archive = ZipDecoder().decodeBytes(bytes);
-      final String text = utf8.decode(archive.findFile('track_points.jsonl')!.content);
-      final List<String> lines = text.split('\n').where((String l) => l.isNotEmpty).toList();
+      final String text = utf8.decode(
+        archive.findFile('track_points.jsonl')!.content,
+      );
+      final List<String> lines = text
+          .split('\n')
+          .where((String l) => l.isNotEmpty)
+          .toList();
 
       expect(lines.length, 3);
       for (final String line in lines) {
@@ -132,11 +148,13 @@ void main() {
     });
 
     test('manifest 内容被解析出来', () {
-      final BackupPayload payload = parseBackupArchive(buildBackupArchive(
-        rides: const <Workout>[_finished],
-        points: _points,
-        exportedAtMs: 1758384000000,
-      ));
+      final BackupPayload payload = parseBackupArchive(
+        buildBackupArchive(
+          rides: const <Workout>[_finished],
+          points: _points,
+          exportedAtMs: 1758384000000,
+        ),
+      );
 
       expect(payload.manifest.schemaVersion, kBackupSchemaVersion);
       expect(payload.manifest.rideCount, 1);
@@ -175,26 +193,32 @@ void main() {
     test('v1 归档仍可恢复：版本检查放行，缺 activity_type 回填为骑行', () {
       // 真 v1 归档：条目名是 rides.json，行里没有 activity_type 列。
       final Archive archive = Archive()
-        ..add(ArchiveFile.string(
-          'manifest.json',
-          jsonEncode(const BackupManifest(
-            schemaVersion: 1,
-            exportedAtMs: 0,
-            rideCount: 1,
-            pointCount: 0,
-          ).toJson()),
-        ))
-        ..add(ArchiveFile.string(
-          'rides.json',
-          jsonEncode(<Map<String, Object?>>[
-            <String, Object?>{
-              'id': 1,
-              'started_at': 1000,
-              'status': 'finished',
-              'title': '周末环湖',
-            },
-          ]),
-        ))
+        ..add(
+          ArchiveFile.string(
+            'manifest.json',
+            jsonEncode(
+              const BackupManifest(
+                schemaVersion: 1,
+                exportedAtMs: 0,
+                rideCount: 1,
+                pointCount: 0,
+              ).toJson(),
+            ),
+          ),
+        )
+        ..add(
+          ArchiveFile.string(
+            'rides.json',
+            jsonEncode(<Map<String, Object?>>[
+              <String, Object?>{
+                'id': 1,
+                'started_at': 1000,
+                'status': 'finished',
+                'title': '周末环湖',
+              },
+            ]),
+          ),
+        )
         ..add(ArchiveFile.string('track_points.jsonl', ''));
       final Uint8List bytes = Uint8List.fromList(ZipEncoder().encode(archive));
 
@@ -235,11 +259,13 @@ void main() {
     });
 
     test('空数据也能打包与解包', () {
-      final BackupPayload payload = parseBackupArchive(buildBackupArchive(
-        rides: const <Workout>[],
-        points: const <TrackPoint>[],
-        exportedAtMs: 0,
-      ));
+      final BackupPayload payload = parseBackupArchive(
+        buildBackupArchive(
+          rides: const <Workout>[],
+          points: const <TrackPoint>[],
+          exportedAtMs: 0,
+        ),
+      );
 
       expect(payload.rides, isEmpty);
       expect(payload.points, isEmpty);
@@ -249,19 +275,23 @@ void main() {
   group('applyBackup', () {
     test('replaceExisting 为真时先清空再写入', () async {
       // 先塞一条「旧数据」，恢复后应当消失。
-      await WorkoutDao(db).insert(const Workout(
-        id: null,
-        startedAtMs: 999,
-        status: WorkoutStatus.finished,
-        title: '旧数据',
-      ));
+      await WorkoutDao(db).insert(
+        const Workout(
+          id: null,
+          startedAtMs: 999,
+          status: WorkoutStatus.finished,
+          title: '旧数据',
+        ),
+      );
 
       await applyBackup(
-        parseBackupArchive(buildBackupArchive(
-          rides: const <Workout>[_finished],
-          points: _points,
-          exportedAtMs: 0,
-        )),
+        parseBackupArchive(
+          buildBackupArchive(
+            rides: const <Workout>[_finished],
+            points: _points,
+            exportedAtMs: 0,
+          ),
+        ),
         db: db,
       );
 
@@ -274,19 +304,23 @@ void main() {
     test('replaceExisting 为假时保留已有数据', () async {
       // 显式给 id：备份里的骑行 id 是 1，若让旧数据自增拿到 1 会先撞主键，
       // 那测的就不是「保留已有数据」而是「主键冲突」了。
-      await WorkoutDao(db).insertWithId(const Workout(
-        id: 100,
-        startedAtMs: 999,
-        status: WorkoutStatus.finished,
-        title: '旧数据',
-      ));
+      await WorkoutDao(db).insertWithId(
+        const Workout(
+          id: 100,
+          startedAtMs: 999,
+          status: WorkoutStatus.finished,
+          title: '旧数据',
+        ),
+      );
 
       await applyBackup(
-        parseBackupArchive(buildBackupArchive(
-          rides: const <Workout>[_finished],
-          points: _points,
-          exportedAtMs: 0,
-        )),
+        parseBackupArchive(
+          buildBackupArchive(
+            rides: const <Workout>[_finished],
+            points: _points,
+            exportedAtMs: 0,
+          ),
+        ),
         db: db,
         replaceExisting: false,
       );
@@ -296,11 +330,13 @@ void main() {
 
     test('恢复后轨迹点挂回原来的 ride id', () async {
       await applyBackup(
-        parseBackupArchive(buildBackupArchive(
-          rides: const <Workout>[_finished],
-          points: _points,
-          exportedAtMs: 0,
-        )),
+        parseBackupArchive(
+          buildBackupArchive(
+            rides: const <Workout>[_finished],
+            points: _points,
+            exportedAtMs: 0,
+          ),
+        ),
         db: db,
       );
 
@@ -337,12 +373,14 @@ void main() {
       // 造一个 ride 指向不存在的 ride_id 的点：外键会拒绝，整个事务应回滚。
       // 旧数据用 id=100 而不是自增的 1，否则备份里 id=1 的骑行会先撞主键，
       // 失败原因就变成主键冲突、根本走不到外键这一层。
-      await WorkoutDao(db).insertWithId(const Workout(
-        id: 100,
-        startedAtMs: 999,
-        status: WorkoutStatus.finished,
-        title: '旧数据',
-      ));
+      await WorkoutDao(db).insertWithId(
+        const Workout(
+          id: 100,
+          startedAtMs: 999,
+          status: WorkoutStatus.finished,
+          title: '旧数据',
+        ),
+      );
 
       final BackupPayload broken = BackupPayload(
         manifest: const BackupManifest(

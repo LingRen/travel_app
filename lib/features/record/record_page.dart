@@ -24,12 +24,15 @@ class RecordPage extends ConsumerStatefulWidget {
   ConsumerState<RecordPage> createState() => _RecordPageState();
 }
 
-class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObserver {
+class _RecordPageState extends ConsumerState<RecordPage>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _consumeResumeRequest());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _consumeResumeRequest(),
+    );
   }
 
   @override
@@ -59,7 +62,9 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
       return;
     }
     ref.read(resumeRideIdProvider.notifier).state = null;
-    unawaited(ref.read(recordControllerProvider.notifier).resumeExisting(rideId));
+    unawaited(
+      ref.read(recordControllerProvider.notifier).resumeExisting(rideId),
+    );
   }
 
   Future<void> _setWakelock(bool enable) async {
@@ -75,10 +80,11 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   }
 
   Future<void> _pickDevice(SensorKind kind) async {
-    final DiscoveredDevice? device = await showModalBottomSheet<DiscoveredDevice>(
-      context: context,
-      builder: (BuildContext context) => DevicePickerSheet(kind: kind),
-    );
+    final DiscoveredDevice? device =
+        await showModalBottomSheet<DiscoveredDevice>(
+          context: context,
+          builder: (BuildContext context) => DevicePickerSheet(kind: kind),
+        );
     if (device == null) return;
     await ref
         .read(recordControllerProvider.notifier)
@@ -101,7 +107,9 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: Text('结束本次${ref.read(recordControllerProvider).selectedActivityType.label}？'),
+        title: Text(
+          '结束本次${ref.read(recordControllerProvider).selectedActivityType.label}？',
+        ),
         content: const Text('结束后会保存记录并结算指标，无法再继续记录。'),
         actions: <Widget>[
           OutlinedButton(
@@ -121,7 +129,9 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     final RecordState state = ref.watch(recordControllerProvider);
-    final RecordController controller = ref.read(recordControllerProvider.notifier);
+    final RecordController controller = ref.read(
+      recordControllerProvider.notifier,
+    );
     final AppSettings? settings = ref.watch(appSettingsProvider).value;
     final DistanceUnit unit = settings?.distanceUnit ?? DistanceUnit.kilometer;
     final String tileUrl =
@@ -129,11 +139,13 @@ class _RecordPageState extends ConsumerState<RecordPage> with WidgetsBindingObse
 
     // 正在记录且 App 在前台时屏幕常亮。见设计文档 10.1 的「熄屏与常亮」：
     // 亮着就常亮，用户按电源键熄屏后随生命周期自动停。
-    ref.listen<RecordState>(recordControllerProvider,
-        (RecordState? _, RecordState next) {
-      unawaited(_setWakelock(
-        next.isActive && !next.isPaused && next.foreground,
-      ));
+    ref.listen<RecordState>(recordControllerProvider, (
+      RecordState? _,
+      RecordState next,
+    ) {
+      unawaited(
+        _setWakelock(next.isActive && !next.isPaused && next.foreground),
+      );
     });
 
     final Widget body;
@@ -274,16 +286,14 @@ class _FinishedReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        children: <Widget>[
-          // 结算是一次性静态读数，按设计文档用衬线大数字，不用仪表等宽字体。
-          Text(value, style: kSerifDisplayTextStyle),
-          const SizedBox(height: kSpaceXs),
-          Text(
-            label,
-            style: kLabelTextStyle.copyWith(
-              color: context.palette.muted,
-            ),
-          ),
-        ],
-      );
+    children: <Widget>[
+      // 结算是一次性静态读数，按设计文档用衬线大数字，不用仪表等宽字体。
+      Text(value, style: kSerifDisplayTextStyle),
+      const SizedBox(height: kSpaceXs),
+      Text(
+        label,
+        style: kLabelTextStyle.copyWith(color: context.palette.muted),
+      ),
+    ],
+  );
 }

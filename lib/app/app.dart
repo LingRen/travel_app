@@ -33,9 +33,7 @@ class CyclingApp extends ConsumerWidget {
         title: '行迹',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(accent),
-        home: const CoverGate(
-          child: RecoveryGate(child: HomeShell()),
-        ),
+        home: const CoverGate(child: RecoveryGate(child: HomeShell())),
       ),
     );
   }

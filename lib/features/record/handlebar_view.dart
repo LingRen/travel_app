@@ -21,8 +21,7 @@ import 'ride_cue_banner.dart';
 double speedScaleFraction(
   double speedMps, {
   double maxMps = kSpeedScaleMaxMps,
-}) =>
-    maxMps <= 0 ? 0 : (speedMps / maxMps).clamp(0.0, 1.0);
+}) => maxMps <= 0 ? 0 : (speedMps / maxMps).clamp(0.0, 1.0);
 
 /// 骑行界面（车把与口袋合并后的唯一一个）。见设计文档 10.1。
 ///
@@ -126,10 +125,10 @@ class HandlebarView extends StatelessWidget {
     final String? errorActionLabel = error == null
         ? null
         : error.contains('定位服务')
-            ? '打开定位'
-            : error.contains('权限')
-                ? '去设置'
-                : null;
+        ? '打开定位'
+        : error.contains('权限')
+        ? '去设置'
+        : null;
     final List<Widget> bottomCells = <Widget>[
       _MetricCell(
         label: '心率',
@@ -205,7 +204,12 @@ class HandlebarView extends StatelessWidget {
             children: <Widget>[
               // 顶部一块：状态 + 本次运动的总量与环境读数。
               Padding(
-                padding: const EdgeInsets.fromLTRB(kSpaceM, kSpaceS, kSpaceM, 0),
+                padding: const EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  kSpaceS,
+                  kSpaceM,
+                  0,
+                ),
                 child: Column(
                   children: <Widget>[
                     _StatusStrip(
@@ -293,7 +297,12 @@ class HandlebarView extends StatelessWidget {
               // 底部一块：当下读数（主读数、传感器）与动作区。拇指与视线都在这儿，
               // 所以把「现在多少」放这一块，把「一共多少」放到上面那块。
               Padding(
-                padding: const EdgeInsets.fromLTRB(kSpaceM, 0, kSpaceM, kSpaceS),
+                padding: const EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  0,
+                  kSpaceM,
+                  kSpaceS,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
@@ -319,10 +328,7 @@ class HandlebarView extends StatelessWidget {
                               textBaseline: TextBaseline.alphabetic,
                               children: <Widget>[
                                 Text(
-                                  formatSpeedValue(
-                                    state.currentSpeedMps,
-                                    unit,
-                                  ),
+                                  formatSpeedValue(state.currentSpeedMps, unit),
                                   key: const Key('handlebar-speed'),
                                   style: kInstrumentTextStyle,
                                 ),
@@ -343,10 +349,7 @@ class HandlebarView extends StatelessWidget {
                       _SpeedScale(speedMps: state.currentSpeedMps),
                       const SizedBox(height: kSpaceS),
                     ],
-                    _MetricRow(
-                      dividerMargin: kSpaceS,
-                      cells: bottomCells,
-                    ),
+                    _MetricRow(dividerMargin: kSpaceS, cells: bottomCells),
                     // 阻断类错误（定位权限 / 定位服务）与连续写入失败都显示在
                     // 这一屏：前者让「开始」点了没反应，不说清楚就成了哑键；
                     // 后者发生在骑行中。不用 SnackBar——它自己会消失，而这两个
@@ -380,7 +383,10 @@ class HandlebarView extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 22,
+                              ),
                               label: Text(
                                 '开始${selectedActivityType.label}',
                                 style: const TextStyle(
@@ -402,8 +408,9 @@ class HandlebarView extends StatelessWidget {
                                     onPressed: onFinish,
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: palette.ink,
-                                      backgroundColor:
-                                          palette.sheet.withValues(alpha: 0.72),
+                                      backgroundColor: palette.sheet.withValues(
+                                        alpha: 0.72,
+                                      ),
                                       side: BorderSide(color: palette.hairline),
                                       shape: const RoundedRectangleBorder(
                                         borderRadius: BorderRadius.all(
@@ -544,13 +551,13 @@ class _StatusStrip extends StatelessWidget {
     final String status = idle
         ? '准备出发'
         : paused
-            ? '已暂停'
-            : '记录中';
+        ? '已暂停'
+        : '记录中';
     final String? detail = idle
         ? (locationReady ? ' · GPS 已锁定' : ' · 等待定位')
         : paused
-            ? null
-            : (state.gpsWeak ? ' · GPS 信号弱' : ' · 信号良好');
+        ? null
+        : (state.gpsWeak ? ' · GPS 信号弱' : ' · 信号良好');
 
     return Row(
       children: <Widget>[
@@ -655,7 +662,9 @@ class _SensorLamp extends StatelessWidget {
       icon: Icon(
         icon,
         size: 18,
-        color: connected ? palette.accentInk : palette.muted.withValues(alpha: 0.55),
+        color: connected
+            ? palette.accentInk
+            : palette.muted.withValues(alpha: 0.55),
       ),
     );
   }
@@ -683,17 +692,12 @@ class _IdleCard extends StatelessWidget {
     final String title = locationReady ? '定位已就绪' : '等待定位…';
     final String subtitle = locationReady
         ? accuracyM == null
-            ? '按下开始，记录这一程。'
-            : '精度 ${accuracyM!.round()} m · 按下开始，记录这一程。'
+              ? '按下开始，记录这一程。'
+              : '精度 ${accuracyM!.round()} m · 按下开始，记录这一程。'
         : '正在获取当前位置，按下开始后会再次尝试。';
     return Container(
       constraints: const BoxConstraints(maxWidth: 330),
-      padding: const EdgeInsets.fromLTRB(
-        kSpaceL,
-        kSpaceM,
-        kSpaceL,
-        kSpaceM,
-      ),
+      padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
       decoration: BoxDecoration(
         color: palette.sheet.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(kRadiusPanel),
@@ -712,10 +716,7 @@ class _IdleCard extends StatelessWidget {
           const SizedBox(height: kSpaceS),
           Container(width: 28, height: 2, color: palette.accentInk),
           const SizedBox(height: kSpaceS),
-          Text(
-            title,
-            style: kSerifHeadingTextStyle.copyWith(fontSize: 24),
-          ),
+          Text(title, style: kSerifHeadingTextStyle.copyWith(fontSize: 24)),
           const SizedBox(height: kSpaceXs),
           Text(
             subtitle,
@@ -747,8 +748,9 @@ class _PaceReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final ({int minutes, int seconds})? parts =
-        placeholder ? null : paceParts(speedMps, unit);
+    final ({int minutes, int seconds})? parts = placeholder
+        ? null
+        : paceParts(speedMps, unit);
     if (parts == null) {
       return Semantics(
         label: '暂无配速',
@@ -890,14 +892,18 @@ class _SpeedScalePainter extends CustomPainter {
     const double trackHeight = 4;
 
     final Rect track = Rect.fromLTWH(0, trackY, size.width, trackHeight);
-    final RRect trackRrect =
-        RRect.fromRectAndRadius(track, const Radius.circular(kRadiusLine));
+    final RRect trackRrect = RRect.fromRectAndRadius(
+      track,
+      const Radius.circular(kRadiusLine),
+    );
 
     canvas.drawRRect(trackRrect, Paint()..color = trackColor);
     if (fraction > 0) {
       // 填充宽度至少一个圆角直径，否则低速时看不出有进度。
-      final double filled =
-          (size.width * fraction).clamp(trackHeight, size.width);
+      final double filled = (size.width * fraction).clamp(
+        trackHeight,
+        size.width,
+      );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(0, trackY, filled, trackHeight),
@@ -1063,11 +1069,7 @@ class _MetricCell extends StatelessWidget {
 /// 单行 + 省略号，不为了把整句文案排全而把这一屏撑成两行；能处理的错误
 /// 在右侧给一个明确入口（去设置 / 打开定位），不让用户只看到一句话。
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
+  const _InlineNotice({required this.message, this.actionLabel, this.onAction});
 
   final String message;
   final String? actionLabel;

@@ -12,12 +12,16 @@ enum SensorKind { heartRate, cadence, power }
 typedef SensorReadingCallback = void Function(SensorKind kind, num value);
 
 /// 连接状态回调。
-typedef SensorConnectionCallback =
-    void Function(SensorKind kind, bool connected);
+typedef SensorConnectionCallback = void Function(
+  SensorKind kind,
+  bool connected,
+);
 
 /// 创建重连定时器。默认走真实时钟，测试注入假实现以免真的等待退避时长。
-typedef BleTimerFactory =
-    Timer Function(Duration delay, void Function() callback);
+typedef BleTimerFactory = Timer Function(
+  Duration delay,
+  void Function() callback,
+);
 
 /// 默认定时器工厂：真实时钟。
 Timer defaultBleTimerFactory(Duration delay, void Function() callback) =>

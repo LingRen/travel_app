@@ -30,7 +30,8 @@ const double _eccentricitySquared = 0.00669342162296594323;
 /// 的地址不是高德源，按子串判定会误判，轨迹就白偏几百米。
 bool isGcj02TileSource(String urlTemplate) {
   final String host = _hostOf(urlTemplate);
-  return _isUnderDomain(host, 'autonavi.com') || _isUnderDomain(host, 'amap.com');
+  return _isUnderDomain(host, 'autonavi.com') ||
+      _isUnderDomain(host, 'amap.com');
 }
 
 /// 从瓦片地址模板里取主机名。模板里的 `{s}`、`{x}` 等占位符不是合法 URL
@@ -71,7 +72,8 @@ bool isOutOfChina(double lat, double lon) =>
   magic = 1 - _eccentricitySquared * magic * magic;
   final double sqrtMagic = _sqrt(magic);
 
-  final double correctedLat = (dLat * 180.0) /
+  final double correctedLat =
+      (dLat * 180.0) /
       ((_axis * (1 - _eccentricitySquared)) / (magic * sqrtMagic) * _pi);
   final double correctedLon =
       (dLon * 180.0) / (_axis / sqrtMagic * _cos(radLat) * _pi);
@@ -80,7 +82,8 @@ bool isOutOfChina(double lat, double lon) =>
 }
 
 double _transformLat(double x, double y) {
-  double ret = -100.0 +
+  double ret =
+      -100.0 +
       2.0 * x +
       3.0 * y +
       0.2 * y * y +

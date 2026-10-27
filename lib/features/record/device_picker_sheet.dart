@@ -48,10 +48,7 @@ class _DevicePickerSheetState extends ConsumerState<DevicePickerSheet> {
                 kSpaceL,
                 kSpaceS,
               ),
-              child: Text(
-                title,
-                style: kSectionTextStyle,
-              ),
+              child: Text(title, style: kSectionTextStyle),
             ),
             if (isHeartRate)
               const Padding(
@@ -66,45 +63,48 @@ class _DevicePickerSheetState extends ConsumerState<DevicePickerSheet> {
             Expanded(
               child: FutureBuilder<List<DiscoveredDevice>>(
                 future: _scan,
-                builder: (
-                  BuildContext context,
-                  AsyncSnapshot<List<DiscoveredDevice>> snapshot,
-                ) {
-                  if (snapshot.hasError) {
-                    final Object error = snapshot.error!;
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(kSpaceL),
-                        child: Text(
-                          error is StateError ? error.message : '扫描失败：$error',
-                          textAlign: TextAlign.center,
-                          style: kMutedTextStyle,
-                        ),
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final List<DiscoveredDevice> devices = snapshot.data!;
-                  if (devices.isEmpty) {
-                    return const Center(
-                      child: Text('没有发现设备', style: kMutedTextStyle),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: devices.length,
-                    separatorBuilder: (BuildContext context, int i) =>
-                        const Divider(height: 1),
-                    itemBuilder: (BuildContext context, int i) {
-                      final DiscoveredDevice d = devices[i];
-                      return _DeviceRow(
-                        device: d,
-                        onTap: () => Navigator.of(context).pop(d),
+                builder:
+                    (
+                      BuildContext context,
+                      AsyncSnapshot<List<DiscoveredDevice>> snapshot,
+                    ) {
+                      if (snapshot.hasError) {
+                        final Object error = snapshot.error!;
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(kSpaceL),
+                            child: Text(
+                              error is StateError
+                                  ? error.message
+                                  : '扫描失败：$error',
+                              textAlign: TextAlign.center,
+                              style: kMutedTextStyle,
+                            ),
+                          ),
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final List<DiscoveredDevice> devices = snapshot.data!;
+                      if (devices.isEmpty) {
+                        return const Center(
+                          child: Text('没有发现设备', style: kMutedTextStyle),
+                        );
+                      }
+                      return ListView.separated(
+                        itemCount: devices.length,
+                        separatorBuilder: (BuildContext context, int i) =>
+                            const Divider(height: 1),
+                        itemBuilder: (BuildContext context, int i) {
+                          final DiscoveredDevice d = devices[i];
+                          return _DeviceRow(
+                            device: d,
+                            onTap: () => Navigator.of(context).pop(d),
+                          );
+                        },
                       );
                     },
-                  );
-                },
               ),
             ),
           ],

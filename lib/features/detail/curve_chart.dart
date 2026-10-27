@@ -185,15 +185,13 @@ class _CurvePainter extends CustomPainter {
       _averageLabelStyle,
     );
     // 默认压在线上方；线贴到图表顶部时翻到下方，免得标签被裁掉。
-    final double labelY =
-        y - label.height - 2 < 0 ? y + 3 : y - label.height - 2;
+    final double labelY = y - label.height - 2 < 0
+        ? y + 3
+        : y - label.height - 2;
     // 平均线标签靠左：极值标签通常在曲线的峰/谷附近，靠右会和它叠在一起。
     label.paint(
       canvas,
-      Offset(
-        4,
-        labelY.clamp(0.0, math.max(0.0, size.height - label.height)),
-      ),
+      Offset(4, labelY.clamp(0.0, math.max(0.0, size.height - label.height))),
     );
   }
 
@@ -242,8 +240,10 @@ class _CurvePainter extends CustomPainter {
 
     // 峰顶的标签朝上、谷底的朝下，反过来会压住曲线。贴到图表边上时收回界内。
     final TextPainter label = _label(text, _extremumLabelStyle);
-    final double labelX = (x - label.width / 2)
-        .clamp(0.0, math.max(0.0, size.width - label.width));
+    final double labelX = (x - label.width / 2).clamp(
+      0.0,
+      math.max(0.0, size.width - label.width),
+    );
     final double labelY = below ? py + 5 : py - label.height - 5;
     label.paint(
       canvas,

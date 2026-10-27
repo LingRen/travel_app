@@ -46,14 +46,14 @@ class SensorPairingRepository {
   }
 
   String _idKey(SensorKind kind) => switch (kind) {
-        SensorKind.heartRate => _hrIdKey,
-        SensorKind.cadence => _cadenceIdKey,
-        SensorKind.power => _powerIdKey,
-      };
+    SensorKind.heartRate => _hrIdKey,
+    SensorKind.cadence => _cadenceIdKey,
+    SensorKind.power => _powerIdKey,
+  };
 
   String _nameKey(SensorKind kind) => switch (kind) {
-        SensorKind.heartRate => _hrNameKey,
-        SensorKind.cadence => _cadenceNameKey,
-        SensorKind.power => _powerNameKey,
-      };
+    SensorKind.heartRate => _hrNameKey,
+    SensorKind.cadence => _cadenceNameKey,
+    SensorKind.power => _powerNameKey,
+  };
 }

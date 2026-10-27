@@ -141,14 +141,14 @@ void main() {
 
     test('同一种子两次生成的点完全一致', () {
       List<Object?> snapshot() => <Object?>[
-            for (final TrackPoint p in generateMockPoints(
-              rideId: 1,
-              startedAtMs: nowMs,
-              durationS: 300,
-              seed: 5,
-            ))
-              <Object?>[p.tMs, p.lat, p.lon, p.speedMps, p.hr],
-          ];
+        for (final TrackPoint p in generateMockPoints(
+          rideId: 1,
+          startedAtMs: nowMs,
+          durationS: 300,
+          seed: 5,
+        ))
+          <Object?>[p.tMs, p.lat, p.lon, p.speedMps, p.hr],
+      ];
       expect(snapshot(), snapshot());
     });
   });
@@ -208,8 +208,11 @@ void main() {
 
       final List<Workout> rides = await repo.listFinished();
       expect(rides.length, 17);
-      expect(rides.any((Workout r) => r.id == real.id), isTrue,
-          reason: '真实记录被模拟数据的覆盖逻辑误删了');
+      expect(
+        rides.any((Workout r) => r.id == real.id),
+        isTrue,
+        reason: '真实记录被模拟数据的覆盖逻辑误删了',
+      );
     });
 
     test('清空会删掉全部记录（含真实记录），返回删除条数', () async {

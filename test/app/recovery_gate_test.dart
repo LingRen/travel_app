@@ -46,8 +46,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<int> seedUnfinishedWorkout(int startedAtMs) => WorkoutDao(db)
-      .insert(Workout(startedAtMs: startedAtMs, status: WorkoutStatus.recording));
+  Future<int> seedUnfinishedWorkout(int startedAtMs) => WorkoutDao(
+    db,
+  ).insert(Workout(startedAtMs: startedAtMs, status: WorkoutStatus.recording));
 
   testWidgets('没有未结束的骑行时不弹窗，直接进入主界面', (WidgetTester tester) async {
     await pumpGate(tester);
@@ -56,7 +57,9 @@ void main() {
     expect(find.text('主界面'), findsOneWidget);
   });
 
-  testWidgets('有未结束骑行时弹窗，选「继续」把 id 写入 resumeRideIdProvider', (WidgetTester tester) async {
+  testWidgets('有未结束骑行时弹窗，选「继续」把 id 写入 resumeRideIdProvider', (
+    WidgetTester tester,
+  ) async {
     final int startedAtMs = DateTime(2026, 1, 2, 3, 4).millisecondsSinceEpoch;
     final int id = await seedUnfinishedWorkout(startedAtMs);
 
@@ -70,7 +73,10 @@ void main() {
 
     expect(container.read(resumeRideIdProvider), id);
     // 「继续」不结算，骑行仍是进行中。
-    expect((await WorkoutDao(db).findById(id))!.status, WorkoutStatus.recording);
+    expect(
+      (await WorkoutDao(db).findById(id))!.status,
+      WorkoutStatus.recording,
+    );
   });
 
   testWidgets('有未结束骑行时选「结算保存」把它置为 finished', (WidgetTester tester) async {
@@ -93,8 +99,12 @@ void main() {
   });
 
   testWidgets('多条未结束骑行时提示最近开始的那条', (WidgetTester tester) async {
-    await seedUnfinishedWorkout(DateTime(2025, 12, 31, 23, 59).millisecondsSinceEpoch);
-    await seedUnfinishedWorkout(DateTime(2026, 1, 2, 3, 4).millisecondsSinceEpoch);
+    await seedUnfinishedWorkout(
+      DateTime(2025, 12, 31, 23, 59).millisecondsSinceEpoch,
+    );
+    await seedUnfinishedWorkout(
+      DateTime(2026, 1, 2, 3, 4).millisecondsSinceEpoch,
+    );
 
     await pumpGate(tester);
 

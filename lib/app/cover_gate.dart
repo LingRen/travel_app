@@ -30,10 +30,7 @@ class _CoverGateState extends State<CoverGate> {
     super.didChangeDependencies();
     if (_timer != null || _done) return;
     _reduced = MediaQuery.disableAnimationsOf(context);
-    _timer = Timer(
-      Duration(milliseconds: _reduced ? 600 : 1200),
-      _startExit,
-    );
+    _timer = Timer(Duration(milliseconds: _reduced ? 600 : 1200), _startExit);
   }
 
   void _startExit() {
@@ -156,10 +153,7 @@ class _CoverBody extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Text(
-                    '运动记录 · 单次分析 · 长期趋势',
-                    style: kLabelTextStyle,
-                  ),
+                  Text('运动记录 · 单次分析 · 长期趋势', style: kLabelTextStyle),
                   const Spacer(),
                   const _RouteArtwork(),
                   const Spacer(),
@@ -227,16 +221,16 @@ class _RouteArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: double.infinity,
-        height: 120,
-        child: CustomPaint(
-          painter: _RoutePainter(
-            line: context.palette.muted,
-            accent: context.palette.accentInk,
-            paper: context.palette.paper,
-          ),
-        ),
-      );
+    width: double.infinity,
+    height: 120,
+    child: CustomPaint(
+      painter: _RoutePainter(
+        line: context.palette.muted,
+        accent: context.palette.accentInk,
+        paper: context.palette.paper,
+      ),
+    ),
+  );
 }
 
 class _RoutePainter extends CustomPainter {

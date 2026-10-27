@@ -167,9 +167,9 @@ class Harness {
 
 /// HRS 特征值：服务 0x180D、测量 0x2A37，故意用 128 位长形式。
 FakeCharacteristic hrCharacteristic() => FakeCharacteristic(
-      serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
-      uuid: '00002a37-0000-1000-8000-00805f9b34fb',
-    );
+  serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
+  uuid: '00002a37-0000-1000-8000-00805f9b34fb',
+);
 
 /// CSC 特征值：服务 0x1816、测量 0x2A2B，故意用短形式。
 FakeCharacteristic cscCharacteristic() =>
@@ -181,11 +181,11 @@ FakeCharacteristic cpsCharacteristic() =>
 
 /// 组装一帧骑行功率数据：flags=0x0000 + sint16 小端瞬时功率。
 List<int> cpsFrame(int watts) => <int>[
-      0x00,
-      0x00,
-      watts & 0xFF,
-      (watts >> 8) & 0xFF,
-    ];
+  0x00,
+  0x00,
+  watts & 0xFF,
+  (watts >> 8) & 0xFF,
+];
 
 /// 组装一帧 CSC 曲柄数据（flags bit1，只带曲柄）。
 List<int> cscFrame({required int revolutions, required int eventTime1024}) =>
@@ -504,11 +504,10 @@ void main() {
       await pumpEventQueue();
 
       expect(h.connections.last, const Connection(SensorKind.heartRate, false));
-      expect(
-        h.timers.delays,
-        <Duration>[const Duration(seconds: 1), const Duration(seconds: 1)],
-        reason: '成功一次后次数必须归零，不能接着上次的 2s 往上翻',
-      );
+      expect(h.timers.delays, <Duration>[
+        const Duration(seconds: 1),
+        const Duration(seconds: 1),
+      ], reason: '成功一次后次数必须归零，不能接着上次的 2s 往上翻');
     });
 
     test('断开重连后第一帧不产生踏频读数（跨断层的上一帧作废）', () async {
@@ -537,11 +536,7 @@ void main() {
       csc.emit(cscFrame(revolutions: 106, eventTime1024: 3072));
       await pumpEventQueue();
 
-      expect(
-        h.readings.length,
-        1,
-        reason: '重连后没有可比的上一帧，首帧不能算出 60 RPM 的假踏频',
-      );
+      expect(h.readings.length, 1, reason: '重连后没有可比的上一帧，首帧不能算出 60 RPM 的假踏频');
     });
 
     test('dispose 取消待执行的重连并断开设备，之后不再重连', () async {

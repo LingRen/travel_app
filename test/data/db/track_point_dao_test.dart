@@ -20,9 +20,9 @@ void main() {
   setUp(() async {
     db = await openAppDatabase(path: inMemoryDatabasePath);
     dao = TrackPointDao(db);
-    rideId = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 1000, status: WorkoutStatus.recording),
-    );
+    rideId = await WorkoutDao(
+      db,
+    ).insert(const Workout(startedAtMs: 1000, status: WorkoutStatus.recording));
   });
 
   tearDown(() => db.close());
@@ -35,7 +35,11 @@ void main() {
     ]);
 
     final List<TrackPoint> points = await dao.listByRide(rideId);
-    expect(points.map((TrackPoint p) => p.tMs).toList(), <int>[1000, 2000, 3000]);
+    expect(points.map((TrackPoint p) => p.tMs).toList(), <int>[
+      1000,
+      2000,
+      3000,
+    ]);
     expect(points.first.hr, 120);
   });
 
@@ -57,9 +61,9 @@ void main() {
   });
 
   test('countByRide 只统计指定骑行的点', () async {
-    final int otherWorkoutId = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 2000, status: WorkoutStatus.recording),
-    );
+    final int otherWorkoutId = await WorkoutDao(
+      db,
+    ).insert(const Workout(startedAtMs: 2000, status: WorkoutStatus.recording));
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 1000, lat: 31.23, lon: 121.46),
       TrackPoint(rideId: rideId, tMs: 2000, lat: 31.23, lon: 121.465),
@@ -71,9 +75,9 @@ void main() {
   });
 
   test('deleteByRide 只删除指定骑行的点', () async {
-    final int otherWorkoutId = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 2000, status: WorkoutStatus.recording),
-    );
+    final int otherWorkoutId = await WorkoutDao(
+      db,
+    ).insert(const Workout(startedAtMs: 2000, status: WorkoutStatus.recording));
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 1000, lat: 31.23, lon: 121.46),
       TrackPoint(rideId: rideId, tMs: 2000, lat: 31.23, lon: 121.465),
@@ -88,12 +92,10 @@ void main() {
   });
 
   test('listAll 按 ride_id 再按 t_ms 正序返回全部点', () async {
-    final int rideA = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
-    );
-    final int rideB = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
-    );
+    final int rideA = await WorkoutDao(db)
+        .insert(const Workout(startedAtMs: 0, status: WorkoutStatus.finished));
+    final int rideB = await WorkoutDao(db)
+        .insert(const Workout(startedAtMs: 0, status: WorkoutStatus.finished));
 
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideB, tMs: 100, lat: 1.0, lon: 1.0),
@@ -103,15 +105,18 @@ void main() {
 
     final List<TrackPoint> all = await dao.listAll();
     expect(all.length, 3);
-    expect(all.map((TrackPoint p) => p.rideId).toList(), <int>[rideA, rideA, rideB]);
+    expect(all.map((TrackPoint p) => p.rideId).toList(), <int>[
+      rideA,
+      rideA,
+      rideB,
+    ]);
     expect(all[0].tMs, 100);
     expect(all[1].tMs, 300);
   });
 
   test('deleteAll 清空 track_points 表', () async {
-    final int rideId = await WorkoutDao(db).insert(
-      const Workout(startedAtMs: 0, status: WorkoutStatus.finished),
-    );
+    final int rideId = await WorkoutDao(db)
+        .insert(const Workout(startedAtMs: 0, status: WorkoutStatus.finished));
     await dao.insertBatch(<TrackPoint>[
       TrackPoint(rideId: rideId, tMs: 0, lat: 1.0, lon: 1.0),
     ]);

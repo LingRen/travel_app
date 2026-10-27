@@ -138,7 +138,10 @@ void main() {
   });
 
   test('只有 id 没有名字时也能读回，名字为空串', () async {
-    await repo.save(SensorKind.cadence, const PairedSensor(id: 'BB:02', name: ''));
+    await repo.save(
+      SensorKind.cadence,
+      const PairedSensor(id: 'BB:02', name: ''),
+    );
 
     final PairedSensor p = (await repo.load(SensorKind.cadence))!;
     expect(p.id, 'BB:02');
@@ -146,7 +149,10 @@ void main() {
   });
 
   test('id 为空串视为未配对', () async {
-    await repo.save(SensorKind.heartRate, const PairedSensor(id: '', name: 'x'));
+    await repo.save(
+      SensorKind.heartRate,
+      const PairedSensor(id: '', name: 'x'),
+    );
     expect(await repo.load(SensorKind.heartRate), isNull);
   });
 }

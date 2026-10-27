@@ -37,10 +37,7 @@ class MiniSpeedCurve extends StatelessWidget {
       width: double.infinity,
       child: CustomPaint(
         size: Size.infinite,
-        painter: _MiniSpeedPainter(
-          samples,
-          color ?? context.palette.accentInk,
-        ),
+        painter: _MiniSpeedPainter(samples, color ?? context.palette.accentInk),
       ),
     );
   }

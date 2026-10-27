@@ -32,31 +32,31 @@ Workout rideWith({
   WorkoutSummary? summary,
   String? powerDeviceName,
   ActivityType? activityType,
-}) =>
-    Workout(
-      id: 1,
-      startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
-      endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-      status: WorkoutStatus.finished,
-      title: '晨骑',
-      activityType: activityType ?? ActivityType.cycling,
-      powerDeviceName: powerDeviceName,
-      summary: summary ??
-          const WorkoutSummary(
-            distanceM: 25300,
-            durationS: 3600,
-            movingS: 3400,
-            avgSpeedMps: 7.03,
-            movingAvgSpeedMps: 7.44,
-            maxSpeedMps: 12.5,
-            elevationGainM: 180,
-            avgHr: 142,
-            maxHr: 176,
-            avgCadence: 78,
-            calories: 900,
-            pointCount: 4,
-          ),
-    );
+}) => Workout(
+  id: 1,
+  startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
+  endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
+  status: WorkoutStatus.finished,
+  title: '晨骑',
+  activityType: activityType ?? ActivityType.cycling,
+  powerDeviceName: powerDeviceName,
+  summary:
+      summary ??
+      const WorkoutSummary(
+        distanceM: 25300,
+        durationS: 3600,
+        movingS: 3400,
+        avgSpeedMps: 7.03,
+        movingAvgSpeedMps: 7.44,
+        maxSpeedMps: 12.5,
+        elevationGainM: 180,
+        avgHr: 142,
+        maxHr: 176,
+        avgCadence: 78,
+        calories: 900,
+        pointCount: 4,
+      ),
+);
 
 /// 带功率的汇总，用来核对功率区块的读数与标题。
 const WorkoutSummary _powerSummary = WorkoutSummary(
@@ -78,59 +78,70 @@ const WorkoutSummary _powerSummary = WorkoutSummary(
 
 /// 每个点都带功率，功率区块才会渲染。
 List<TrackPoint> pointsWithPower() => <TrackPoint>[
-      for (int i = 0; i < 4; i++)
-        TrackPoint(
-          rideId: 1,
-          tMs: 1000 + i * 1000,
-          lat: 31.0 + i * 0.0001,
-          lon: 121.0,
-          speedMps: 4.0 + i,
-          powerW: 200 + i * 10,
-        ),
-    ];
+  for (int i = 0; i < 4; i++)
+    TrackPoint(
+      rideId: 1,
+      tMs: 1000 + i * 1000,
+      lat: 31.0 + i * 0.0001,
+      lon: 121.0,
+      speedMps: 4.0 + i,
+      powerW: 200 + i * 10,
+    ),
+];
 
 /// 每秒一个点，速度与心率递增，用来产生可断言的曲线与区间分布。
 List<TrackPoint> pointsWithHr() => <TrackPoint>[
-      for (int i = 0; i < 4; i++)
-        TrackPoint(
-          rideId: 1,
-          tMs: 1000 + i * 1000,
-          lat: 31.0 + i * 0.0001,
-          lon: 121.0,
-          altitudeM: 10.0 + i,
-          speedMps: 4.0 + i,
-          hr: 100 + i * 20,
-          cadence: 70 + i,
-        ),
-    ];
+  for (int i = 0; i < 4; i++)
+    TrackPoint(
+      rideId: 1,
+      tMs: 1000 + i * 1000,
+      lat: 31.0 + i * 0.0001,
+      lon: 121.0,
+      altitudeM: 10.0 + i,
+      speedMps: 4.0 + i,
+      hr: 100 + i * 20,
+      cadence: 70 + i,
+    ),
+];
 
 /// 中段丢过 14 秒定位：详情页据此在地图上标断口、写一行中断摘要。
 List<TrackPoint> pointsWithGap() => <TrackPoint>[
-      const TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4),
-      const TrackPoint(
-          rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, speedMps: 4),
-      // 14 秒空档 + 约 1.1 公里位移：信号真的丢了。
-      const TrackPoint(rideId: 1, tMs: 16000, lat: 31.01, lon: 121.0, speedMps: 5),
-      const TrackPoint(
-          rideId: 1, tMs: 17000, lat: 31.0101, lon: 121.0, speedMps: 5),
-    ];
+  const TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4),
+  const TrackPoint(rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, speedMps: 4),
+  // 14 秒空档 + 约 1.1 公里位移：信号真的丢了。
+  const TrackPoint(rideId: 1, tMs: 16000, lat: 31.01, lon: 121.0, speedMps: 5),
+  const TrackPoint(
+    rideId: 1,
+    tMs: 17000,
+    lat: 31.0101,
+    lon: 121.0,
+    speedMps: 5,
+  ),
+];
 
 Widget wrap({
   required WorkoutDetail detail,
   AppSettings settings = _settings,
-}) =>
-    ProviderScope(
-      overrides: <Override>[
-        rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
-        appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
-      ],
-      child: MaterialApp(theme: buildAppTheme(), home: DetailPage(rideId: detail.ride.id!)),
-    );
+}) => ProviderScope(
+  overrides: <Override>[
+    rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(settings),
+    ),
+  ],
+  child: MaterialApp(
+    theme: buildAppTheme(),
+    home: DetailPage(rideId: detail.ride.id!),
+  ),
+);
 
 /// 详情页是 `ListView`，默认 800x600 的测试视口只会懒构建前两屏；
 /// 「三个区块都渲染出来」这类断言必须先把视口调高，否则断言会退化成
 /// 「当前滚动位置恰好构建了哪些区块」。
-Future<void> pumpDetail(WidgetTester tester, {required WorkoutDetail detail}) async {
+Future<void> pumpDetail(
+  WidgetTester tester, {
+  required WorkoutDetail detail,
+}) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -213,8 +224,9 @@ void main() {
       );
 
       // 顺序与区块一致：速度、心率、踏频。
-      final List<CurveChart> charts =
-          tester.widgetList<CurveChart>(find.byType(CurveChart)).toList();
+      final List<CurveChart> charts = tester
+          .widgetList<CurveChart>(find.byType(CurveChart))
+          .toList();
 
       // 速度：平均线画在总均速 7.03 m/s 上，标注一位小数、单位 km/h。
       expect(charts[0].averageValue, 7.03);
@@ -239,8 +251,9 @@ void main() {
         ),
       );
 
-      final CurveChart power =
-          tester.widgetList<CurveChart>(find.byType(CurveChart)).last;
+      final CurveChart power = tester
+          .widgetList<CurveChart>(find.byType(CurveChart))
+          .last;
       expect(power.averageValue, 205.3);
       expect(power.formatValue(205.3), '205');
       expect(power.unitLabel, 'W');
@@ -250,13 +263,18 @@ void main() {
       await pumpDetail(
         tester,
         detail: WorkoutDetail(
-          ride: Workout(id: 1, startedAtMs: 1000, status: WorkoutStatus.finished),
+          ride: Workout(
+            id: 1,
+            startedAtMs: 1000,
+            status: WorkoutStatus.finished,
+          ),
           points: pointsWithHr(),
         ),
       );
 
-      final List<CurveChart> charts =
-          tester.widgetList<CurveChart>(find.byType(CurveChart)).toList();
+      final List<CurveChart> charts = tester
+          .widgetList<CurveChart>(find.byType(CurveChart))
+          .toList();
       expect(charts, isNotEmpty);
       for (final CurveChart chart in charts) {
         expect(chart.averageValue, isNull);
@@ -400,9 +418,11 @@ void main() {
   });
 
   testWidgets('轨迹点有坐标时渲染地图区块', (WidgetTester tester) async {
-    await tester.pumpWidget(wrap(
-      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
-    ));
+    await tester.pumpWidget(
+      wrap(
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 实测：flutter_test 的 HttpOverrides 让瓦片请求返回 400 而不是挂起，
@@ -437,8 +457,9 @@ void main() {
     expect(find.textContaining('信号中断 1 段'), findsOneWidget);
     expect(find.textContaining('共 00:14'), findsOneWidget);
 
-    final MarkerLayer layer =
-        tester.widget<MarkerLayer>(find.byType(MarkerLayer));
+    final MarkerLayer layer = tester.widget<MarkerLayer>(
+      find.byType(MarkerLayer),
+    );
     expect(layer.markers.length, 2, reason: '断口两侧各一个端点标记');
   });
 
@@ -461,9 +482,11 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(wrap(
-      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
-    ));
+    await tester.pumpWidget(
+      wrap(
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final double height = tester.widget<RouteMap>(find.byType(RouteMap)).height;
@@ -476,9 +499,11 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(wrap(
-      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
-    ));
+    await tester.pumpWidget(
+      wrap(
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(tester.widget<RouteMap>(find.byType(RouteMap)).height, 260);
@@ -488,18 +513,19 @@ void main() {
   // 轨迹会整体偏出几百米（真机实测约 310 米）。这里直接读折线收到的坐标，
   // 而不是只断言「传了参数」。
   group('坐标跟随瓦片源', () {
-    LatLng firstPolylinePoint(WidgetTester tester) =>
-        tester
-            .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
-            .polylines
-            .first
-            .points
-            .first;
+    LatLng firstPolylinePoint(WidgetTester tester) => tester
+        .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+        .polylines
+        .first
+        .points
+        .first;
 
     testWidgets('高德源：轨迹转成 GCJ-02', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(
-        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
-      ));
+      await tester.pumpWidget(
+        wrap(
+          detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final ({double lat, double lon}) expected = wgs84ToGcj02(31.0, 121.0);
@@ -509,15 +535,18 @@ void main() {
     });
 
     testWidgets('OSM 源：轨迹保持 WGS-84 原样', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(
-        detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
-        settings: const AppSettings(
-          maxHeartRate: 190,
-          weightKg: 70,
-          distanceUnit: DistanceUnit.kilometer,
-          mapTileUrlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      await tester.pumpWidget(
+        wrap(
+          detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+          settings: const AppSettings(
+            maxHeartRate: 190,
+            weightKg: 70,
+            distanceUnit: DistanceUnit.kilometer,
+            mapTileUrlTemplate:
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final LatLng first = firstPolylinePoint(tester);
@@ -532,17 +561,18 @@ void main() {
         TrackPoint(rideId: 1, tMs: 1000 + i * 1000, speedMps: 5, hr: 140),
     ];
 
-    await tester.pumpWidget(wrap(
-      detail: WorkoutDetail(ride: rideWith(), points: noPosition),
-    ));
+    await tester.pumpWidget(
+      wrap(
+        detail: WorkoutDetail(ride: rideWith(), points: noPosition),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(RouteMap), findsOneWidget);
     expect(find.text('没有可显示的轨迹'), findsOneWidget);
   });
 
-  testWidgets('汇总两行三列：骑行显示功率，功率为空时用破折号',
-      (WidgetTester tester) async {
+  testWidgets('汇总两行三列：骑行显示功率，功率为空时用破折号', (WidgetTester tester) async {
     await pumpDetail(
       tester,
       detail: WorkoutDetail(
@@ -579,8 +609,7 @@ void main() {
     }
   });
 
-  testWidgets('配速类型详情：曲线叫配速，不出现踏频 / 功率区块',
-      (WidgetTester tester) async {
+  testWidgets('配速类型详情：曲线叫配速，不出现踏频 / 功率区块', (WidgetTester tester) async {
     await pumpDetail(
       tester,
       detail: WorkoutDetail(
@@ -602,14 +631,7 @@ void main() {
       detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
     );
 
-    for (final String word in <String>[
-      '天气',
-      '晴',
-      '成都',
-      '龙泉',
-      '桃花故里',
-      '°C',
-    ]) {
+    for (final String word in <String>['天气', '晴', '成都', '龙泉', '桃花故里', '°C']) {
       expect(find.textContaining(word), findsNothing, reason: word);
     }
   });
@@ -647,10 +669,17 @@ void main() {
         TrackPoint(rideId: 1, tMs: 22000, speedMps: 5),
       ];
 
-      final List<CurveSample> samples =
-          buildCurve(points, metric: CurveMetric.speed);
+      final List<CurveSample> samples = buildCurve(
+        points,
+        metric: CurveMetric.speed,
+      );
 
-      expect(samples.map((CurveSample s) => s.segment).toList(), <int>[0, 0, 1, 1]);
+      expect(samples.map((CurveSample s) => s.segment).toList(), <int>[
+        0,
+        0,
+        1,
+        1,
+      ]);
       expect(drawnCurveSegments(samples), <(int, int)>[(0, 1), (2, 3)]);
     });
 
@@ -675,11 +704,13 @@ void main() {
         totalSeconds: 2.001,
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: SizedBox(width: 400, child: HrZoneBar(breakdown: breakdown)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 400, child: HrZoneBar(breakdown: breakdown)),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final Finder zones = find.descendant(
@@ -702,11 +733,13 @@ void main() {
         totalSeconds: 3.0,
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: SizedBox(width: 400, child: HrZoneBar(breakdown: breakdown)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 400, child: HrZoneBar(breakdown: breakdown)),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final Finder zones = find.descendant(

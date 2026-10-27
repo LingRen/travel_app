@@ -22,7 +22,10 @@ String formatDistance(double meters, DistanceUnit unit) {
 /// 距离拆成「数值 + 单位」，给历史卡片/详情大数字排版用。
 ///
 /// 公里制保留一位小数（`42.6 km`），不足 1 公里时用米；英里制同理。
-({String value, String unit}) formatDistanceParts(double meters, DistanceUnit unit) {
+({String value, String unit}) formatDistanceParts(
+  double meters,
+  DistanceUnit unit,
+) {
   if (unit == DistanceUnit.mile) {
     final double miles = meters / _metersPerMile;
     return miles < 0.1
@@ -35,7 +38,8 @@ String formatDistance(double meters, DistanceUnit unit) {
 }
 
 /// 速度数值，不含单位。
-String formatSpeedValue(double mps, DistanceUnit unit) => unit == DistanceUnit.mile
+String formatSpeedValue(double mps, DistanceUnit unit) =>
+    unit == DistanceUnit.mile
     ? (mps * 3600 / _metersPerMile).toStringAsFixed(1)
     : (mps * 3.6).toStringAsFixed(1);
 
@@ -61,8 +65,8 @@ double distanceInUnit(double meters, DistanceUnit unit) =>
 /// 反而难比较。
 String formatElevation(double meters, DistanceUnit unit) =>
     unit == DistanceUnit.mile
-        ? '${(meters * _feetPerMeter).round()} ft'
-        : '${meters.round()} m';
+    ? '${(meters * _feetPerMeter).round()} ft'
+    : '${meters.round()} m';
 
 /// 时长文本。不足一小时用 mm:ss，超过用 h:mm:ss。
 String formatDuration(int seconds) {
@@ -179,8 +183,9 @@ String formatPace(double speedMps, DistanceUnit unit) {
 ({int minutes, int seconds})? paceParts(double speedMps, DistanceUnit unit) {
   if (speedMps <= 0) return null;
   // 秒每单位距离：公里 1000m，英里 1609.344m。
-  final double metersPerUnit =
-      unit == DistanceUnit.mile ? _metersPerMile : 1000.0;
+  final double metersPerUnit = unit == DistanceUnit.mile
+      ? _metersPerMile
+      : 1000.0;
   final double seconds = metersPerUnit / speedMps;
   final int minutes = seconds ~/ 60;
   int rest = seconds.remainder(60).round();

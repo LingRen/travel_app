@@ -14,14 +14,13 @@ void main() {
     double? lon = 121.0,
     double? altitudeM,
     double? speedMps,
-  }) =>
-      LocationFix(
-        tMs: tMs,
-        lat: lat,
-        lon: lon,
-        altitudeM: altitudeM,
-        speedMps: speedMps,
-      );
+  }) => LocationFix(
+    tMs: tMs,
+    lat: lat,
+    lon: lon,
+    altitudeM: altitudeM,
+    speedMps: speedMps,
+  );
 
   group('RecordingSession 时长', () {
     test('tick 累计有效时长', () {
@@ -84,12 +83,18 @@ void main() {
     });
 
     test('GPS 上报速度不合理时回退到位移推算', () {
-      final RecordingSession tooFast = RecordingSession(rideId: 1, startedAtMs: 0);
+      final RecordingSession tooFast = RecordingSession(
+        rideId: 1,
+        startedAtMs: 0,
+      );
       tooFast.ingestFix(fixAt(0));
       tooFast.ingestFix(fixAt(1000, lat: 31.0001, speedMps: 100.0));
       expect(tooFast.snapshot.currentSpeedMps, closeTo(11.13, 0.2));
 
-      final RecordingSession negative = RecordingSession(rideId: 2, startedAtMs: 0);
+      final RecordingSession negative = RecordingSession(
+        rideId: 2,
+        startedAtMs: 0,
+      );
       negative.ingestFix(fixAt(0));
       negative.ingestFix(fixAt(1000, lat: 31.0001, speedMps: -1.0));
       expect(negative.snapshot.currentSpeedMps, closeTo(11.13, 0.2));
@@ -107,8 +112,11 @@ void main() {
       // 停在原地，位置在一两米内抖动，GPS 仍会解算出 0.3 m/s 的残差速度。
       for (int i = 0; i < 5; i++) {
         s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.00001, speedMps: 0.3));
-        expect(s.snapshot.currentSpeedMps, 0,
-            reason: '第 ${i + 1} 秒：静止时的幻影速度不能显示');
+        expect(
+          s.snapshot.currentSpeedMps,
+          0,
+          reason: '第 ${i + 1} 秒：静止时的幻影速度不能显示',
+        );
       }
     });
 
@@ -139,14 +147,15 @@ void main() {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
       // 停车 10 秒，位置在一两米内来回抖，芯片一直报 0.3 m/s。
       for (int i = 0; i < 10; i++) {
-        s.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + (i.isEven ? 0.00001 : -0.00001),
-          speedMps: 0.3,
-        ));
+        s.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + (i.isEven ? 0.00001 : -0.00001),
+            speedMps: 0.3,
+          ),
+        );
       }
-      expect(s.snapshot.distanceM, 0,
-          reason: '静止时的位置漂移不是里程');
+      expect(s.snapshot.distanceM, 0, reason: '静止时的位置漂移不是里程');
     });
 
     test('慢速移动的里程按锚点累计，总量不丢', () {
@@ -232,15 +241,20 @@ void main() {
       final RecordingSession flat = RecordingSession(rideId: 1, startedAtMs: 0);
       final int flatW = flatPower(flat);
 
-      final RecordingSession uphill = RecordingSession(rideId: 2, startedAtMs: 0);
+      final RecordingSession uphill = RecordingSession(
+        rideId: 2,
+        startedAtMs: 0,
+      );
       int climbW = 0;
       for (int i = 0; i < 6; i++) {
-        uphill.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + i * 0.0001,
-          altitudeM: 100.0 + i,
-          speedMps: 6.0,
-        ));
+        uphill.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + i * 0.0001,
+            altitudeM: 100.0 + i,
+            speedMps: 6.0,
+          ),
+        );
         final List<TrackPoint> batch = uphill.takePendingPoints();
         if (batch.isNotEmpty) climbW = batch.last.powerW!;
       }
@@ -296,7 +310,12 @@ void main() {
     });
 
     test('可以用已落盘的点续写会话', () {
-      const TrackPoint last = TrackPoint(rideId: 1, tMs: 5000, lat: 31.0, lon: 121.0);
+      const TrackPoint last = TrackPoint(
+        rideId: 1,
+        tMs: 5000,
+        lat: 31.0,
+        lon: 121.0,
+      );
       final RecordingSession s = RecordingSession(
         rideId: 1,
         startedAtMs: 0,
@@ -331,7 +350,8 @@ void main() {
       expect(
         s.snapshot.elapsedMs,
         3000,
-        reason: '只能加恢复之后的 1 秒：既不能算上开始到现在整段，'
+        reason:
+            '只能加恢复之后的 1 秒：既不能算上开始到现在整段，'
             '也不能算上崩溃到重启之间的空档',
       );
     });
@@ -453,11 +473,13 @@ void main() {
       // 之后每秒升 0.1 米、共 100 秒：真实爬升 10 米。中值窗口有约 7 秒滞后，
       // 所以最后读数比理论值略小。
       for (int i = 61; i <= 160; i++) {
-        s.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + i * 0.00009,
-          altitudeM: 100 + (i - 60) * 0.1,
-        ));
+        s.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + i * 0.00009,
+            altitudeM: 100 + (i - 60) * 0.1,
+          ),
+        );
       }
       expect(s.snapshot.elevationGainM, closeTo(9.2, 1.0));
     });
@@ -469,11 +491,13 @@ void main() {
       }
       // 40 秒下降 8 米：下降本身不计爬升。
       for (int i = 61; i <= 100; i++) {
-        s.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + i * 0.00009,
-          altitudeM: 100 - (i - 60) * 0.2,
-        ));
+        s.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + i * 0.00009,
+            altitudeM: 100 - (i - 60) * 0.2,
+          ),
+        );
       }
       expect(s.snapshot.elevationGainM, 0, reason: '下降不计入爬升');
 
@@ -481,11 +505,13 @@ void main() {
       // 原点」。滞回只在跨过 3 米阈值时结算，下降段最后不足 3 米的尾巴没有
       // 推进基准，所以累计值是 6 而不是 9。
       for (int i = 101; i <= 160; i++) {
-        s.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + i * 0.00009,
-          altitudeM: 92 + (i - 100) * 0.2,
-        ));
+        s.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + i * 0.00009,
+            altitudeM: 92 + (i - 100) * 0.2,
+          ),
+        );
       }
       expect(s.snapshot.elevationGainM, closeTo(6, 1));
     });
@@ -511,11 +537,13 @@ void main() {
       // 之后升 12 米：以 102 为基准，而不是跳变值 160。跨过 3 / 6 / 9 三档，
       // 累计 9 米，剩下不到 3 米的尾巴不计。
       for (int i = 61; i <= 120; i++) {
-        s.ingestFix(fixAt(
-          i * 1000,
-          lat: 31.0 + i * 0.00009,
-          altitudeM: 102 + (i - 60) * 0.2,
-        ));
+        s.ingestFix(
+          fixAt(
+            i * 1000,
+            lat: 31.0 + i * 0.00009,
+            altitudeM: 102 + (i - 60) * 0.2,
+          ),
+        );
       }
       expect(s.snapshot.elevationGainM, closeTo(9, 1));
     });
@@ -532,20 +560,19 @@ void main() {
         final double alt = i < 60 ? 100.0 : 100 + (i - 60) * 0.1;
         final double lat = 31.0 + i * 0.00009;
         s.ingestFix(fixAt(i * 1000, lat: lat, altitudeM: alt));
-        points.add(TrackPoint(
-          rideId: 1,
-          tMs: i * 1000,
-          lat: lat,
-          lon: 121.0,
-          altitudeM: alt,
-        ));
+        points.add(
+          TrackPoint(
+            rideId: 1,
+            tMs: i * 1000,
+            lat: lat,
+            lon: 121.0,
+            altitudeM: alt,
+          ),
+        );
       }
 
       expect(s.snapshot.elevationGainM, greaterThan(8));
-      expect(
-        s.snapshot.elevationGainM,
-        closeTo(elevationGainOf(points), 1.0),
-      );
+      expect(s.snapshot.elevationGainM, closeTo(elevationGainOf(points), 1.0));
     });
   });
 
@@ -596,13 +623,15 @@ void main() {
       );
       s.ingestCadence(90);
       s.ingestPower(250);
-      s.ingestFix(LocationFix(
-        tMs: 1000,
-        lat: 31.2304,
-        lon: 121.4737,
-        speedMps: 2.78,
-        altitudeM: 10,
-      ));
+      s.ingestFix(
+        LocationFix(
+          tMs: 1000,
+          lat: 31.2304,
+          lon: 121.4737,
+          speedMps: 2.78,
+          altitudeM: 10,
+        ),
+      );
       s.tick(1000);
       expect(s.snapshot.power, isNull);
       expect(s.snapshot.cadence, isNull);

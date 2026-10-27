@@ -51,10 +51,11 @@ List<RouteSegment> buildRouteSegments(
 }) {
   assert(maxVerticesPerSegment >= 2, '一段至少要两个顶点才画得出线');
 
-  final List<({int index, TrackPoint point})> located = <({int index, TrackPoint point})>[
-    for (int i = 0; i < points.length; i++)
-      if (points[i].hasPosition) (index: i, point: points[i]),
-  ];
+  final List<({int index, TrackPoint point})> located =
+      <({int index, TrackPoint point})>[
+        for (int i = 0; i < points.length; i++)
+          if (points[i].hasPosition) (index: i, point: points[i]),
+      ];
   if (located.length < 2) return const <RouteSegment>[];
 
   final List<RouteSegment> segments = <RouteSegment>[];
@@ -155,12 +156,14 @@ List<RouteGap> findRouteGaps(List<TrackPoint> points, {bool toGcj02 = true}) {
     final TrackPoint a = located[i - 1];
     final TrackPoint b = located[i];
     if (!isMeaningfulGap(a, b)) continue;
-    gaps.add(RouteGap(
-      startMs: a.tMs,
-      endMs: b.tMs,
-      before: _vertex(a, toGcj02),
-      after: _vertex(b, toGcj02),
-    ));
+    gaps.add(
+      RouteGap(
+        startMs: a.tMs,
+        endMs: b.tMs,
+        before: _vertex(a, toGcj02),
+        after: _vertex(b, toGcj02),
+      ),
+    );
   }
   return gaps;
 }

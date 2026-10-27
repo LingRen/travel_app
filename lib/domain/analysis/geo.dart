@@ -14,8 +14,12 @@ double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
   final double dLon = _toRadians(lon2 - lon1);
   final double sinHalfLat = math.sin(dLat / 2);
   final double sinHalfLon = math.sin(dLon / 2);
-  final double a = sinHalfLat * sinHalfLat +
-      math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) * sinHalfLon * sinHalfLon;
+  final double a =
+      sinHalfLat * sinHalfLat +
+      math.cos(_toRadians(lat1)) *
+          math.cos(_toRadians(lat2)) *
+          sinHalfLon *
+          sinHalfLon;
   return 2 * kEarthRadiusM * math.asin(math.min(1.0, math.sqrt(a)));
 }
 
@@ -56,7 +60,9 @@ bool isTrustedSegment(TrackPoint a, TrackPoint b) {
 ///
 /// 不可信时返回 0，判定规则见 [isTrustedSegment]。
 double segmentDistanceMeters(TrackPoint a, TrackPoint b) =>
-    isTrustedSegment(a, b) ? haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) : 0;
+    isTrustedSegment(a, b)
+    ? haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!)
+    : 0;
 
 /// 整条轨迹的有效里程（米），口径见 [kDistanceNoiseFloorM]。
 ///
@@ -90,4 +96,3 @@ double trackDistanceMeters(List<TrackPoint> points) {
 /// 该点是否按静止死区判定为「没在动」。速度为 0 的点（落盘前已过死区）即静止。
 bool _isStationaryPoint(TrackPoint p) =>
     p.speedMps != null && p.speedMps! < kSpeedDeadbandEnterMps;
-

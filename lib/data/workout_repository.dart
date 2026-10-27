@@ -39,14 +39,16 @@ class WorkoutRepository {
     String? cadenceDeviceName,
     String? powerDeviceName,
   }) async {
-    final int id = await _workouts.insert(Workout(
-      startedAtMs: startedAtMs,
-      status: WorkoutStatus.recording,
-      activityType: activityType,
-      hrDeviceName: hrDeviceName,
-      cadenceDeviceName: cadenceDeviceName,
-      powerDeviceName: powerDeviceName,
-    ));
+    final int id = await _workouts.insert(
+      Workout(
+        startedAtMs: startedAtMs,
+        status: WorkoutStatus.recording,
+        activityType: activityType,
+        hrDeviceName: hrDeviceName,
+        cadenceDeviceName: cadenceDeviceName,
+        powerDeviceName: powerDeviceName,
+      ),
+    );
     return Workout(
       id: id,
       startedAtMs: startedAtMs,
@@ -78,7 +80,11 @@ class WorkoutRepository {
       maxHeartRate: settings.maxHeartRate,
       weightKg: settings.weightKg,
     );
-    await _workouts.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    await _workouts.markFinished(
+      id: rideId,
+      endedAtMs: endedAtMs,
+      summary: summary,
+    );
     onWorkoutDataChanged?.call();
     return summary;
   }
@@ -93,8 +99,9 @@ class WorkoutRepository {
     final AppSettings settings = await _settings.load();
 
     final int endedAtMs = points.isEmpty ? ride.startedAtMs : points.last.tMs;
-    final int durationS =
-        points.length < 2 ? 0 : ((points.last.tMs - points.first.tMs) / 1000).round();
+    final int durationS = points.length < 2
+        ? 0
+        : ((points.last.tMs - points.first.tMs) / 1000).round();
 
     final WorkoutSummary summary = computeSummary(
       points: points,
@@ -102,7 +109,11 @@ class WorkoutRepository {
       maxHeartRate: settings.maxHeartRate,
       weightKg: settings.weightKg,
     );
-    await _workouts.markFinished(id: rideId, endedAtMs: endedAtMs, summary: summary);
+    await _workouts.markFinished(
+      id: rideId,
+      endedAtMs: endedAtMs,
+      summary: summary,
+    );
     onWorkoutDataChanged?.call();
     return summary;
   }
@@ -113,12 +124,11 @@ class WorkoutRepository {
     int? limit,
     int? offset,
     ActivityType? activityType,
-  }) =>
-      _workouts.listFinished(
-        limit: limit,
-        offset: offset,
-        activityType: activityType,
-      );
+  }) => _workouts.listFinished(
+    limit: limit,
+    offset: offset,
+    activityType: activityType,
+  );
 
   Future<Workout?> getWorkout(int id) => _workouts.findById(id);
 

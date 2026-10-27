@@ -31,9 +31,6 @@ class SqliteBackupStore implements BackupStore {
   Future<List<TrackPoint>> listPoints() => TrackPointDao(_db).listAll();
 
   @override
-  Future<void> apply(
-    BackupPayload payload, {
-    required bool replaceExisting,
-  }) =>
+  Future<void> apply(BackupPayload payload, {required bool replaceExisting}) =>
       applyBackup(payload, db: _db, replaceExisting: replaceExisting);
 }

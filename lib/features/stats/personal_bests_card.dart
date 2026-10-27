@@ -50,9 +50,9 @@ class PersonalBestsCard extends StatelessWidget {
           label: usesPace ? '最快配速' : '最快均速',
           value: usesPace
               ? '${formatPace(bests.fastestMovingAvgMps!.value, unit)} '
-                  '${paceUnitLabel(unit)}'
+                    '${paceUnitLabel(unit)}'
               : '${formatSpeedValue(bests.fastestMovingAvgMps!.value, unit)} '
-                  '${speedUnitLabel(unit)}',
+                    '${speedUnitLabel(unit)}',
           best: bests.fastestMovingAvgMps!,
         ),
       if (bests.mostElevationGainM != null)
@@ -126,8 +126,10 @@ class PersonalBestsCard extends StatelessWidget {
   }
 
   String _distanceText(double meters) {
-    final ({String value, String unit}) parts =
-        formatDistanceParts(meters, unit);
+    final ({String value, String unit}) parts = formatDistanceParts(
+      meters,
+      unit,
+    );
     return '${parts.value} ${parts.unit}';
   }
 }

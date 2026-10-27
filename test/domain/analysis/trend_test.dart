@@ -33,7 +33,11 @@ Workout ride({
 void main() {
   group('buildTrend 范围与桶结构', () {
     test('week 返回 7 个日桶，首桶是本周一', () {
-      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.week, nowMs: nowMs);
+      final TrendSummary t = buildTrend(
+        <Workout>[],
+        range: TrendRange.week,
+        nowMs: nowMs,
+      );
       expect(t.buckets.length, 7);
       expect(t.buckets.first.label, '09-21');
       expect(t.buckets.last.label, '09-27');
@@ -42,21 +46,33 @@ void main() {
     });
 
     test('month 返回当月天数的日桶', () {
-      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.month, nowMs: nowMs);
+      final TrendSummary t = buildTrend(
+        <Workout>[],
+        range: TrendRange.month,
+        nowMs: nowMs,
+      );
       expect(t.buckets.length, 30); // 2026-09 有 30 天
       expect(t.buckets.first.label, '09-01');
       expect(t.buckets.last.label, '09-30');
     });
 
     test('year 返回 12 个月桶，标签为 YYYY-MM', () {
-      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.year, nowMs: nowMs);
+      final TrendSummary t = buildTrend(
+        <Workout>[],
+        range: TrendRange.year,
+        nowMs: nowMs,
+      );
       expect(t.buckets.length, 12);
       expect(t.buckets.first.label, '2026-01');
       expect(t.buckets.last.label, '2026-12');
     });
 
     test('空输入时累计值全为 0', () {
-      final TrendSummary t = buildTrend(<Workout>[], range: TrendRange.week, nowMs: nowMs);
+      final TrendSummary t = buildTrend(
+        <Workout>[],
+        range: TrendRange.week,
+        nowMs: nowMs,
+      );
       expect(t.distanceM, 0);
       expect(t.durationS, 0);
       expect(t.elevationGainM, 0);
@@ -114,8 +130,18 @@ void main() {
     test('未结束的骑行不计入', () {
       final TrendSummary t = buildTrend(
         <Workout>[
-          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: WorkoutStatus.recording, summary: null),
-          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: WorkoutStatus.paused, summary: null),
+          ride(
+            id: 1,
+            startedAtMs: ms(2026, 9, 22, 8),
+            status: WorkoutStatus.recording,
+            summary: null,
+          ),
+          ride(
+            id: 2,
+            startedAtMs: ms(2026, 9, 22, 9),
+            status: WorkoutStatus.paused,
+            summary: null,
+          ),
         ],
         range: TrendRange.week,
         nowMs: nowMs,
@@ -137,8 +163,16 @@ void main() {
       // `status != finished` 这一条过滤：否则它会被 summary 判断掩盖而失去区分力。
       final TrendSummary t = buildTrend(
         <Workout>[
-          ride(id: 1, startedAtMs: ms(2026, 9, 22, 8), status: WorkoutStatus.recording),
-          ride(id: 2, startedAtMs: ms(2026, 9, 22, 9), status: WorkoutStatus.paused),
+          ride(
+            id: 1,
+            startedAtMs: ms(2026, 9, 22, 8),
+            status: WorkoutStatus.recording,
+          ),
+          ride(
+            id: 2,
+            startedAtMs: ms(2026, 9, 22, 9),
+            status: WorkoutStatus.paused,
+          ),
         ],
         range: TrendRange.week,
         nowMs: nowMs,
@@ -240,7 +274,12 @@ void main() {
 
     test('没有已结束骑行时四项全为 null', () {
       final PersonalBests b = personalBests(<Workout>[
-        ride(id: 1, startedAtMs: ms(2026, 9, 1), status: WorkoutStatus.recording, summary: null),
+        ride(
+          id: 1,
+          startedAtMs: ms(2026, 9, 1),
+          status: WorkoutStatus.recording,
+          summary: null,
+        ),
       ]);
       expect(b.longestDistanceM, isNull);
       expect(b.longestDurationS, isNull);
@@ -250,8 +289,17 @@ void main() {
 
     test('跳过没有 id 或没有 summary 的骑行', () {
       final PersonalBests b = personalBests(<Workout>[
-        const Workout(startedAtMs: 1000, status: WorkoutStatus.finished, summary: null),
-        Workout(id: 9, startedAtMs: 2000, status: WorkoutStatus.finished, summary: null),
+        const Workout(
+          startedAtMs: 1000,
+          status: WorkoutStatus.finished,
+          summary: null,
+        ),
+        Workout(
+          id: 9,
+          startedAtMs: 2000,
+          status: WorkoutStatus.finished,
+          summary: null,
+        ),
       ]);
       expect(b.longestDistanceM, isNull);
     });

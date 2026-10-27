@@ -63,7 +63,9 @@ void main() {
   testWidgets('CyclingApp 以亮色纸本启动并进入四 tab 主界面', (WidgetTester tester) async {
     await pumpApp(tester);
 
-    final MaterialApp app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    final MaterialApp app = tester.widget<MaterialApp>(
+      find.byType(MaterialApp),
+    );
     expect(app.title, '行迹');
     expect(app.theme!.brightness, Brightness.light);
     expect(app.theme!.scaffoldBackgroundColor, const Color(0xFFF5F0E5));

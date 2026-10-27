@@ -19,27 +19,27 @@ class ActivityTypeSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PaperSheet(
-        title: '选择运动',
-        subtitle: '选择本次记录的运动 · 开始后锁定',
-        onClose: () => Navigator.of(context).maybePop(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (int i = 0; i < ActivityType.values.length; i++) ...<Widget>[
-              if (i > 0) const Divider(height: 1),
-              _ActivityTypeRow(
-                type: ActivityType.values[i],
-                selected: ActivityType.values[i] == current,
-                onTap: () {
-                  onSelected(ActivityType.values[i]);
-                  Navigator.of(context).maybePop();
-                },
-              ),
-            ],
-          ],
-        ),
-      );
+    title: '选择运动',
+    subtitle: '选择本次记录的运动 · 开始后锁定',
+    onClose: () => Navigator.of(context).maybePop(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (int i = 0; i < ActivityType.values.length; i++) ...<Widget>[
+          if (i > 0) const Divider(height: 1),
+          _ActivityTypeRow(
+            type: ActivityType.values[i],
+            selected: ActivityType.values[i] == current,
+            onTap: () {
+              onSelected(ActivityType.values[i]);
+              Navigator.of(context).maybePop();
+            },
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _ActivityTypeRow extends StatelessWidget {
@@ -68,11 +68,7 @@ class _ActivityTypeRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: kSpaceM),
             child: Row(
               children: <Widget>[
-                Seal(
-                  label: activityTypeSeal(type),
-                  filled: selected,
-                  size: 44,
-                ),
+                Seal(label: activityTypeSeal(type), filled: selected, size: 44),
                 const SizedBox(width: kSpaceL),
                 Expanded(
                   child: Column(

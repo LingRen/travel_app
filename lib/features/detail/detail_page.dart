@@ -39,11 +39,12 @@ class DetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<WorkoutDetail> detail =
-        ref.watch(rideDetailProvider(rideId));
+    final AsyncValue<WorkoutDetail> detail = ref.watch(
+      rideDetailProvider(rideId),
+    );
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
-            DistanceUnit.kilometer;
+        DistanceUnit.kilometer;
     final String typeLabel = detail.value?.ride.activityType.label ?? '运动';
 
     return Scaffold(
@@ -121,20 +122,27 @@ class _DetailBody extends ConsumerWidget {
     final List<TrackPoint> points = detail.points;
     final int maxHeartRate =
         ref.watch(appSettingsProvider).value?.maxHeartRate ??
-            kDefaultMaxHeartRate;
+        kDefaultMaxHeartRate;
 
-    final List<CurveSample> speedSamples =
-        buildCurve(points, metric: CurveMetric.speed);
-    final List<CurveSample> hr =
-        buildCurve(points, metric: CurveMetric.heartRate);
-    final List<CurveSample> cadence =
-        buildCurve(points, metric: CurveMetric.cadence);
-    final List<CurveSample> power =
-        buildCurve(points, metric: CurveMetric.power);
+    final List<CurveSample> speedSamples = buildCurve(
+      points,
+      metric: CurveMetric.speed,
+    );
+    final List<CurveSample> hr = buildCurve(
+      points,
+      metric: CurveMetric.heartRate,
+    );
+    final List<CurveSample> cadence = buildCurve(
+      points,
+      metric: CurveMetric.cadence,
+    );
+    final List<CurveSample> power = buildCurve(
+      points,
+      metric: CurveMetric.power,
+    );
 
     final bool usesPace = ride.activityType.usesPace;
-    final double metersPerUnit =
-        unit == DistanceUnit.mile ? 1609.344 : 1000.0;
+    final double metersPerUnit = unit == DistanceUnit.mile ? 1609.344 : 1000.0;
     // 配速曲线纵轴是「秒/单位距离」，不是速度。直接把速度曲线改个标题会
     // 让纵轴含义和标注对不上，这里先换算再交给同一个画笔。
     final List<CurveSample> paceSamples = <CurveSample>[
@@ -146,27 +154,30 @@ class _DetailBody extends ConsumerWidget {
             segment: sample.segment,
           ),
     ];
-    final List<CurveSample> mainSamples =
-        usesPace ? paceSamples : speedSamples;
+    final List<CurveSample> mainSamples = usesPace ? paceSamples : speedSamples;
 
     final WorkoutSummary? s = ride.summary;
     final String speedUnit = speedUnitLabel(unit);
     final String paceUnit = paceUnitLabel(unit);
     final double? mainAverage = usesPace
         ? (s != null && s.movingAvgSpeedMps > 0
-            ? metersPerUnit / s.movingAvgSpeedMps
-            : null)
+              ? metersPerUnit / s.movingAvgSpeedMps
+              : null)
         : s?.avgSpeedMps;
 
     final String tileUrl =
         ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
-            kDefaultMapTileUrlTemplate;
+        kDefaultMapTileUrlTemplate;
     final bool toGcj02 = isGcj02TileSource(tileUrl);
-    final List<RouteSegment> route =
-        buildRouteSegments(points, toGcj02: toGcj02);
+    final List<RouteSegment> route = buildRouteSegments(
+      points,
+      toGcj02: toGcj02,
+    );
     final List<RouteGap> gaps = findRouteGaps(points, toGcj02: toGcj02);
-    final int gapSeconds =
-        gaps.fold(0, (int sum, RouteGap gap) => sum + gap.durationS);
+    final int gapSeconds = gaps.fold(
+      0,
+      (int sum, RouteGap gap) => sum + gap.durationS,
+    );
 
     final double mapHeight = math.min(
       _kMapHeight,
@@ -247,12 +258,7 @@ class _DetailBody extends ConsumerWidget {
         // 只在地图真的断过时解释；不展示天气、地点或路线名。
         if (gaps.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              kSpaceL,
-              kSpaceS,
-              kSpaceL,
-              0,
-            ),
+            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
             child: Row(
               children: <Widget>[
                 Icon(Icons.wifi_off, size: 16, color: palette.warning),
@@ -271,16 +277,24 @@ class _DetailBody extends ConsumerWidget {
             ),
           ),
         const SizedBox(height: kSpaceS),
-        Divider(height: 1, indent: kSpaceL, endIndent: kSpaceL,
-            color: palette.hairline),
+        Divider(
+          height: 1,
+          indent: kSpaceL,
+          endIndent: kSpaceL,
+          color: palette.hairline,
+        ),
         SummaryGrid(
           key: const Key('detail-summary'),
           ride: ride,
           unit: unit,
           points: points,
         ),
-        Divider(height: 1, indent: kSpaceL, endIndent: kSpaceL,
-            color: palette.hairline),
+        Divider(
+          height: 1,
+          indent: kSpaceL,
+          endIndent: kSpaceL,
+          color: palette.hairline,
+        ),
         if (points.isEmpty)
           Padding(
             padding: const EdgeInsets.all(kSpaceL),
@@ -295,11 +309,11 @@ class _DetailBody extends ConsumerWidget {
             title: usesPace ? '配速' : '速度',
             summary: usesPace
                 ? (s == null
-                    ? ''
-                    : '均配 ${formatPace(s.movingAvgSpeedMps, unit)} $paceUnit')
+                      ? ''
+                      : '均配 ${formatPace(s.movingAvgSpeedMps, unit)} $paceUnit')
                 : (s == null
-                    ? ''
-                    : '均速 ${formatSpeedValue(s.avgSpeedMps, unit)} $speedUnit'),
+                      ? ''
+                      : '均速 ${formatSpeedValue(s.avgSpeedMps, unit)} $speedUnit'),
             child: CurveChart(
               samples: mainSamples,
               unitLabel: usesPace ? paceUnit : speedUnit,
@@ -326,9 +340,7 @@ class _DetailBody extends ConsumerWidget {
                   baseColorArgb: palette.accentInk.toARGB32(),
                 ),
                 const SizedBox(height: kSpaceM),
-                HrZoneBar(
-                  breakdown: hrZoneBreakdown(points, maxHeartRate),
-                ),
+                HrZoneBar(breakdown: hrZoneBreakdown(points, maxHeartRate)),
               ],
             ),
           ),

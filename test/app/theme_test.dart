@@ -16,7 +16,8 @@ double _contrastRatio(Color a, Color b) {
 /// 两个色相在色环上的最短距离（0..180）。饱和度低的颜色色相不稳，这里只用于
 /// 数据色 / 主题色之间。
 double _hueDistance(Color a, Color b) {
-  final double d = (HSVColor.fromColor(a).hue - HSVColor.fromColor(b).hue).abs();
+  final double d = (HSVColor.fromColor(a).hue - HSVColor.fromColor(b).hue)
+      .abs();
   return d > 180 ? 360 - d : d;
 }
 
@@ -101,7 +102,8 @@ void main() {
         expect(
           hue >= 30 || ratio >= 1.30,
           isTrue,
-          reason: '${accent.label} 与另一处用色撞得太近：'
+          reason:
+              '${accent.label} 与另一处用色撞得太近：'
               '色相差 ${hue.toStringAsFixed(1)}°，亮度比 ${ratio.toStringAsFixed(2)}',
         );
       }

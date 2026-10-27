@@ -32,7 +32,10 @@ void main() {
   tearDown(() => db.close());
 
   test('startWorkout 建立一条 recording 状态的记录', () async {
-    final Workout ride = await repo.startWorkout(startedAtMs: 1000, hrDeviceName: 'FIT 3');
+    final Workout ride = await repo.startWorkout(
+      startedAtMs: 1000,
+      hrDeviceName: 'FIT 3',
+    );
 
     expect(ride.id, isNotNull);
     expect(ride.status, WorkoutStatus.recording);
@@ -52,7 +55,13 @@ void main() {
     final Workout ride = await repo.startWorkout(startedAtMs: 1000);
     await repo.appendPoints(ride.id!, <TrackPoint>[
       TrackPoint(rideId: ride.id!, tMs: 1000, lat: 31.23, lon: 121.47, hr: 120),
-      TrackPoint(rideId: ride.id!, tMs: 2000, lat: 31.23, lon: 121.471, hr: 122),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 2000,
+        lat: 31.23,
+        lon: 121.471,
+        hr: 122,
+      ),
     ]);
 
     final List<TrackPoint> points = await repo.getPoints(ride.id!);
@@ -63,9 +72,30 @@ void main() {
   test('finishRide 写入汇总并把状态改为 finished', () async {
     final Workout ride = await repo.startWorkout(startedAtMs: 0);
     await repo.appendPoints(ride.id!, <TrackPoint>[
-      TrackPoint(rideId: ride.id!, tMs: 0, lat: 31.23, lon: 121.4700, speedMps: 5, hr: 120),
-      TrackPoint(rideId: ride.id!, tMs: 1000, lat: 31.23, lon: 121.4701, speedMps: 5, hr: 120),
-      TrackPoint(rideId: ride.id!, tMs: 2000, lat: 31.23, lon: 121.4702, speedMps: 5, hr: 120),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 0,
+        lat: 31.23,
+        lon: 121.4700,
+        speedMps: 5,
+        hr: 120,
+      ),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 1000,
+        lat: 31.23,
+        lon: 121.4701,
+        speedMps: 5,
+        hr: 120,
+      ),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 2000,
+        lat: 31.23,
+        lon: 121.4702,
+        speedMps: 5,
+        hr: 120,
+      ),
     ]);
 
     await repo.finishRide(ride.id!, endedAtMs: 2000, durationS: 2);
@@ -86,8 +116,20 @@ void main() {
   test('settleRide 从已有轨迹点结算一条崩溃遗留的骑行', () async {
     final Workout ride = await repo.startWorkout(startedAtMs: 0);
     await repo.appendPoints(ride.id!, <TrackPoint>[
-      TrackPoint(rideId: ride.id!, tMs: 0, lat: 31.23, lon: 121.4700, speedMps: 5),
-      TrackPoint(rideId: ride.id!, tMs: 10000, lat: 31.23, lon: 121.4710, speedMps: 5),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 0,
+        lat: 31.23,
+        lon: 121.4700,
+        speedMps: 5,
+      ),
+      TrackPoint(
+        rideId: ride.id!,
+        tMs: 10000,
+        lat: 31.23,
+        lon: 121.4710,
+        speedMps: 5,
+      ),
     ]);
 
     await repo.settleRide(ride.id!);

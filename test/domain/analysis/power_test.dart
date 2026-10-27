@@ -9,8 +9,7 @@ void main() {
     //   风阻 = 0.5 × 1.225 × 0.32 × 6²           = 7.06 N
     //   合计 10.49 N × 6 m/s                     = 62.9 W
     test('平路上给出与手算一致的量级', () {
-      final double watts =
-          estimatePowerW(speedMps: 6, grade: 0, weightKg: 70);
+      final double watts = estimatePowerW(speedMps: 6, grade: 0, weightKg: 70);
       expect(watts, closeTo(62.93, 0.01));
     });
 
@@ -35,15 +34,26 @@ void main() {
     test('上坡比平路费功率，且坡度越陡越高', () {
       final double flat = estimatePowerW(speedMps: 5, grade: 0, weightKg: 70);
       final double up = estimatePowerW(speedMps: 5, grade: 0.04, weightKg: 70);
-      final double steeper =
-          estimatePowerW(speedMps: 5, grade: 0.08, weightKg: 70);
+      final double steeper = estimatePowerW(
+        speedMps: 5,
+        grade: 0.08,
+        weightKg: 70,
+      );
       expect(up, greaterThan(flat));
       expect(steeper, greaterThan(up));
     });
 
     test('体重大的人同样速度同样坡更费功率', () {
-      final double light = estimatePowerW(speedMps: 5, grade: 0.05, weightKg: 60);
-      final double heavy = estimatePowerW(speedMps: 5, grade: 0.05, weightKg: 90);
+      final double light = estimatePowerW(
+        speedMps: 5,
+        grade: 0.05,
+        weightKg: 60,
+      );
+      final double heavy = estimatePowerW(
+        speedMps: 5,
+        grade: 0.05,
+        weightKg: 90,
+      );
       expect(heavy, greaterThan(light));
     });
   });
@@ -113,7 +123,10 @@ void main() {
 
     test('陡坡与陡下坡都按上限截断', () {
       expect(
-        fitGrade(distanceM: distanceM, altitudeM: climbM.map((double m) => m * 4).toList()),
+        fitGrade(
+          distanceM: distanceM,
+          altitudeM: climbM.map((double m) => m * 4).toList(),
+        ),
         kMaxGrade,
       );
       expect(

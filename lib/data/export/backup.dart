@@ -34,18 +34,18 @@ class BackupManifest {
   final int pointCount;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'schema_version': schemaVersion,
-        'exported_at': exportedAtMs,
-        'ride_count': rideCount,
-        'point_count': pointCount,
-      };
+    'schema_version': schemaVersion,
+    'exported_at': exportedAtMs,
+    'ride_count': rideCount,
+    'point_count': pointCount,
+  };
 
   static BackupManifest fromJson(Map<String, Object?> json) => BackupManifest(
-        schemaVersion: (json['schema_version'] as num?)?.toInt() ?? 0,
-        exportedAtMs: (json['exported_at'] as num?)?.toInt() ?? 0,
-        rideCount: (json['ride_count'] as num?)?.toInt() ?? 0,
-        pointCount: (json['point_count'] as num?)?.toInt() ?? 0,
-      );
+    schemaVersion: (json['schema_version'] as num?)?.toInt() ?? 0,
+    exportedAtMs: (json['exported_at'] as num?)?.toInt() ?? 0,
+    rideCount: (json['ride_count'] as num?)?.toInt() ?? 0,
+    pointCount: (json['point_count'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// 一份解开的备份。
@@ -102,16 +102,20 @@ Uint8List buildBackupArchive({
 
   final Archive archive = Archive()
     ..add(ArchiveFile.string(_manifestName, jsonEncode(manifest.toJson())))
-    ..add(ArchiveFile.string(
-      _ridesName,
-      jsonEncode(<Map<String, Object?>>[
-        for (final Workout r in rides) r.toDbMap(),
-      ]),
-    ))
-    ..add(ArchiveFile.string(
-      _pointsName,
-      points.map((TrackPoint p) => jsonEncode(p.toDbMap())).join('\n'),
-    ));
+    ..add(
+      ArchiveFile.string(
+        _ridesName,
+        jsonEncode(<Map<String, Object?>>[
+          for (final Workout r in rides) r.toDbMap(),
+        ]),
+      ),
+    )
+    ..add(
+      ArchiveFile.string(
+        _pointsName,
+        points.map((TrackPoint p) => jsonEncode(p.toDbMap())).join('\n'),
+      ),
+    );
 
   return Uint8List.fromList(ZipEncoder().encode(archive));
 }

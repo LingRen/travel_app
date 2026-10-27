@@ -71,18 +71,25 @@ class FakeBlePlatform implements BlePlatform {
   }
 }
 
-BleScanEntry entry(FakeScanDevice device, {required int rssi, String advName = ''}) =>
-    BleScanEntry(device: device, advertisedName: advName, rssi: rssi);
+BleScanEntry entry(
+  FakeScanDevice device, {
+  required int rssi,
+  String advName = '',
+}) => BleScanEntry(device: device, advertisedName: advName, rssi: rssi);
 
 void main() {
   group('isAdapterOn', () {
     test('适配器已开启时返回 true', () async {
-      expect(await BleScanner(platform: FakeBlePlatform()).isAdapterOn(), isTrue);
+      expect(
+        await BleScanner(platform: FakeBlePlatform()).isAdapterOn(),
+        isTrue,
+      );
     });
 
     test('适配器关闭时返回 false，由 UI 提示而不阻断记录', () async {
       expect(
-        await BleScanner(platform: FakeBlePlatform(adapterOn: false)).isAdapterOn(),
+        await BleScanner(platform: FakeBlePlatform(adapterOn: false))
+            .isAdapterOn(),
         isFalse,
       );
     });
@@ -100,15 +107,19 @@ void main() {
         entry(mid, rssi: -55),
       ]);
 
-      final List<DiscoveredDevice> found =
-          await BleScanner(platform: platform).scan(timeout: Duration.zero);
+      final List<DiscoveredDevice> found = await BleScanner(platform: platform)
+          .scan(timeout: Duration.zero);
 
-      expect(
-        found.map((DiscoveredDevice d) => d.device.id).toList(),
-        <String>['AA:02', 'AA:03', 'AA:01'],
-      );
-      expect(found.map((DiscoveredDevice d) => d.rssi).toList(),
-          <int>[-30, -55, -80]);
+      expect(found.map((DiscoveredDevice d) => d.device.id).toList(), <String>[
+        'AA:02',
+        'AA:03',
+        'AA:01',
+      ]);
+      expect(found.map((DiscoveredDevice d) => d.rssi).toList(), <int>[
+        -30,
+        -55,
+        -80,
+      ]);
     });
 
     test('同一设备多次上报只保留一条，且用最新的 RSSI 覆盖旧值', () async {
@@ -117,8 +128,8 @@ void main() {
       platform.batches.add(<BleScanEntry>[entry(device, rssi: -70)]);
       platform.batches.add(<BleScanEntry>[entry(device, rssi: -42)]);
 
-      final List<DiscoveredDevice> found =
-          await BleScanner(platform: platform).scan(timeout: Duration.zero);
+      final List<DiscoveredDevice> found = await BleScanner(platform: platform)
+          .scan(timeout: Duration.zero);
 
       expect(found.length, 1);
       expect(found.single.rssi, -42);
@@ -133,8 +144,8 @@ void main() {
         entry(uncached, rssi: -50, advName: 'HRM-Dual'),
       ]);
 
-      final List<DiscoveredDevice> found =
-          await BleScanner(platform: platform).scan(timeout: Duration.zero);
+      final List<DiscoveredDevice> found = await BleScanner(platform: platform)
+          .scan(timeout: Duration.zero);
 
       final Map<String, String> names = <String, String>{
         for (final DiscoveredDevice d in found) d.device.id: d.name,
@@ -169,8 +180,8 @@ void main() {
         entry(FakeScanDevice(id: 'AA:09'), rssi: -60),
       ]);
 
-      final List<DiscoveredDevice> found =
-          await BleScanner(platform: platform).scan(timeout: Duration.zero);
+      final List<DiscoveredDevice> found = await BleScanner(platform: platform)
+          .scan(timeout: Duration.zero);
 
       expect(found.length, 1);
       expect(found.single.name, isEmpty);
@@ -183,8 +194,8 @@ void main() {
       final FakeScanDevice device = FakeScanDevice(id: 'AA:01', name: 'Fit 3');
       platform.devicesById['AA:01'] = device;
 
-      final BleDeviceHandle? found =
-          await BleScanner(platform: platform).deviceById('AA:01');
+      final BleDeviceHandle? found = await BleScanner(platform: platform)
+          .deviceById('AA:01');
       expect(found, same(device));
     });
 

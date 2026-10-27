@@ -145,16 +145,14 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
   }
 
   CameraFit _fitFor(LatLngBounds bounds) => CameraFit.bounds(
-        bounds: bounds,
-        padding: _kFitPadding,
-        maxZoom: _kMaxZoom,
-      );
+    bounds: bounds,
+    padding: _kFitPadding,
+    maxZoom: _kMaxZoom,
+  );
 
   /// 只有一个点时的取景：直接以它为中心，缩放压到街区级。
-  CameraFit _fitForPoint(LatLng point) => CameraFit.coordinates(
-        coordinates: <LatLng>[point],
-        maxZoom: _kMaxZoom,
-      );
+  CameraFit _fitForPoint(LatLng point) =>
+      CameraFit.coordinates(coordinates: <LatLng>[point], maxZoom: _kMaxZoom);
 
   /// 地图上要标圆点的位置：粗略定位优先；它被真实点取代后，第一次只有
   /// 一个真实点时仍以它为准——那时还画不出折线，不标点地图就是空的。
@@ -193,8 +191,9 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     // 一个顶点都拿不到。但此时地图不能退回占位：第一个真实点顶掉粗略定位的
     // 那一小会儿会「亮一下又黑回去」。补上这一个点，让地图留在原地。
     if (_vertices.isEmpty) {
-      final List<TrackPoint> located =
-          points.where((TrackPoint p) => p.hasPosition).toList();
+      final List<TrackPoint> located = points
+          .where((TrackPoint p) => p.hasPosition)
+          .toList();
       if (located.length == 1) {
         final TrackPoint p = located.single;
         _vertices = <LatLng>[_toMap(p.lat!, p.lon!)];
@@ -249,12 +248,12 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        key: const Key('live-route-map'),
-        height: widget.height,
-        child: _vertices.isEmpty && _previewVertex == null
-            ? _placeholder(context)
-            : _map(context),
-      );
+    key: const Key('live-route-map'),
+    height: widget.height,
+    child: _vertices.isEmpty && _previewVertex == null
+        ? _placeholder(context)
+        : _map(context),
+  );
 
   Widget _placeholder(BuildContext context) => widget.showPlaceholder
       ? Align(
@@ -284,57 +283,57 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
         },
       ),
       children: <Widget>[
-          // 瓦片降饱和 + 纸色薄罩，让高德的彩色底图接近设计稿的纸本舆图。
-          // 只包 TileLayer：轨迹与指北/比例尺不受影响。
-          ColorFiltered(
-            key: const Key('live-map-color-filter'),
-            colorFilter: ColorFilter.mode(
-              context.palette.paper.withValues(alpha: 0.16),
-              BlendMode.srcOver,
+        // 瓦片降饱和 + 纸色薄罩，让高德的彩色底图接近设计稿的纸本舆图。
+        // 只包 TileLayer：轨迹与指北/比例尺不受影响。
+        ColorFiltered(
+          key: const Key('live-map-color-filter'),
+          colorFilter: ColorFilter.mode(
+            context.palette.paper.withValues(alpha: 0.16),
+            BlendMode.srcOver,
+          ),
+          child: ColorFiltered(
+            colorFilter: const ColorFilter.matrix(kMapTileColorMatrix),
+            child: TileLayer(
+              urlTemplate: widget.tileUrlTemplate,
+              subdomains: widget.subdomains,
+              userAgentPackageName: 'com.ling.cycling_app',
             ),
-            child: ColorFiltered(
-              colorFilter: const ColorFilter.matrix(kMapTileColorMatrix),
-              child: TileLayer(
-                urlTemplate: widget.tileUrlTemplate,
-                subdomains: widget.subdomains,
-                userAgentPackageName: 'com.ling.cycling_app',
+          ),
+        ),
+        PolylineLayer<Object>(
+          polylines: _polylinesWith(context.palette.accentInk),
+        ),
+        if (_markerPoint != null)
+          MarkerLayer(
+            markers: <Marker>[
+              Marker(
+                point: _markerPoint!,
+                width: 18,
+                height: 18,
+                child: const _PositionDot(),
               ),
-            ),
+            ],
           ),
-          PolylineLayer<Object>(
-            polylines: _polylinesWith(context.palette.accentInk),
+        // 指北与比例尺只是参照，不吃手势。正常屏放在地图带中段，矮屏
+        // 往上收一档，避免压到主读数。
+        IgnorePointer(
+          child: Align(
+            alignment: compact
+                ? const Alignment(0.9, -0.3)
+                : const Alignment(0.9, 0.04),
+            child: const _NorthIndicator(),
           ),
-          if (_markerPoint != null)
-            MarkerLayer(
-              markers: <Marker>[
-                Marker(
-                  point: _markerPoint!,
-                  width: 18,
-                  height: 18,
-                  child: const _PositionDot(),
-                ),
-              ],
-            ),
-          // 指北与比例尺只是参照，不吃手势。正常屏放在地图带中段，矮屏
-          // 往上收一档，避免压到主读数。
-          IgnorePointer(
-            child: Align(
-              alignment: compact
-                  ? const Alignment(0.9, -0.3)
-                  : const Alignment(0.9, 0.04),
-              child: const _NorthIndicator(),
-            ),
+        ),
+        IgnorePointer(
+          child: Align(
+            alignment: compact
+                ? const Alignment(-0.86, -0.3)
+                : const Alignment(-0.86, 0.2),
+            child: const _MapScaleBar(),
           ),
-          IgnorePointer(
-            child: Align(
-              alignment: compact
-                  ? const Alignment(-0.86, -0.3)
-                  : const Alignment(-0.86, 0.2),
-              child: const _MapScaleBar(),
-            ),
-          ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 }
 
@@ -426,14 +425,15 @@ class _MapScaleBar extends StatelessWidget {
   /// 取 1、2、5 乘以 10 的整数次幂中不超过 [raw] 的最大值。
   static double _niceDistance(double raw) {
     if (!raw.isFinite || raw <= 0) return 100;
-    final double exponent =
-        math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+    final double exponent = math
+        .pow(10, (math.log(raw) / math.ln10).floor())
+        .toDouble();
     final double fraction = raw / exponent;
     final double nice = fraction >= 5
         ? 5
         : fraction >= 2
-            ? 2
-            : 1;
+        ? 2
+        : 1;
     return nice * exponent;
   }
 }
@@ -444,10 +444,10 @@ class _PositionDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: context.palette.accent,
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-      );
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: context.palette.accent,
+      border: Border.all(color: Colors.white, width: 2),
+    ),
+  );
 }

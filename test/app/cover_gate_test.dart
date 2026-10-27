@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _wrap(Widget child, {bool disableAnimations = false}) => MaterialApp(
-      theme: buildAppTheme(),
-      home: MediaQuery(
-        data: MediaQueryData(disableAnimations: disableAnimations),
-        child: child,
-      ),
-    );
+  theme: buildAppTheme(),
+  home: MediaQuery(
+    data: MediaQueryData(disableAnimations: disableAnimations),
+    child: child,
+  ),
+);
 
 void main() {
-  testWidgets('封面显示品牌、标语与本机声明，期间不构建主界面',
-      (WidgetTester tester) async {
+  testWidgets('封面显示品牌、标语与本机声明，期间不构建主界面', (WidgetTester tester) async {
     await tester.pumpWidget(_wrap(const CoverGate(child: Text('主界面'))));
 
     expect(find.text('行迹'), findsOneWidget);
@@ -63,10 +62,9 @@ void main() {
   });
 
   testWidgets('减少动态效果时停留 600ms 且不淡出', (WidgetTester tester) async {
-    await tester.pumpWidget(_wrap(
-      const CoverGate(child: Text('主界面')),
-      disableAnimations: true,
-    ));
+    await tester.pumpWidget(
+      _wrap(const CoverGate(child: Text('主界面')), disableAnimations: true),
+    );
 
     await tester.pump(const Duration(milliseconds: 599));
     expect(find.text('主界面'), findsNothing);

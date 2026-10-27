@@ -135,7 +135,8 @@ class RecordController extends Notifier<RecordState> {
 
   /// 每种传感器至多一个连接。用 Map 而不是三个字段：连接/断开/记配对/
   /// 取设备名这些地方是按「类型」做的同一件事，写三遍迟早会漏一个。
-  final Map<SensorKind, SensorMonitor> _monitors = <SensorKind, SensorMonitor>{};
+  final Map<SensorKind, SensorMonitor> _monitors =
+      <SensorKind, SensorMonitor>{};
 
   /// 当前已连上的传感器类型。
   final Set<SensorKind> _connected = <SensorKind>{};
@@ -194,7 +195,7 @@ class RecordController extends Notifier<RecordState> {
     // 回收、回来直接点开始，落库的就是默认的骑行——事后只能手改库。
     _selectedActivityType =
         ref.read(appSettingsProvider).value?.lastActivityType ??
-            ActivityType.cycling;
+        ActivityType.cycling;
     // 设置是异步读的：首帧可能还没到位，等它出来再补上（用户已亲手挑过则不动）。
     ref.listen<AsyncValue<AppSettings>>(
       appSettingsProvider,
@@ -240,7 +241,10 @@ class RecordController extends Notifier<RecordState> {
 
     // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
     // 这样 workouts 的三个 *_device_name 才有值。
-    await _autoConnectPairedSensors().timeout(_kAutoConnectBudget, onTimeout: () {});
+    await _autoConnectPairedSensors().timeout(
+      _kAutoConnectBudget,
+      onTimeout: () {},
+    );
 
     // 估算功率要用体重。只在这里取一次：骑行中途改设置不该让已经记下的读数变样。
     // 设置还没读出来时（首帧）退回默认体重，不影响记录本身。
@@ -248,7 +252,9 @@ class RecordController extends Notifier<RecordState> {
     final double weightKg =
         ref.read(appSettingsProvider).value?.weightKg ?? kDefaultWeightKg;
 
-    final Workout ride = await ref.read(workoutRepositoryProvider).startWorkout(
+    final Workout ride = await ref
+        .read(workoutRepositoryProvider)
+        .startWorkout(
           startedAtMs: _now(),
           activityType: type,
           hrDeviceName: _monitors[SensorKind.heartRate]?.deviceName,
@@ -316,7 +322,11 @@ class RecordController extends Notifier<RecordState> {
     if (session == null || _finished) return;
     session.pause(_now());
     unawaited(_flush(force: true));
-    unawaited(ref.read(workoutRepositoryProvider).setStatus(_rideId!, WorkoutStatus.paused));
+    unawaited(
+      ref
+          .read(workoutRepositoryProvider)
+          .setStatus(_rideId!, WorkoutStatus.paused),
+    );
     _publish();
   }
 
@@ -328,7 +338,11 @@ class RecordController extends Notifier<RecordState> {
     // 否则一恢复就会先播一条「GPS 信号弱」，紧接着再播「定位已恢复」。
     _lastFixMs = _now();
     _wasGpsWeak = false;
-    unawaited(ref.read(workoutRepositoryProvider).setStatus(_rideId!, WorkoutStatus.recording));
+    unawaited(
+      ref
+          .read(workoutRepositoryProvider)
+          .setStatus(_rideId!, WorkoutStatus.recording),
+    );
     _publish();
   }
 
@@ -353,7 +367,9 @@ class RecordController extends Notifier<RecordState> {
     await _persist(remaining);
     await _flush(force: true);
 
-    await ref.read(workoutRepositoryProvider).finishRide(
+    await ref
+        .read(workoutRepositoryProvider)
+        .finishRide(
           _rideId!,
           endedAtMs: now,
           durationS: session.snapshot.elapsedSeconds,

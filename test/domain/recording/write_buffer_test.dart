@@ -3,7 +3,8 @@ import 'package:cycling_app/domain/recording/write_buffer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  TrackPoint pointAt(int tMs) => TrackPoint(rideId: 1, tMs: tMs, lat: 31.0, lon: 121.0);
+  TrackPoint pointAt(int tMs) =>
+      TrackPoint(rideId: 1, tMs: tMs, lat: 31.0, lon: 121.0);
 
   group('WriteBuffer', () {
     test('初始为空', () {

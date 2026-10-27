@@ -125,12 +125,18 @@ void main() {
 
   group('历史 / 详情排版', () {
     test('距离拆成数值与单位：公里一位小数，不足 1 公里用米', () {
-      expect(formatDistanceParts(25300, DistanceUnit.kilometer),
-          (value: '25.3', unit: 'km'));
-      expect(formatDistanceParts(842, DistanceUnit.kilometer),
-          (value: '842', unit: 'm'));
-      expect(formatDistanceParts(25300, DistanceUnit.mile),
-          (value: '15.7', unit: 'mi'));
+      expect(formatDistanceParts(25300, DistanceUnit.kilometer), (
+        value: '25.3',
+        unit: 'km',
+      ));
+      expect(formatDistanceParts(842, DistanceUnit.kilometer), (
+        value: '842',
+        unit: 'm',
+      ));
+      expect(formatDistanceParts(25300, DistanceUnit.mile), (
+        value: '15.7',
+        unit: 'mi',
+      ));
     });
 
     test('日期 / 星期 / 时间', () {
@@ -179,8 +185,10 @@ void main() {
     });
 
     test('paceParts 把分秒拆开给主读数排版', () {
-      final ({int minutes, int seconds})? parts =
-          paceParts(3.0, DistanceUnit.kilometer);
+      final ({int minutes, int seconds})? parts = paceParts(
+        3.0,
+        DistanceUnit.kilometer,
+      );
       expect(parts!.minutes, 5);
       expect(parts.seconds, 33);
       expect(paceParts(0, DistanceUnit.kilometer), isNull);

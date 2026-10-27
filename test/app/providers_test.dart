@@ -40,8 +40,9 @@ void main() {
 
   /// 直接往注入的连接里写一条进行中的骑行与三个轨迹点。
   Future<int> seedWorkout(int startedAtMs) async {
-    final int id = await WorkoutDao(db)
-        .insert(Workout(startedAtMs: startedAtMs, status: WorkoutStatus.recording));
+    final int id = await WorkoutDao(db).insert(
+      Workout(startedAtMs: startedAtMs, status: WorkoutStatus.recording),
+    );
     await TrackPointDao(db).insertBatch(<TrackPoint>[
       TrackPoint(rideId: id, tMs: 0, lat: 31.2300, lon: 121.4700, hr: 120),
       TrackPoint(rideId: id, tMs: 1000, lat: 31.2300, lon: 121.4701, hr: 150),
@@ -72,8 +73,9 @@ void main() {
   test('workoutRepositoryProvider 复用注入的数据库连接', () async {
     final int id = await seedWorkout(1000);
 
-    final List<Workout> unfinished =
-        await container.read(workoutRepositoryProvider).findUnfinished();
+    final List<Workout> unfinished = await container
+        .read(workoutRepositoryProvider)
+        .findUnfinished();
 
     expect(unfinished.map((Workout r) => r.id).toList(), <int>[id]);
   });
@@ -90,26 +92,41 @@ void main() {
     final WorkoutRepository repo = container.read(workoutRepositoryProvider);
 
     final int a = await seedWorkout(0);
-    final WorkoutSummary withDefaultWeight =
-        await repo.finishRide(a, endedAtMs: 2000, durationS: 2);
+    final WorkoutSummary withDefaultWeight = await repo.finishRide(
+      a,
+      endedAtMs: 2000,
+      durationS: 2,
+    );
     expect(withDefaultWeight.calories, isNotNull);
 
-    await container.read(settingsRepositoryProvider).save(const AppSettings(
-          maxHeartRate: kDefaultMaxHeartRate,
-          weightKg: 140,
-          distanceUnit: DistanceUnit.kilometer,
-          mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
-        ));
+    await container
+        .read(settingsRepositoryProvider)
+        .save(
+          const AppSettings(
+            maxHeartRate: kDefaultMaxHeartRate,
+            weightKg: 140,
+            distanceUnit: DistanceUnit.kilometer,
+            mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
+          ),
+        );
 
     final int b = await seedWorkout(100000);
-    final WorkoutSummary withDoubleWeight =
-        await repo.finishRide(b, endedAtMs: 102000, durationS: 2);
+    final WorkoutSummary withDoubleWeight = await repo.finishRide(
+      b,
+      endedAtMs: 102000,
+      durationS: 2,
+    );
 
-    expect(withDoubleWeight.calories, closeTo(withDefaultWeight.calories! * 2, 1e-6));
+    expect(
+      withDoubleWeight.calories,
+      closeTo(withDefaultWeight.calories! * 2, 1e-6),
+    );
   });
 
   test('appSettingsProvider 读出默认值，包含可配置的瓦片源地址', () async {
-    final AppSettings settings = await container.read(appSettingsProvider.future);
+    final AppSettings settings = await container.read(
+      appSettingsProvider.future,
+    );
 
     // 字面量：钉住默认值本身，避免断言与常量自指。
     expect(settings.maxHeartRate, 190);
@@ -129,12 +146,17 @@ void main() {
     await container.read(settingsRepositoryProvider).save(saved);
 
     container.invalidate(appSettingsProvider);
-    final AppSettings reloaded = await container.read(appSettingsProvider.future);
+    final AppSettings reloaded = await container.read(
+      appSettingsProvider.future,
+    );
 
     expect(reloaded.maxHeartRate, 200);
     expect(reloaded.weightKg, 82.5);
     expect(reloaded.distanceUnit, DistanceUnit.mile);
-    expect(reloaded.mapTileUrlTemplate, 'https://tiles.example.com/{z}/{x}/{y}.png');
+    expect(
+      reloaded.mapTileUrlTemplate,
+      'https://tiles.example.com/{z}/{x}/{y}.png',
+    );
   });
 
   test('locationServiceProvider / bleScannerProvider 返回生产实现', () {
@@ -182,10 +204,10 @@ void main() {
   test('结束骑行后历史与统计列表自动刷新，无需手动 invalidate', () async {
     // 订阅住，模拟页面一直挂着 watch：否则缓存可能因无人监听被回收，
     // 断言就退化成「反正每次都会重查」，失去区分力。
-    final ProviderSubscription<AsyncValue<List<Workout>>> historySub =
-        container.listen(historyRidesProvider, (_, _) {});
-    final ProviderSubscription<AsyncValue<List<Workout>>> statsSub =
-        container.listen(finishedRidesProvider, (_, _) {});
+    final ProviderSubscription<AsyncValue<List<Workout>>> historySub = container
+        .listen(historyRidesProvider, (_, _) {});
+    final ProviderSubscription<AsyncValue<List<Workout>>> statsSub = container
+        .listen(finishedRidesProvider, (_, _) {});
     addTearDown(historySub.close);
     addTearDown(statsSub.close);
 
@@ -193,33 +215,31 @@ void main() {
     expect(await container.read(finishedRidesProvider.future), isEmpty);
 
     final int id = await seedWorkout(0);
-    await container.read(workoutRepositoryProvider).finishRide(
-          id,
-          endedAtMs: 2000,
-          durationS: 2,
-        );
+    await container
+        .read(workoutRepositoryProvider)
+        .finishRide(id, endedAtMs: 2000, durationS: 2);
 
     expect(
-      (await container.read(historyRidesProvider.future)).map((Workout r) => r.id),
+      (await container.read(historyRidesProvider.future))
+          .map((Workout r) => r.id),
       <int>[id],
     );
     expect(
-      (await container.read(finishedRidesProvider.future)).map((Workout r) => r.id),
+      (await container.read(finishedRidesProvider.future))
+          .map((Workout r) => r.id),
       <int>[id],
     );
   });
 
   test('删除骑行后历史列表自动刷新', () async {
-    final ProviderSubscription<AsyncValue<List<Workout>>> sub =
-        container.listen(historyRidesProvider, (_, _) {});
+    final ProviderSubscription<AsyncValue<List<Workout>>> sub = container
+        .listen(historyRidesProvider, (_, _) {});
     addTearDown(sub.close);
 
     final int id = await seedWorkout(0);
-    await container.read(workoutRepositoryProvider).finishRide(
-          id,
-          endedAtMs: 2000,
-          durationS: 2,
-        );
+    await container
+        .read(workoutRepositoryProvider)
+        .finishRide(id, endedAtMs: 2000, durationS: 2);
     expect(await container.read(historyRidesProvider.future), hasLength(1));
 
     await container.read(workoutRepositoryProvider).deleteRide(id);

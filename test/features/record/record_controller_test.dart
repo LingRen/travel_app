@@ -69,7 +69,11 @@ class _FakeWorkoutRepository implements WorkoutRepository {
     this.hrDeviceName = hrDeviceName;
     this.cadenceDeviceName = cadenceDeviceName;
     this.powerDeviceName = powerDeviceName;
-    return Workout(id: 1, startedAtMs: startedAtMs, status: WorkoutStatus.recording);
+    return Workout(
+      id: 1,
+      startedAtMs: startedAtMs,
+      status: WorkoutStatus.recording,
+    );
   }
 
   @override
@@ -82,7 +86,8 @@ class _FakeWorkoutRepository implements WorkoutRepository {
   }
 
   @override
-  Future<void> setStatus(int rideId, WorkoutStatus status) async => statuses.add(status);
+  Future<void> setStatus(int rideId, WorkoutStatus status) async =>
+      statuses.add(status);
 
   @override
   Future<WorkoutSummary> finishRide(
@@ -105,8 +110,7 @@ class _FakeWorkoutRepository implements WorkoutRepository {
     int? limit,
     int? offset,
     ActivityType? activityType,
-  }) async =>
-      <Workout>[];
+  }) async => <Workout>[];
 
   @override
   Future<Workout?> getWorkout(int id) async => existingWorkout;
@@ -264,9 +268,9 @@ class _FakeBlePlatform implements BlePlatform {
 
 /// 标准 HRS 特征值：服务 0x180D、测量 0x2A37（故意用 128 位长形式）。
 _FakeCharacteristic _hrCharacteristic() => _FakeCharacteristic(
-      serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
-      uuid: '00002a37-0000-1000-8000-00805f9b34fb',
-    );
+  serviceUuid: '0000180D-0000-1000-8000-00805F9B34FB',
+  uuid: '00002a37-0000-1000-8000-00805f9b34fb',
+);
 
 /// 标准 CPS 特征值：服务 0x1818、测量 0x2A63。
 _FakeCharacteristic _cpsCharacteristic() =>
@@ -283,7 +287,11 @@ class _FakeRideCuePlayer implements RideCuePlayer {
   int disposeCalls = 0;
 
   @override
-  Future<void> speak(List<RideCue> cues, DistanceUnit unit, ActivityType type) async {
+  Future<void> speak(
+    List<RideCue> cues,
+    DistanceUnit unit,
+    ActivityType type,
+  ) async {
     spokenBatches.add(cues);
     spokenUnits.add(unit);
     spokenTypes.add(type);
@@ -297,11 +305,11 @@ class _FakeRideCuePlayer implements RideCuePlayer {
 
 /// 组装一帧骑行功率数据：flags=0x0000 + sint16 小端瞬时功率。
 List<int> _cpsFrame(int watts) => <int>[
-      0x00,
-      0x00,
-      watts & 0xFF,
-      (watts >> 8) & 0xFF,
-    ];
+  0x00,
+  0x00,
+  watts & 0xFF,
+  (watts >> 8) & 0xFF,
+];
 
 void main() {
   late _FakeWorkoutRepository repo;
@@ -352,25 +360,26 @@ void main() {
     double? speedMps,
   }) async {
     clockMs += 1000;
-    location.emit(LocationFix(
-      tMs: clockMs,
-      lat: lat,
-      lon: 121.0,
-      speedMps: speedMps,
-    ));
+    location.emit(
+      LocationFix(tMs: clockMs, lat: lat, lon: 121.0, speedMps: speedMps),
+    );
     await tester.pump(const Duration(seconds: 1));
   }
 
   testWidgets('定位服务关闭时不创建记录并给出提示', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     location.readiness = LocationReadiness.serviceDisabled;
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     await controller.start();
 
     expect(container.read(recordControllerProvider).phase, isNull);
-    expect(container.read(recordControllerProvider).errorMessage, contains('定位服务'));
+    expect(
+      container.read(recordControllerProvider).errorMessage,
+      contains('定位服务'),
+    );
     expect(repo.startWorkoutCalls, 0);
     container.dispose();
   });
@@ -378,20 +387,25 @@ void main() {
   testWidgets('定位权限被永久拒绝时引导去系统设置', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     location.readiness = LocationReadiness.permissionDeniedForever;
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     await controller.start();
 
-    expect(container.read(recordControllerProvider).errorMessage, contains('系统设置'));
+    expect(
+      container.read(recordControllerProvider).errorMessage,
+      contains('系统设置'),
+    );
     expect(repo.startWorkoutCalls, 0);
     container.dispose();
   });
 
   testWidgets('start 成功后进入 recording 并持有 rideId', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     await controller.start();
 
@@ -406,8 +420,9 @@ void main() {
   testWidgets('开始后先展示粗略定位，第一个真实点到达即清除', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     location.previewFix = const LocationFix(tMs: 900, lat: 31.2, lon: 121.4);
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     await controller.start();
     await tester.pump();
@@ -427,8 +442,9 @@ void main() {
 
   testWidgets('拿不到粗略定位时开始记录照常进行', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     await controller.start();
     await tester.pump();
@@ -442,8 +458,9 @@ void main() {
 
   testWidgets('定位点攒够一批才提交事务', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     for (int i = 1; i <= 9; i++) {
@@ -458,8 +475,9 @@ void main() {
 
   testWidgets('暂停时立刻落盘剩余点并标记 rides.status', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     for (int i = 1; i <= 3; i++) {
@@ -471,21 +489,28 @@ void main() {
     await tester.pump();
 
     expect(repo.written.length, 3);
-    expect(container.read(recordControllerProvider).phase, RecordingPhase.paused);
+    expect(
+      container.read(recordControllerProvider).phase,
+      RecordingPhase.paused,
+    );
     expect(repo.statuses, <WorkoutStatus>[WorkoutStatus.paused]);
 
     controller.resume();
     await tester.pump();
 
-    expect(container.read(recordControllerProvider).phase, RecordingPhase.recording);
+    expect(
+      container.read(recordControllerProvider).phase,
+      RecordingPhase.recording,
+    );
     expect(repo.statuses.last, WorkoutStatus.recording);
     container.dispose();
   });
 
   testWidgets('结束时结算并清空缓冲', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     for (int i = 1; i <= 3; i++) {
@@ -497,14 +522,18 @@ void main() {
 
     expect(repo.written.length, 3);
     expect(repo.finishCalls, 1);
-    expect(container.read(recordControllerProvider).phase, RecordingPhase.finished);
+    expect(
+      container.read(recordControllerProvider).phase,
+      RecordingPhase.finished,
+    );
     container.dispose();
   });
 
   testWidgets('GPS 超过 10 秒没有新点时标记信号弱', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     await rideOneSecond(tester, lat: 31.0);
@@ -519,8 +548,9 @@ void main() {
 
   testWidgets('信号丢失与恢复各播报一次，不重复刷屏', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     await rideOneSecond(tester, lat: 31.0);
@@ -548,8 +578,9 @@ void main() {
 
   testWidgets('写入连续失败三次后提示用户', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     repo.failAppendTimes = 1000;
     await controller.start();
 
@@ -574,8 +605,9 @@ void main() {
 
   testWidgets('写库失败先重试一次，重试成功不算失败', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     repo.failAppendTimes = 1; // 只让第一次尝试失败
     await controller.start();
 
@@ -591,9 +623,14 @@ void main() {
 
   testWidgets('恢复未结束会话时按已落盘点补算时长与距离', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
-    repo.existingWorkout = const Workout(id: 7, startedAtMs: 0, status: WorkoutStatus.recording);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    repo.existingWorkout = const Workout(
+      id: 7,
+      startedAtMs: 0,
+      status: WorkoutStatus.recording,
+    );
     repo.existingPoints = const <TrackPoint>[
       TrackPoint(rideId: 7, tMs: 0, lat: 31.0, lon: 121.0),
       TrackPoint(rideId: 7, tMs: 1000, lat: 31.0001, lon: 121.0),
@@ -610,11 +647,11 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('恢复很久以前开始的会话后，时长只从恢复时刻继续累计',
-      (WidgetTester tester) async {
+  testWidgets('恢复很久以前开始的会话后，时长只从恢复时刻继续累计', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     // 一小时前开始、最后落盘点在一小时前的会话；崩溃后 5 分钟才重新打开 App。
     repo.existingWorkout = const Workout(
       id: 7,
@@ -637,7 +674,8 @@ void main() {
     expect(
       container.read(recordControllerProvider).elapsedMs,
       3000,
-      reason: '恢复后的第一次 tick 只能加恢复后的 1 秒，'
+      reason:
+          '恢复后的第一次 tick 只能加恢复后的 1 秒，'
           '既不能算上「开始到现在」整段，也不能算上崩溃到重启的空档',
     );
     container.dispose();
@@ -645,9 +683,14 @@ void main() {
 
   testWidgets('恢复时跳过时间倒流与 GPS 断档的点对', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
-    repo.existingWorkout = const Workout(id: 7, startedAtMs: 0, status: WorkoutStatus.recording);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    repo.existingWorkout = const Workout(
+      id: 7,
+      startedAtMs: 0,
+      status: WorkoutStatus.recording,
+    );
     repo.existingPoints = const <TrackPoint>[
       TrackPoint(rideId: 7, tMs: 0, lat: 31.0, lon: 121.0),
       TrackPoint(rideId: 7, tMs: 1000, lat: 31.0001, lon: 121.0),
@@ -668,8 +711,9 @@ void main() {
 
   testWidgets('退到后台时强制落盘未满一批的点', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     for (int i = 1; i <= 3; i++) {
@@ -686,8 +730,9 @@ void main() {
 
   testWidgets('切到 inactive 也强制落盘', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     for (int i = 1; i <= 2; i++) {
@@ -702,11 +747,11 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('连接心率传感器后读数进入会话，设备名写入骑行记录',
-      (WidgetTester tester) async {
+  testWidgets('连接心率传感器后读数进入会话，设备名写入骑行记录', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     final _FakeCharacteristic hr = _hrCharacteristic();
     final _FakeBleDevice device = _FakeBleDevice(
       id: 'AA:01',
@@ -731,11 +776,11 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('连接功率计后读数进入会话，设备名写入骑行记录',
-      (WidgetTester tester) async {
+  testWidgets('连接功率计后读数进入会话，设备名写入骑行记录', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     final _FakeCharacteristic cps = _cpsCharacteristic();
     final _FakeBleDevice device = _FakeBleDevice(
       id: 'AA:03',
@@ -764,8 +809,9 @@ void main() {
 
   testWidgets('reset 回到未开始状态', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
     await rideOneSecond(tester, lat: 31.0);
     await controller.finish();
@@ -779,11 +825,13 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('selectActivityType 未开始时更新状态，记录中忽略，reset 保留选择',
-      (WidgetTester tester) async {
+  testWidgets('selectActivityType 未开始时更新状态，记录中忽略，reset 保留选择', (
+    WidgetTester tester,
+  ) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
 
     // 默认骑行。
     expect(
@@ -818,15 +866,17 @@ void main() {
 
   testWidgets('退到后台不重建界面状态，回到前台补一次 publish', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
     await rideOneSecond(tester, lat: 31.0);
     await rideOneSecond(tester, lat: 31.0001);
 
     controller.handleLifecycle(AppLifecycleState.paused);
-    final int backgroundElapsedMs =
-        container.read(recordControllerProvider).elapsedMs;
+    final int backgroundElapsedMs = container
+        .read(recordControllerProvider)
+        .elapsedMs;
     expect(container.read(recordControllerProvider).foreground, isFalse);
 
     // 后台期间 1Hz 节拍照常走（时长、超速衰减都挂在它上面），但界面状态原地
@@ -850,14 +900,16 @@ void main() {
 
   testWidgets('实时轨迹按距离抽稀，且没追加时不换列表对象', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     // 第一个定位点无条件留下。
     await rideOneSecond(tester, lat: 31.0);
-    final List<TrackPoint> first =
-        container.read(recordControllerProvider).liveTrack;
+    final List<TrackPoint> first = container
+        .read(recordControllerProvider)
+        .liveTrack;
     expect(first.length, 1);
 
     // 11.13 米：够落盘（kMinWriteDistanceM = 5），但不够进缩略图
@@ -884,8 +936,9 @@ void main() {
   // 「断断续续」。断点必须由采集侧在确实丢信号时显式标出来。
   testWidgets('慢速骑行的时间跨度不算断点，真丢信号才断', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     // 每秒 1.1 米（0.00001 度）：25 米要走 22 秒，缩略图只能靠 15 秒的时间规则
@@ -898,19 +951,19 @@ void main() {
     expect(slow.liveTrack.length, greaterThanOrEqualTo(2));
     expect(slow.liveTrackBreaks, isEmpty, reason: '一路都有定位，不该有断点');
     expect(
-      buildRouteSegments(slow.liveTrack, breakBefore: slow.liveTrackBreaks).length,
+      buildRouteSegments(
+        slow.liveTrack,
+        breakBefore: slow.liveTrackBreaks,
+      ).length,
       1,
       reason: '抽稀造成的 15 秒间隔不能把轨迹切开',
     );
 
     // 12 秒没有定位：再恢复时，下一个被缩略图收下的点必须是段首。
     clockMs += 12000;
-    location.emit(LocationFix(
-      tMs: clockMs,
-      lat: 31.0005,
-      lon: 121.0,
-      speedMps: 5,
-    ));
+    location.emit(
+      LocationFix(tMs: clockMs, lat: 31.0005, lon: 121.0, speedMps: 5),
+    );
     await tester.pump(const Duration(seconds: 1));
     // 恢复后按 ~11 m/s 推进 12 秒：断点那个点之后还要再攒一个点，否则断出来的
     // 尾段只有一个顶点、会被 `_flush` 丢掉，看不出「断成两段」。
@@ -921,17 +974,21 @@ void main() {
     final RecordState after = container.read(recordControllerProvider);
     expect(after.liveTrackBreaks, isNotEmpty, reason: '真丢了 12 秒信号');
     expect(
-      buildRouteSegments(after.liveTrack, breakBefore: after.liveTrackBreaks).length,
+      buildRouteSegments(
+        after.liveTrack,
+        breakBefore: after.liveTrackBreaks,
+      ).length,
       2,
     );
     container.dispose();
   });
 
-  testWidgets('start 时自动重连已配对的心率传感器，并把设备名写进骑行记录',
-      (WidgetTester tester) async {
+  testWidgets('start 时自动重连已配对的心率传感器，并把设备名写进骑行记录', (WidgetTester tester) async {
     final _FakeSensorPairing pairing = _FakeSensorPairing();
-    pairing.stored[SensorKind.heartRate] =
-        const PairedSensor(id: 'AA:01', name: 'FIT 3');
+    pairing.stored[SensorKind.heartRate] = const PairedSensor(
+      id: 'AA:01',
+      name: 'FIT 3',
+    );
     final _FakeBleDevice device = _FakeBleDevice(
       id: 'AA:01',
       name: 'FIT 3',
@@ -963,14 +1020,19 @@ void main() {
     expect(container.read(recordControllerProvider).cadenceConnected, isFalse);
     expect(container.read(recordControllerProvider).powerConnected, isFalse);
     expect(repo.hrDeviceName, isNull);
-    expect(container.read(recordControllerProvider).phase, RecordingPhase.recording);
+    expect(
+      container.read(recordControllerProvider).phase,
+      RecordingPhase.recording,
+    );
     container.dispose();
   });
 
   testWidgets('配对里的设备找不回来时照常开始记录，不报错', (WidgetTester tester) async {
     final _FakeSensorPairing pairing = _FakeSensorPairing();
-    pairing.stored[SensorKind.heartRate] =
-        const PairedSensor(id: 'AA:01', name: 'FIT 3');
+    pairing.stored[SensorKind.heartRate] = const PairedSensor(
+      id: 'AA:01',
+      name: 'FIT 3',
+    );
     final ProviderContainer container = makeContainer(
       pairing: pairing,
       platform: _FakeBlePlatform(<String, BleDeviceHandle>{}), // 空表，找不到
@@ -1007,8 +1069,9 @@ void main() {
 
   testWidgets('骑行提示写入状态并交给播报器念出来', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     // 12 m/s = 43.2 km/h，向上跨过 40 档。报的是实际速度 43.2，不是档位下沿。
@@ -1028,8 +1091,9 @@ void main() {
 
   testWidgets('同一速档的后续节拍不重复播报', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     await rideOneSecond(tester, lat: 31.0, speedMps: 12.0);
@@ -1047,8 +1111,9 @@ void main() {
 
   testWidgets('定位点到达立即刷新速度读数，不等 1 秒节拍', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     await rideOneSecond(tester, lat: 31.0, speedMps: 6.0);
@@ -1057,12 +1122,9 @@ void main() {
     // 只过 200 毫秒：1Hz 节拍还没到，但定位点已经来了。数值必须马上变——
     // 原来这里要等下一拍，加上定位解算本身的延迟，体感就是「速度慢半拍」。
     clockMs += 200;
-    location.emit(LocationFix(
-      tMs: clockMs,
-      lat: 31.0001,
-      lon: 121.0,
-      speedMps: 9.5,
-    ));
+    location.emit(
+      LocationFix(tMs: clockMs, lat: 31.0001, lon: 121.0, speedMps: 9.5),
+    );
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(container.read(recordControllerProvider).currentSpeedMps, 9.5);
@@ -1071,8 +1133,9 @@ void main() {
 
   testWidgets('熄屏进后台时照常播报，但不重建界面状态', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
-    final RecordController controller =
-        container.read(recordControllerProvider.notifier);
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
     await controller.start();
 
     // 7.2 km/h，落在 0 档，先不产生提示。
@@ -1080,8 +1143,9 @@ void main() {
     expect(cuePlayer.spokenBatches, isEmpty);
 
     controller.handleLifecycle(AppLifecycleState.paused);
-    final int backgroundElapsedMs =
-        container.read(recordControllerProvider).elapsedMs;
+    final int backgroundElapsedMs = container
+        .read(recordControllerProvider)
+        .elapsedMs;
 
     // 熄屏放口袋里跨过一次速档：屏内横幅看不见，语音必须照念。
     await rideOneSecond(tester, lat: 31.0001, speedMps: 12.0);

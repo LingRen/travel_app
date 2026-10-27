@@ -26,7 +26,10 @@ void main() {
   /// 用于验证距离计算按纬度收缩：纬度 [lat0] 处同样的经度差对应更短的地面
   /// 距离，若把 lat/lon 传反，算出的距离会偏大 [1/cos(lat0)] 倍。
   double lonOffsetDeg(double lat0, double meters) =>
-      meters / (kEarthRadiusM * math.cos(lat0 * math.pi / 180)) * 180.0 / math.pi;
+      meters /
+      (kEarthRadiusM * math.cos(lat0 * math.pi / 180)) *
+      180.0 /
+      math.pi;
 
   group('shouldWriteTrackPoint', () {
     test('没有上一点时写入', () {
@@ -47,8 +50,12 @@ void main() {
         lat: latOffsetDeg(kMinWriteDistanceM),
         lon: 0.0,
       );
-      final double d =
-          haversineMeters(last.lat!, last.lon!, fix.lat!, fix.lon!);
+      final double d = haversineMeters(
+        last.lat!,
+        last.lon!,
+        fix.lat!,
+        fix.lon!,
+      );
       expect(d, kMinWriteDistanceM, reason: '构造出的距离应恰在阈值上，实测 $d 米');
       expect(shouldWriteTrackPoint(lastWritten: last, fix: fix), isTrue);
     });
@@ -66,8 +73,12 @@ void main() {
         lat: latOffsetDeg(kMinWriteDistanceM - 0.1),
         lon: 0.0,
       );
-      final double d =
-          haversineMeters(last.lat!, last.lon!, fix.lat!, fix.lon!);
+      final double d = haversineMeters(
+        last.lat!,
+        last.lon!,
+        fix.lat!,
+        fix.lon!,
+      );
       expect(d, lessThan(kMinWriteDistanceM), reason: '实测 $d 米');
       expect(shouldWriteTrackPoint(lastWritten: last, fix: fix), isFalse);
     });
@@ -82,8 +93,12 @@ void main() {
         lat: lat0,
         lon: lonOffsetDeg(lat0, 4.0),
       );
-      final double d =
-          haversineMeters(last.lat!, last.lon!, fix.lat!, fix.lon!);
+      final double d = haversineMeters(
+        last.lat!,
+        last.lon!,
+        fix.lat!,
+        fix.lon!,
+      );
       expect(d, closeTo(4.0, 0.05), reason: '实测 $d 米');
       expect(d, lessThan(kMinWriteDistanceM));
       expect(shouldWriteTrackPoint(lastWritten: last, fix: fix), isFalse);

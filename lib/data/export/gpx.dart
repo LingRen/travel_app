@@ -39,28 +39,37 @@ String buildGpx({required Workout ride, required List<TrackPoint> points}) {
       'xmlns:gpxtpx': kGpxTpxNamespace,
     },
     nest: () {
-      builder.element('metadata', nest: () {
-        builder.element('name', nest: name);
-        builder.element('time', nest: _isoUtc(ride.startedAtMs));
-      });
+      builder.element(
+        'metadata',
+        nest: () {
+          builder.element('name', nest: name);
+          builder.element('time', nest: _isoUtc(ride.startedAtMs));
+        },
+      );
 
-      builder.element('trk', nest: () {
-        builder.element('name', nest: name);
-        builder.element('type', nest: 'cycling');
+      builder.element(
+        'trk',
+        nest: () {
+          builder.element('name', nest: name);
+          builder.element('type', nest: 'cycling');
 
-        if (segments.isEmpty) {
-          // 没有可用点时也留一个空 trkseg，保证结构一致、可被解析。
-          builder.element('trkseg');
-          return;
-        }
-        for (final List<TrackPoint> segment in segments) {
-          builder.element('trkseg', nest: () {
-            for (final TrackPoint p in segment) {
-              _writeTrackPoint(builder, p);
-            }
-          });
-        }
-      });
+          if (segments.isEmpty) {
+            // 没有可用点时也留一个空 trkseg，保证结构一致、可被解析。
+            builder.element('trkseg');
+            return;
+          }
+          for (final List<TrackPoint> segment in segments) {
+            builder.element(
+              'trkseg',
+              nest: () {
+                for (final TrackPoint p in segment) {
+                  _writeTrackPoint(builder, p);
+                }
+              },
+            );
+          }
+        },
+      );
     },
   );
 
@@ -85,12 +94,20 @@ void _writeTrackPoint(XmlBuilder builder, TrackPoint p) {
       final int? cadence = p.cadence;
       if (hr == null && cadence == null) return;
 
-      builder.element('extensions', nest: () {
-        builder.element('gpxtpx:TrackPointExtension', nest: () {
-          if (hr != null) builder.element('gpxtpx:hr', nest: '$hr');
-          if (cadence != null) builder.element('gpxtpx:cad', nest: '$cadence');
-        });
-      });
+      builder.element(
+        'extensions',
+        nest: () {
+          builder.element(
+            'gpxtpx:TrackPointExtension',
+            nest: () {
+              if (hr != null) builder.element('gpxtpx:hr', nest: '$hr');
+              if (cadence != null) {
+                builder.element('gpxtpx:cad', nest: '$cadence');
+              }
+            },
+          );
+        },
+      );
     },
   );
 }
@@ -103,7 +120,8 @@ List<List<TrackPoint>> _splitSegments(List<TrackPoint> located) {
 
   for (final TrackPoint p in located) {
     final int? prev = prevTMs;
-    final bool needNew = current == null ||
+    final bool needNew =
+        current == null ||
         prev == null ||
         p.tMs - prev <= 0 ||
         p.tMs - prev > kGpsGapMs;

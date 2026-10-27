@@ -89,7 +89,9 @@ void main() {
         isFalse,
       );
       expect(
-        isGcj02TileSource('https://{s}.basemaps.cartocdn.com/x/{z}/{x}/{y}.png'),
+        isGcj02TileSource(
+          'https://{s}.basemaps.cartocdn.com/x/{z}/{x}/{y}.png',
+        ),
         isFalse,
       );
     });
@@ -105,12 +107,18 @@ void main() {
     });
 
     test('带端口与 userinfo 的地址取的是主机名', () {
-      expect(isGcj02TileSource('https://user@webrd01.is.autonavi.com:8080/x'), isTrue);
+      expect(
+        isGcj02TileSource('https://user@webrd01.is.autonavi.com:8080/x'),
+        isTrue,
+      );
     });
 
     // 子串判定的误判会导致轨迹白偏几百米，因此只看域名、不看路径这条要钉住。
     test('域名只出现在路径里的第三方地址不算 GCJ-02', () {
-      expect(isGcj02TileSource('https://example.org/autonavi.com/{z}'), isFalse);
+      expect(
+        isGcj02TileSource('https://example.org/autonavi.com/{z}'),
+        isFalse,
+      );
       expect(isGcj02TileSource('https://example.org/?src=amap.com'), isFalse);
     });
 

@@ -64,7 +64,10 @@ class HrZoneBar extends StatelessWidget {
                         // flex 至少为 1：占比小到 flex 取整成 0 时，`Expanded` 会被
                         // 当成非弹性子节点、量出零宽而整个区间从条上消失
                         // （已实测：0.05% 的区间宽度 0.0px，且无任何断言/异常）。
-                        flex: math.max(1, (breakdown.ratioOf(zone.index) * 1000).round()),
+                        flex: math.max(
+                          1,
+                          (breakdown.ratioOf(zone.index) * 1000).round(),
+                        ),
                         child: ColoredBox(color: zoneColors[zone.index - 1]),
                       ),
                 ],

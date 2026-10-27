@@ -49,7 +49,11 @@ class TrackPointDao {
   }
 
   Future<void> deleteByRide(int rideId) async {
-    await _db.delete('track_points', where: 'ride_id = ?', whereArgs: <Object?>[rideId]);
+    await _db.delete(
+      'track_points',
+      where: 'ride_id = ?',
+      whereArgs: <Object?>[rideId],
+    );
   }
 
   /// 全部轨迹点，按 ride_id 再按 t_ms 正序。备份导出用。

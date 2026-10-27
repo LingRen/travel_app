@@ -27,13 +27,12 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppSettings? settings = ref.watch(appSettingsProvider).value;
     if (settings == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final AppPalette palette = context.palette;
-    final DateTime now =
-        DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)());
+    final DateTime now = DateTime.fromMillisecondsSinceEpoch(
+      ref.read(nowProvider)(),
+    );
     final int? lastBackup = ref.watch(lastBackupAtProvider).value;
 
     return Scaffold(
@@ -51,10 +50,7 @@ class SettingsPage extends ConsumerWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: <Widget>[
-                  const _GroupHeader(
-                    '身 体',
-                    hint: '用于心率区间与功率估算',
-                  ),
+                  const _GroupHeader('身 体', hint: '用于心率区间与功率估算'),
                   _SettingsRow(
                     key: const Key('settings-max-hr'),
                     label: '最大心率',
@@ -214,14 +210,14 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _openBackup(BuildContext context) => showPaperSheet<void>(
-        context: context,
-        builder: (BuildContext sheetContext) => PaperSheet(
-          title: '备份与恢复',
-          subtitle: '导出一份归档，或从归档恢复全部记录',
-          onClose: () => Navigator.of(sheetContext).pop(),
-          child: const BackupSection(showHeader: false),
-        ),
-      );
+    context: context,
+    builder: (BuildContext sheetContext) => PaperSheet(
+      title: '备份与恢复',
+      subtitle: '导出一份归档，或从归档恢复全部记录',
+      onClose: () => Navigator.of(sheetContext).pop(),
+      child: const BackupSection(showHeader: false),
+    ),
+  );
 
   Future<void> _save(WidgetRef ref, AppSettings settings) async {
     await ref.read(settingsRepositoryProvider).save(settings);
@@ -236,21 +232,20 @@ class SettingsPage extends ConsumerWidget {
     required String label,
     required TextInputType keyboardType,
     required String? Function(String) validate,
-  }) =>
-      showPaperSheet<String>(
-        context: context,
-        builder: (BuildContext sheetContext) => PaperSheet(
-          title: title,
-          subtitle: helper,
-          onClose: () => Navigator.of(sheetContext).pop(),
-          child: _TextEditForm(
-            initial: initial,
-            label: label,
-            keyboardType: keyboardType,
-            validate: validate,
-          ),
-        ),
-      );
+  }) => showPaperSheet<String>(
+    context: context,
+    builder: (BuildContext sheetContext) => PaperSheet(
+      title: title,
+      subtitle: helper,
+      onClose: () => Navigator.of(sheetContext).pop(),
+      child: _TextEditForm(
+        initial: initial,
+        label: label,
+        keyboardType: keyboardType,
+        validate: validate,
+      ),
+    ),
+  );
 
   static String _unitLabel(DistanceUnit unit) =>
       unit == DistanceUnit.mile ? '英里' : '公里';
@@ -346,11 +341,7 @@ class _SettingsRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: kSpaceS),
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: palette.muted,
-                ),
+                Icon(Icons.chevron_right, size: 18, color: palette.muted),
               ],
             ),
           ),
@@ -374,12 +365,7 @@ class _AboutRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        kSpaceL,
-        kSpaceM,
-        kSpaceL,
-        kSpaceM,
-      ),
+      padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
       child: Row(
         children: <Widget>[
           Expanded(
@@ -392,10 +378,7 @@ class _AboutRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            '数据仅存本机',
-            style: TextStyle(fontSize: 12, color: palette.muted),
-          ),
+          Text('数据仅存本机', style: TextStyle(fontSize: 12, color: palette.muted)),
         ],
       ),
     );
@@ -415,29 +398,18 @@ class _ThemeSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-            kSpaceL,
-            kSpaceM,
-            kSpaceL,
-            0,
-          ),
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
           child: Row(
             children: <Widget>[
               Expanded(
                 child: Text(
                   '主题色',
-                  style: TextStyle(
-                    fontSize: kFontSubtitle,
-                    color: palette.ink,
-                  ),
+                  style: TextStyle(fontSize: kFontSubtitle, color: palette.ink),
                 ),
               ),
               Text(
                 '当前 ${settings.accent.label}',
-                style: TextStyle(
-                  fontSize: kFontMeta,
-                  color: palette.muted,
-                ),
+                style: TextStyle(fontSize: kFontMeta, color: palette.muted),
               ),
             ],
           ),
@@ -524,11 +496,7 @@ class _AccentDot extends StatelessWidget {
                   ),
                 ),
                 child: selected
-                    ? Icon(
-                        Icons.check,
-                        size: 20,
-                        color: palette.onAccent,
-                      )
+                    ? Icon(Icons.check, size: 20, color: palette.onAccent)
                     : null,
               ),
               const SizedBox(height: kSpaceXs),
@@ -581,14 +549,13 @@ class _SensorSectionState extends ConsumerState<_SensorSection> {
   Future<void> _connect(SensorKind kind) async {
     final DiscoveredDevice? device =
         await showModalBottomSheet<DiscoveredDevice>(
-      context: context,
-      builder: (BuildContext context) => DevicePickerSheet(kind: kind),
-    );
-    if (device == null) return;
-    await ref.read(sensorPairingProvider).save(
-          kind,
-          PairedSensor(id: device.device.id, name: device.name),
+          context: context,
+          builder: (BuildContext context) => DevicePickerSheet(kind: kind),
         );
+    if (device == null) return;
+    await ref
+        .read(sensorPairingProvider)
+        .save(kind, PairedSensor(id: device.device.id, name: device.name));
     await _reload();
   }
 
@@ -683,11 +650,7 @@ class _SensorRow extends StatelessWidget {
                           ),
                         )
                       else
-                        Icon(
-                          Icons.add,
-                          size: 16,
-                          color: palette.accentInk,
-                        ),
+                        Icon(Icons.add, size: 16, color: palette.accentInk),
                       const SizedBox(width: kSpaceS),
                       if (connected)
                         Flexible(
@@ -717,26 +680,17 @@ class _SensorRow extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: palette.muted,
                       minimumSize: const Size(44, 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: kSpaceS,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: kSpaceS),
                     ),
                     child: const Text('断开'),
                   ),
                 ] else ...<Widget>[
                   Text(
                     '未连接',
-                    style: TextStyle(
-                      fontSize: kFontMeta,
-                      color: palette.muted,
-                    ),
+                    style: TextStyle(fontSize: kFontMeta, color: palette.muted),
                   ),
                   const SizedBox(width: kSpaceXs),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: palette.muted,
-                  ),
+                  Icon(Icons.chevron_right, size: 18, color: palette.muted),
                 ],
               ],
             ),
@@ -800,28 +754,22 @@ class _TextEditFormState extends State<_TextEditForm> {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            keyboardType: widget.keyboardType,
-            decoration: InputDecoration(
-              labelText: widget.label,
-              errorText: _error,
-            ),
-            onSubmitted: (_) => _submit(),
-          ),
-          const SizedBox(height: kSpaceL),
-          SizedBox(
-            height: 52,
-            child: FilledButton(
-              onPressed: _submit,
-              child: const Text('保存'),
-            ),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: widget.keyboardType,
+        decoration: InputDecoration(labelText: widget.label, errorText: _error),
+        onSubmitted: (_) => _submit(),
+      ),
+      const SizedBox(height: kSpaceL),
+      SizedBox(
+        height: 52,
+        child: FilledButton(onPressed: _submit, child: const Text('保存')),
+      ),
+    ],
+  );
 }
 
 class _ChoiceRow extends StatelessWidget {
@@ -848,14 +796,10 @@ class _ChoiceRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: kFontSubtitle,
-                  color: palette.ink,
-                ),
+                style: TextStyle(fontSize: kFontSubtitle, color: palette.ink),
               ),
             ),
-            if (selected)
-              Icon(Icons.check, size: 20, color: palette.accentInk),
+            if (selected) Icon(Icons.check, size: 20, color: palette.accentInk),
           ],
         ),
       ),
@@ -933,7 +877,8 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
   Future<void> _seed() async {
     final bool ok = await _confirm(
       title: '生成 $_seedCount 条模拟记录？',
-      body: '会在最近两个半月里铺一批假记录，走的是和真实记录一样的写入路径。'
+      body:
+          '会在最近两个半月里铺一批假记录，走的是和真实记录一样的写入路径。'
           '上次生成的模拟记录会被覆盖成同一批（不会越点越多），真实记录不动。',
       action: '生成',
     );
@@ -969,8 +914,9 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
       _message = null;
     });
     try {
-      final int count =
-          await deleteAllWorkouts(ref.read(workoutRepositoryProvider));
+      final int count = await deleteAllWorkouts(
+        ref.read(workoutRepositoryProvider),
+      );
       _setMessage('已删除 $count 条记录');
     } catch (error) {
       _setMessage('删除失败：$error');

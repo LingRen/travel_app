@@ -38,7 +38,10 @@ double? maxSmoothedSpeed(List<double?> speeds, int window) {
 
 /// 移动时长与静止时长（秒）。
 class MovingStats {
-  const MovingStats({required this.movingSeconds, required this.stationarySeconds});
+  const MovingStats({
+    required this.movingSeconds,
+    required this.stationarySeconds,
+  });
 
   final double movingSeconds;
   final double stationarySeconds;
@@ -53,7 +56,10 @@ class MovingStats {
 /// - 两端都有坐标、却构成 GPS 跳变（隐含速度超过 [kMaxPlausibleSpeedMps]）。
 ///   跳变区间的距离已被 [segmentDistanceMeters] 剔除，时长也必须一并剔除，
 ///   否则移动均速（距离 / 移动时长）会被低估。
-MovingStats splitMovingStationary(List<TrackPoint> points, double thresholdMps) {
+MovingStats splitMovingStationary(
+  List<TrackPoint> points,
+  double thresholdMps,
+) {
   double moving = 0;
   double stationary = 0;
   for (int i = 1; i < points.length; i++) {
@@ -62,7 +68,9 @@ MovingStats splitMovingStationary(List<TrackPoint> points, double thresholdMps) 
     final int dtMs = cur.tMs - prev.tMs;
     if (dtMs <= 0 || dtMs > kGpsGapMs) continue;
     // 只有两端都有坐标时才判得出跳变；缺坐标的区间退回纯时间判定。
-    if (prev.hasPosition && cur.hasPosition && !isTrustedSegment(prev, cur)) continue;
+    if (prev.hasPosition && cur.hasPosition && !isTrustedSegment(prev, cur)) {
+      continue;
+    }
     final double? v = cur.speedMps;
     if (v == null) continue;
     final double dt = dtMs / 1000.0;

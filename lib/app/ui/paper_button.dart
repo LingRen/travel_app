@@ -54,21 +54,21 @@ class PaperButton extends StatelessWidget {
 
     final Widget button = switch (variant) {
       PaperButtonVariant.filled => FilledButton(
-          onPressed: onPressed,
-          child: child,
-        ),
+        onPressed: onPressed,
+        child: child,
+      ),
       PaperButtonVariant.ghost => TextButton(
-          onPressed: onPressed,
-          style: TextButton.styleFrom(
-            foregroundColor: palette.accentInk,
-            minimumSize: const Size(0, 52),
-            padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(kRadiusButton)),
-            ),
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: palette.accentInk,
+          minimumSize: const Size(0, 52),
+          padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(kRadiusButton)),
           ),
-          child: child,
         ),
+        child: child,
+      ),
     };
 
     return SizedBox(

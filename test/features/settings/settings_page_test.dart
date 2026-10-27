@@ -84,8 +84,7 @@ class _FakeBleScanner implements BleScanner {
   @override
   Future<List<DiscoveredDevice>> scan({
     Duration timeout = const Duration(seconds: 10),
-  }) async =>
-      const <DiscoveredDevice>[];
+  }) async => const <DiscoveredDevice>[];
 }
 
 class _FakeBackupStore implements BackupStore {
@@ -147,17 +146,17 @@ class _FakeBackupIo implements BackupIo {
 }
 
 Uint8List emptyArchive() => buildBackupArchive(
-      rides: const <Workout>[],
-      points: const <TrackPoint>[],
-      exportedAtMs: 0,
-    );
+  rides: const <Workout>[],
+  points: const <TrackPoint>[],
+  exportedAtMs: 0,
+);
 
 Uint8List wrongVersionArchive() => buildBackupArchive(
-      rides: const <Workout>[],
-      points: const <TrackPoint>[],
-      exportedAtMs: 0,
-      schemaVersion: kBackupSchemaVersion + 1,
-    );
+  rides: const <Workout>[],
+  points: const <TrackPoint>[],
+  exportedAtMs: 0,
+  schemaVersion: kBackupSchemaVersion + 1,
+);
 
 List<String> backupSectionTexts(WidgetTester tester) => tester
     .widgetList<Text>(
@@ -192,17 +191,18 @@ void main() {
   });
 
   Widget wrap({AppSettings current = _settings}) => ProviderScope(
-        overrides: <Override>[
-          settingsRepositoryProvider.overrideWithValue(settings),
-          sensorPairingProvider.overrideWithValue(pairing),
-          bleScannerProvider.overrideWithValue(_FakeBleScanner()),
-          backupStoreProvider.overrideWithValue(store),
-          backupIoProvider.overrideWithValue(io),
-          appSettingsProvider
-              .overrideWithValue(AsyncValue<AppSettings>.data(current)),
-        ],
-        child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
-      );
+    overrides: <Override>[
+      settingsRepositoryProvider.overrideWithValue(settings),
+      sensorPairingProvider.overrideWithValue(pairing),
+      bleScannerProvider.overrideWithValue(_FakeBleScanner()),
+      backupStoreProvider.overrideWithValue(store),
+      backupIoProvider.overrideWithValue(io),
+      appSettingsProvider.overrideWithValue(
+        AsyncValue<AppSettings>.data(current),
+      ),
+    ],
+    child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
+  );
 
   Future<void> pumpSettings(
     WidgetTester tester, {
@@ -221,16 +221,13 @@ void main() {
   }
 
   Finder sheetTextField() => find.descendant(
-        of: find.byType(PaperSheet),
-        matching: find.byType(TextField),
-      );
+    of: find.byType(PaperSheet),
+    matching: find.byType(TextField),
+  );
 
   Future<void> saveSheet(WidgetTester tester) async {
     await tester.tap(
-      find.descendant(
-        of: find.byType(PaperSheet),
-        matching: find.text('保存'),
-      ),
+      find.descendant(of: find.byType(PaperSheet), matching: find.text('保存')),
     );
     await tester.pumpAndSettle();
   }
@@ -367,10 +364,11 @@ void main() {
     expect(find.text('选择心率设备'), findsNothing);
   });
 
-  testWidgets('已配对传感器显示设备名与已连接，断开后回到未连接',
-      (WidgetTester tester) async {
-    pairing.stored[SensorKind.heartRate] =
-        const PairedSensor(id: 'AA:01', name: 'FIT 3');
+  testWidgets('已配对传感器显示设备名与已连接，断开后回到未连接', (WidgetTester tester) async {
+    pairing.stored[SensorKind.heartRate] = const PairedSensor(
+      id: 'AA:01',
+      name: 'FIT 3',
+    );
 
     await pumpSettings(tester);
 

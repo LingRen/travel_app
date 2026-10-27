@@ -79,17 +79,17 @@ class RecordingSession {
     this.weightKg = kDefaultRiderWeightKg,
     this.activityType = ActivityType.cycling,
     List<TrackPoint> recentTrack = const <TrackPoint>[],
-  })  : _elapsedMs = initialElapsedMs,
-        _distanceM = initialDistanceM,
-        _elevationGainM = initialElevationGainM,
-        _cueDetector = CueDetector(
-          initialDistanceM: initialDistanceM,
-          initialElapsedMs: initialElapsedMs,
-          activityType: activityType,
-        ),
-        _lastWritten = lastWritten,
-        _lastTickMs = resumedAtMs ?? startedAtMs,
-        _lastWrittenMs = lastWritten?.tMs ?? startedAtMs {
+  }) : _elapsedMs = initialElapsedMs,
+       _distanceM = initialDistanceM,
+       _elevationGainM = initialElevationGainM,
+       _cueDetector = CueDetector(
+         initialDistanceM: initialDistanceM,
+         initialElapsedMs: initialElapsedMs,
+         activityType: activityType,
+       ),
+       _lastWritten = lastWritten,
+       _lastTickMs = resumedAtMs ?? startedAtMs,
+       _lastWrittenMs = lastWritten?.tMs ?? startedAtMs {
     // 崩溃恢复时把已落盘的那段轨迹接上，否则恢复后缩略图是空的，
     // 要等新点攒够才慢慢长出来。走同一条抽稀路径，不另写一套。
     // 落盘点之间的真实断点按时间差还原（这批点没被抽稀过，2 秒一点）。
@@ -210,17 +210,17 @@ class RecordingSession {
   bool get shouldFlush => _buffer.isFull;
 
   RecordingSnapshot get snapshot => RecordingSnapshot(
-        phase: _phase,
-        elapsedMs: _elapsedMs,
-        distanceM: _distanceM,
-        currentSpeedMps: _currentSpeedMps,
-        hr: _hr,
-        cadence: _cadence?.round(),
-        power: _effectivePower,
-        pointCount: _pointCount,
-        currentAltitudeM: _currentAltitudeM,
-        elevationGainM: _elevationGainM,
-      );
+    phase: _phase,
+    elapsedMs: _elapsedMs,
+    distanceM: _distanceM,
+    currentSpeedMps: _currentSpeedMps,
+    hr: _hr,
+    cadence: _cadence?.round(),
+    power: _effectivePower,
+    pointCount: _pointCount,
+    currentAltitudeM: _currentAltitudeM,
+    elevationGainM: _elevationGainM,
+  );
 
   /// 取出并清空待落盘的点。返回非空列表时调用方应写库。
   List<TrackPoint> takePendingPoints() => _buffer.drain();
@@ -232,8 +232,7 @@ class RecordingSession {
     final LocationFix? prev = _lastFix;
     // 上一次定位到这里已经超过断点阈值：这次是真丢了信号，而不是抽稀造成的
     // 时间跨度。缩略图要靠它断开，不能等画的时候再按时间猜。
-    final bool gpsLostBefore =
-        prev != null && fix.tMs - prev.tMs > kGpsGapMs;
+    final bool gpsLostBefore = prev != null && fix.tMs - prev.tMs > kGpsGapMs;
     double segmentM = 0;
     if (prev != null && prev.hasPosition) {
       segmentM = segmentDistanceMeters(_toPoint(prev), _toPoint(fix));
@@ -252,8 +251,10 @@ class RecordingSession {
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
       // 落盘的速度同样过死区：结算里的移动/静止时长与平均速度都读这个值，
       // 写原始幻影速度的话，停车十分钟会被算成十分钟的移动时间。
-      _write(_toPoint(fix, speedMps: _currentSpeedMps),
-          gpsLostBefore: gpsLostBefore);
+      _write(
+        _toPoint(fix, speedMps: _currentSpeedMps),
+        gpsLostBefore: gpsLostBefore,
+      );
     } else if (gpsLostBefore) {
       // 这个点没落盘（几乎没位移），但它标记的断点不能丢：留给下一个落盘点。
       _liveBreakPending = true;
@@ -303,8 +304,12 @@ class RecordingSession {
       return;
     }
     final LocationFix anchor = _distanceAnchor ??= prev;
-    final double d =
-        haversineMeters(anchor.lat!, anchor.lon!, fix.lat!, fix.lon!);
+    final double d = haversineMeters(
+      anchor.lat!,
+      anchor.lon!,
+      fix.lat!,
+      fix.lon!,
+    );
     if (d < kDistanceNoiseFloorM) return;
     _distanceM += d;
     _distanceAnchor = fix;
@@ -364,7 +369,8 @@ class RecordingSession {
     final double? prev = _lastPlausibleAltM;
     if (prev != null) {
       final double change = altitude - prev;
-      final bool implausible = change.abs() >= kSuspectElevationJumpM &&
+      final bool implausible =
+          change.abs() >= kSuspectElevationJumpM &&
           (segmentM <= 0 || change.abs() / segmentM > kMaxPlausibleGrade);
       if (implausible) return;
     }
@@ -430,11 +436,13 @@ class RecordingSession {
   /// 计算，一秒一次的粒度足够，也让判据与界面刷新同一节拍、测试可确定。
   void _collectCues() {
     if (_phase != RecordingPhase.recording) return;
-    _pendingCues.addAll(_cueDetector.update(
-      distanceM: _distanceM,
-      elapsedMs: _elapsedMs,
-      speedMps: _currentSpeedMps,
-    ));
+    _pendingCues.addAll(
+      _cueDetector.update(
+        distanceM: _distanceM,
+        elapsedMs: _elapsedMs,
+        speedMps: _currentSpeedMps,
+      ),
+    );
   }
 
   /// 暂停采样。暂停期间不产生轨迹点，时长也不增长。
@@ -503,13 +511,15 @@ class RecordingSession {
     final bool gpsLost = last == null || nowMs - last.tMs >= kGpsGapMs;
     if (!gpsLost || nowMs - _lastWrittenMs < kMaxWriteIntervalMs) return;
 
-    _write(TrackPoint(
-      rideId: rideId,
-      tMs: nowMs,
-      hr: _hr,
-      cadence: _cadence?.round(),
-      powerW: _power,
-    ));
+    _write(
+      TrackPoint(
+        rideId: rideId,
+        tMs: nowMs,
+        hr: _hr,
+        cadence: _cadence?.round(),
+        powerW: _power,
+      ),
+    );
   }
 
   void _write(TrackPoint point, {bool gpsLostBefore = false}) {
@@ -576,15 +586,15 @@ class RecordingSession {
   }
 
   TrackPoint _toPoint(LocationFix fix, {double? speedMps}) => TrackPoint(
-        rideId: rideId,
-        tMs: fix.tMs,
-        lat: fix.lat,
-        lon: fix.lon,
-        altitudeM: fix.altitudeM,
-        speedMps: speedMps ?? fix.speedMps,
-        accuracyM: fix.accuracyM,
-        hr: _hr,
-        cadence: _cadence?.round(),
-        powerW: _effectivePower,
-      );
+    rideId: rideId,
+    tMs: fix.tMs,
+    lat: fix.lat,
+    lon: fix.lon,
+    altitudeM: fix.altitudeM,
+    speedMps: speedMps ?? fix.speedMps,
+    accuracyM: fix.accuracyM,
+    hr: _hr,
+    cadence: _cadence?.round(),
+    powerW: _effectivePower,
+  );
 }

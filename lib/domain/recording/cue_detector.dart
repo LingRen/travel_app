@@ -31,9 +31,9 @@ class CueDetector {
     double initialDistanceM = 0,
     int initialElapsedMs = 0,
     this.activityType = ActivityType.cycling,
-  })  : _lapKm = initialDistanceM ~/ kCueLapM,
-        _tensKm = initialDistanceM ~/ kCueDistanceTierM,
-        _lapStartElapsedMs = initialElapsedMs;
+  }) : _lapKm = initialDistanceM ~/ kCueLapM,
+       _tensKm = initialDistanceM ~/ kCueDistanceTierM,
+       _lapStartElapsedMs = initialElapsedMs;
 
   /// 本次运动的类型。决定速度跨档提示是否启用（只有骑行有「跨速档」概念）。
   final ActivityType activityType;
@@ -64,13 +64,15 @@ class CueDetector {
     while (_lapKm < distanceM ~/ kCueLapM) {
       _lapKm++;
       final double lapSeconds = (elapsedMs - _lapStartElapsedMs) / 1000.0;
-      cues.add(LapCue(
-        lapKm: _lapKm,
-        durationS: lapSeconds.round(),
-        // 一公里的边界到边界就是整 1000m，均速直接由它除以耗时得到；耗时非正
-        // （同一拍里跨过多公里）时按 0 处理，不做除零。
-        avgSpeedMps: lapSeconds > 0 ? kCueLapM / lapSeconds : 0,
-      ));
+      cues.add(
+        LapCue(
+          lapKm: _lapKm,
+          durationS: lapSeconds.round(),
+          // 一公里的边界到边界就是整 1000m，均速直接由它除以耗时得到；耗时非正
+          // （同一拍里跨过多公里）时按 0 处理，不做除零。
+          avgSpeedMps: lapSeconds > 0 ? kCueLapM / lapSeconds : 0,
+        ),
+      );
       _lapStartElapsedMs = elapsedMs;
     }
 

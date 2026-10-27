@@ -107,18 +107,17 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? accentInk,
     Color? warning,
     Color? danger,
-  }) =>
-      AppPalette(
-        paper: paper ?? this.paper,
-        sheet: sheet ?? this.sheet,
-        ink: ink ?? this.ink,
-        muted: muted ?? this.muted,
-        hairline: hairline ?? this.hairline,
-        accent: accent ?? this.accent,
-        accentInk: accentInk ?? this.accentInk,
-        warning: warning ?? this.warning,
-        danger: danger ?? this.danger,
-      );
+  }) => AppPalette(
+    paper: paper ?? this.paper,
+    sheet: sheet ?? this.sheet,
+    ink: ink ?? this.ink,
+    muted: muted ?? this.muted,
+    hairline: hairline ?? this.hairline,
+    accent: accent ?? this.accent,
+    accentInk: accentInk ?? this.accentInk,
+    warning: warning ?? this.warning,
+    danger: danger ?? this.danger,
+  );
 
   @override
   AppPalette lerp(ThemeExtension<AppPalette>? other, double t) {
@@ -157,10 +156,26 @@ const double kRouteCasingWidth = 3;
 
 /// 瓦片降饱和矩阵：保留 55% 饱和度，再轻微提亮，配合纸色薄罩使用。
 const List<double> kMapTileColorMatrix = <double>[
-  0.6457, 0.3218, 0.0325, 0, 6,
-  0.0957, 0.8718, 0.0325, 0, 3,
-  0.0957, 0.3218, 0.5825, 0, -4,
-  0, 0, 0, 1, 0,
+  0.6457,
+  0.3218,
+  0.0325,
+  0,
+  6,
+  0.0957,
+  0.8718,
+  0.0325,
+  0,
+  3,
+  0.0957,
+  0.3218,
+  0.5825,
+  0,
+  -4,
+  0,
+  0,
+  0,
+  1,
+  0,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -188,7 +203,11 @@ const List<String> kSansFallback = <String>[
 
 /// 数据等宽字体栈。
 const String kMonoFamily = 'IBM Plex Mono';
-const List<String> kMonoFallback = <String>['Menlo', 'Courier New', 'monospace'];
+const List<String> kMonoFallback = <String>[
+  'Menlo',
+  'Courier New',
+  'monospace',
+];
 
 /// 等宽数字的字形特性。只影响数字，字母标点不受影响。
 const List<FontFeature> kTabularFigures = <FontFeature>[
@@ -347,38 +366,39 @@ const BorderSide kHairline = BorderSide(color: kHairlineColor, width: 1);
 
 ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.cinnabar]) {
   final Color accentInk = accent.inkColor;
-  final ColorScheme scheme = ColorScheme.fromSeed(
-    seedColor: accentInk,
-    brightness: Brightness.light,
-  ).copyWith(
-    primary: accentInk,
-    onPrimary: kPaper,
-    primaryContainer: accentInk.withValues(alpha: 0.12),
-    onPrimaryContainer: accentInk,
-    secondary: accentInk,
-    onSecondary: kPaper,
-    error: kAppDanger,
-    onError: kPaper,
-    errorContainer: kAppDanger.withValues(alpha: 0.12),
-    onErrorContainer: kAppDanger,
-    surface: kSheet,
-    onSurface: kInk,
-    surfaceDim: kPaper,
-    surfaceBright: kSheet,
-    surfaceContainerLowest: kSheet,
-    surfaceContainerLow: kSheet,
-    surfaceContainer: kSheet,
-    surfaceContainerHigh: kPaperRaised,
-    surfaceContainerHighest: kPaperRaised,
-    onSurfaceVariant: kMutedInk,
-    outline: kHairlineColor,
-    outlineVariant: kHairlineColor,
-    surfaceTint: Colors.transparent,
-    inverseSurface: kInk,
-    onInverseSurface: kPaper,
-    inversePrimary: accentInk,
-    scrim: kInk.withValues(alpha: 0.4),
-  );
+  final ColorScheme scheme =
+      ColorScheme.fromSeed(
+        seedColor: accentInk,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: accentInk,
+        onPrimary: kPaper,
+        primaryContainer: accentInk.withValues(alpha: 0.12),
+        onPrimaryContainer: accentInk,
+        secondary: accentInk,
+        onSecondary: kPaper,
+        error: kAppDanger,
+        onError: kPaper,
+        errorContainer: kAppDanger.withValues(alpha: 0.12),
+        onErrorContainer: kAppDanger,
+        surface: kSheet,
+        onSurface: kInk,
+        surfaceDim: kPaper,
+        surfaceBright: kSheet,
+        surfaceContainerLowest: kSheet,
+        surfaceContainerLow: kSheet,
+        surfaceContainer: kSheet,
+        surfaceContainerHigh: kPaperRaised,
+        surfaceContainerHighest: kPaperRaised,
+        onSurfaceVariant: kMutedInk,
+        outline: kHairlineColor,
+        outlineVariant: kHairlineColor,
+        surfaceTint: Colors.transparent,
+        inverseSurface: kInk,
+        onInverseSurface: kPaper,
+        inversePrimary: accentInk,
+        scrim: kInk.withValues(alpha: 0.4),
+      );
 
   return ThemeData(
     useMaterial3: true,
@@ -544,9 +564,8 @@ ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.cinnabar]) {
               : Colors.transparent,
         ),
         foregroundColor: WidgetStateProperty.resolveWith(
-          (Set<WidgetState> states) => states.contains(WidgetState.selected)
-              ? kPaper
-              : kMutedInk,
+          (Set<WidgetState> states) =>
+              states.contains(WidgetState.selected) ? kPaper : kMutedInk,
         ),
         side: const WidgetStatePropertyAll<BorderSide>(kHairline),
         shape: const WidgetStatePropertyAll<OutlinedBorder>(

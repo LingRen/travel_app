@@ -42,69 +42,66 @@ Workout ride(
   int? startedAtMs,
   WorkoutSummary? summary,
   ActivityType activityType = ActivityType.cycling,
-}) =>
-    Workout(
-      id: id,
-      startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
-      endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-      status: WorkoutStatus.finished,
-      title: title,
-      activityType: activityType,
-      summary: summary ?? _summary,
-    );
+}) => Workout(
+  id: id,
+  startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
+  endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
+  status: WorkoutStatus.finished,
+  title: title,
+  activityType: activityType,
+  summary: summary ?? _summary,
+);
 
 List<TrackPoint> points() => <TrackPoint>[
-      for (int i = 0; i < 4; i++)
-        TrackPoint(
-          rideId: 1,
-          tMs: 1000 + i * 1000,
-          lat: 31.0 + i * 0.0001,
-          lon: 121.0,
-          speedMps: 4.0 + i,
-        ),
-    ];
+  for (int i = 0; i < 4; i++)
+    TrackPoint(
+      rideId: 1,
+      tMs: 1000 + i * 1000,
+      lat: 31.0 + i * 0.0001,
+      lon: 121.0,
+      speedMps: 4.0 + i,
+    ),
+];
 
 /// 点卡片进入详情页时要用的假详情：标题为空，因此 AppBar 会退回 `骑行详情`。
 WorkoutDetail detailFor(int id) => WorkoutDetail(
-      ride: Workout(
-        id: id,
-        startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
-        endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
-        status: WorkoutStatus.finished,
-      ),
-      points: const <TrackPoint>[],
-    );
+  ride: Workout(
+    id: id,
+    startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
+    endedAtMs: DateTime(2026, 9, 21, 9).millisecondsSinceEpoch,
+    status: WorkoutStatus.finished,
+  ),
+  points: const <TrackPoint>[],
+);
 
 Widget wrap({
   required List<Workout> rides,
   List<TrackPoint>? ridePoints,
   AppSettings settings = _settings,
   WorkoutDetail? detail,
-}) =>
-    ProviderScope(
-      overrides: <Override>[
-        // 与真实 provider 同口径：筛选只过滤类型，null（全部）时原样返回。
-        historyRidesProvider.overrideWith((Ref ref) {
-          final ActivityType? filter = ref.watch(historyFilterProvider);
-          return filter == null
-              ? rides
-              : rides
-                    .where((Workout r) => r.activityType == filter)
-                    .toList();
-        }),
-        appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
-        // id 为 null 的记录根本不会查询轨迹点（`_MiniCurve` 直接返回占位），
-        // 这里也跳过，否则 `r.id!` 会在建 ProviderScope 时就抛。
-        for (final Workout r in rides)
-          if (r.id != null)
-            ridePointsProvider(r.id!).overrideWith(
-              (Ref ref) => ridePoints ?? const <TrackPoint>[],
-            ),
-        if (detail != null)
-          rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
-      ],
-      child: MaterialApp(theme: buildAppTheme(), home: const HistoryPage()),
-    );
+}) => ProviderScope(
+  overrides: <Override>[
+    // 与真实 provider 同口径：筛选只过滤类型，null（全部）时原样返回。
+    historyRidesProvider.overrideWith((Ref ref) {
+      final ActivityType? filter = ref.watch(historyFilterProvider);
+      return filter == null
+          ? rides
+          : rides.where((Workout r) => r.activityType == filter).toList();
+    }),
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(settings),
+    ),
+    // id 为 null 的记录根本不会查询轨迹点（`_MiniCurve` 直接返回占位），
+    // 这里也跳过，否则 `r.id!` 会在建 ProviderScope 时就抛。
+    for (final Workout r in rides)
+      if (r.id != null)
+        ridePointsProvider(r.id!)
+            .overrideWith((Ref ref) => ridePoints ?? const <TrackPoint>[]),
+    if (detail != null)
+      rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
+  ],
+  child: MaterialApp(theme: buildAppTheme(), home: const HistoryPage()),
+);
 
 /// 历史页是 `ListView.builder`，默认 800x600 的测试视口只懒构建前几屏，
 /// 后面的卡片根本不会被 build。多卡片用例必须先把视口调高，否则断言会退化成
@@ -119,12 +116,14 @@ Future<void> pumpHistory(
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(wrap(
-    rides: rides,
-    ridePoints: ridePoints,
-    settings: settings,
-    detail: detail,
-  ));
+  await tester.pumpWidget(
+    wrap(
+      rides: rides,
+      ridePoints: ridePoints,
+      settings: settings,
+      detail: detail,
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -147,7 +146,11 @@ void main() {
     await pumpHistory(
       tester,
       rides: <Workout>[
-        ride(2, title: '第二次', startedAtMs: DateTime(2026, 9, 22, 8).millisecondsSinceEpoch),
+        ride(
+          2,
+          title: '第二次',
+          startedAtMs: DateTime(2026, 9, 22, 8).millisecondsSinceEpoch,
+        ),
         ride(1, title: '第一次'),
       ],
       ridePoints: points(),
@@ -351,7 +354,11 @@ void main() {
   });
 
   testWidgets('有标题时标题与日期列各自渲染', (WidgetTester tester) async {
-    await pumpHistory(tester, rides: <Workout>[ride(1, title: '晨骑')], ridePoints: points());
+    await pumpHistory(
+      tester,
+      rides: <Workout>[ride(1, title: '晨骑')],
+      ridePoints: points(),
+    );
 
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.text('09.21'), findsOneWidget);
@@ -527,22 +534,25 @@ void main() {
     test('样本不足 2 个时不画任何线段', () {
       expect(drawnMiniCurveSegments(const <CurveSample>[]), isEmpty);
       expect(
-        drawnMiniCurveSegments(
-          const <CurveSample>[CurveSample(xSeconds: 0, y: 5, segment: 0)],
-        ),
+        drawnMiniCurveSegments(const <CurveSample>[
+          CurveSample(xSeconds: 0, y: 5, segment: 0),
+        ]),
         isEmpty,
       );
     });
 
     test('正常输入时线段数等于样本数减一', () {
-      final List<CurveSample> samples =
-          buildCurve(points(), metric: CurveMetric.speed);
+      final List<CurveSample> samples = buildCurve(
+        points(),
+        metric: CurveMetric.speed,
+      );
 
       expect(samples.length, 4);
-      expect(
-        drawnMiniCurveSegments(samples),
-        <(int, int)>[(0, 1), (1, 2), (2, 3)],
-      );
+      expect(drawnMiniCurveSegments(samples), <(int, int)>[
+        (0, 1),
+        (1, 2),
+        (2, 3),
+      ]);
       expect(drawnMiniCurveSegments(samples).length, samples.length - 1);
     });
 

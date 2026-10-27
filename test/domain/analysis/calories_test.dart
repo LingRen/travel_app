@@ -28,10 +28,10 @@ void main() {
   });
 
   test('没有心率数据时返回 null', () {
-    final HrZoneBreakdown zones = hrZoneBreakdown(
-      <TrackPoint>[TrackPoint(rideId: 1, tMs: 0), TrackPoint(rideId: 1, tMs: 1000)],
-      190,
-    );
+    final HrZoneBreakdown zones = hrZoneBreakdown(<TrackPoint>[
+      TrackPoint(rideId: 1, tMs: 0),
+      TrackPoint(rideId: 1, tMs: 1000),
+    ], 190);
     expect(estimateCalories(zones: zones, weightKg: 70), isNull);
   });
 

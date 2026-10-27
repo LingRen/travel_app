@@ -15,11 +15,13 @@ final StateProvider<ActivityType?> historyFilterProvider =
 /// 已完成的运动，按开始时间倒序（排序由 `WorkoutDao.listFinished` 保证）。
 final FutureProvider<List<Workout>> historyRidesProvider =
     FutureProvider<List<Workout>>((Ref ref) {
-  // 依赖数据版本号：结束运动、崩溃结算、改标题、删除、恢复备份后自动重查。
-  ref.watch(rideDataRevisionProvider);
-  final ActivityType? filter = ref.watch(historyFilterProvider);
-  return ref.watch(workoutRepositoryProvider).listFinished(activityType: filter);
-});
+      // 依赖数据版本号：结束运动、崩溃结算、改标题、删除、恢复备份后自动重查。
+      ref.watch(rideDataRevisionProvider);
+      final ActivityType? filter = ref.watch(historyFilterProvider);
+      return ref
+          .watch(workoutRepositoryProvider)
+          .listFinished(activityType: filter);
+    });
 
 /// 某次骑行的轨迹点，供卡片上的迷你曲线使用。
 ///
@@ -27,6 +29,6 @@ final FutureProvider<List<Workout>> historyRidesProvider =
 /// 记录多起来之后不会一次把所有轨迹点读进内存。
 final FutureProviderFamily<List<TrackPoint>, int> ridePointsProvider =
     FutureProvider.family<List<TrackPoint>, int>((Ref ref, int rideId) {
-  ref.watch(rideDataRevisionProvider);
-  return ref.watch(workoutRepositoryProvider).getPoints(rideId);
-});
+      ref.watch(rideDataRevisionProvider);
+      return ref.watch(workoutRepositoryProvider).getPoints(rideId);
+    });

@@ -16,12 +16,15 @@ final StateProvider<ActivityType?> statsFilterProvider =
 /// 个人记录量级（几百到几千条）下这完全够用；真到几万条再考虑下推到 SQL。
 final FutureProvider<List<Workout>> finishedRidesProvider =
     FutureProvider<List<Workout>>((Ref ref) {
-  // 依赖数据版本号：结束运动、崩溃结算、删除、恢复备份后自动重查。
-  ref.watch(rideDataRevisionProvider);
-  final ActivityType? filter = ref.watch(statsFilterProvider);
-  return ref.watch(workoutRepositoryProvider).listFinished(activityType: filter);
-});
+      // 依赖数据版本号：结束运动、崩溃结算、删除、恢复备份后自动重查。
+      ref.watch(rideDataRevisionProvider);
+      final ActivityType? filter = ref.watch(statsFilterProvider);
+      return ref
+          .watch(workoutRepositoryProvider)
+          .listFinished(activityType: filter);
+    });
 
 /// 当前选中的统计范围。见设计文档 10.4。
-final StateProvider<TrendRange> trendRangeProvider =
-    StateProvider<TrendRange>((Ref ref) => TrendRange.week);
+final StateProvider<TrendRange> trendRangeProvider = StateProvider<TrendRange>(
+  (Ref ref) => TrendRange.week,
+);

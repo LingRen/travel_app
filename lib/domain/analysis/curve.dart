@@ -45,8 +45,7 @@ List<CurveSample> buildCurve(
     CurveMetric.speed => movingAverage(raw, kSpeedCurveFilterWindow),
     CurveMetric.heartRate ||
     CurveMetric.cadence ||
-    CurveMetric.power =>
-      _smoothKeepingGaps(raw, kSensorCurveFilterWindow),
+    CurveMetric.power => _smoothKeepingGaps(raw, kSensorCurveFilterWindow),
   };
 
   final List<CurveSample> all = <CurveSample>[];
@@ -69,11 +68,9 @@ List<CurveSample> buildCurve(
     prev = point;
     originTMs ??= tMs.toDouble();
 
-    all.add(CurveSample(
-      xSeconds: (tMs - originTMs) / 1000.0,
-      y: y,
-      segment: segment,
-    ));
+    all.add(
+      CurveSample(xSeconds: (tMs - originTMs) / 1000.0, y: y, segment: segment),
+    );
   }
 
   return _downsample(all, maxSamples);
@@ -84,17 +81,13 @@ List<double?> _rawValues(List<TrackPoint> points, CurveMetric metric) {
     case CurveMetric.speed:
       return <double?>[for (final TrackPoint p in points) p.speedMps];
     case CurveMetric.heartRate:
-      return <double?>[
-        for (final TrackPoint p in points) p.hr?.toDouble(),
-      ];
+      return <double?>[for (final TrackPoint p in points) p.hr?.toDouble()];
     case CurveMetric.cadence:
       return <double?>[
         for (final TrackPoint p in points) p.cadence?.toDouble(),
       ];
     case CurveMetric.power:
-      return <double?>[
-        for (final TrackPoint p in points) p.powerW?.toDouble(),
-      ];
+      return <double?>[for (final TrackPoint p in points) p.powerW?.toDouble()];
   }
 }
 
@@ -239,27 +232,29 @@ List<CurveArc> curveArcs(
 
     final CurvePoint prev =
         i - 1 >= 0 && samples[i - 1].segment == samples[i].segment
-            ? _normalized(samples[i - 1], maxX, maxY)
-            : p0;
+        ? _normalized(samples[i - 1], maxX, maxY)
+        : p0;
     final CurvePoint next =
         j + 1 < samples.length && samples[j + 1].segment == samples[j].segment
-            ? _normalized(samples[j + 1], maxX, maxY)
-            : p1;
+        ? _normalized(samples[j + 1], maxX, maxY)
+        : p1;
 
-    arcs.add(CurveArc(
-      fromIndex: i,
-      toIndex: j,
-      from: p0,
-      to: p1,
-      control1: CurvePoint(
-        p0.x + (p1.x - prev.x) / kCurveTensionDivisor,
-        p0.y + (p1.y - prev.y) / kCurveTensionDivisor,
+    arcs.add(
+      CurveArc(
+        fromIndex: i,
+        toIndex: j,
+        from: p0,
+        to: p1,
+        control1: CurvePoint(
+          p0.x + (p1.x - prev.x) / kCurveTensionDivisor,
+          p0.y + (p1.y - prev.y) / kCurveTensionDivisor,
+        ),
+        control2: CurvePoint(
+          p1.x - (next.x - p0.x) / kCurveTensionDivisor,
+          p1.y - (next.y - p0.y) / kCurveTensionDivisor,
+        ),
       ),
-      control2: CurvePoint(
-        p1.x - (next.x - p0.x) / kCurveTensionDivisor,
-        p1.y - (next.y - p0.y) / kCurveTensionDivisor,
-      ),
-    ));
+    );
   }
   return arcs;
 }

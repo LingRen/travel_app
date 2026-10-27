@@ -35,32 +35,28 @@ Workout ride(
   double? avgPowerW,
   int? maxPowerW,
   ActivityType activityType = ActivityType.cycling,
-}) =>
-    Workout(
-      id: id,
-      title: title,
-      startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
-      endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
-      status: WorkoutStatus.finished,
-      activityType: activityType,
-      summary: WorkoutSummary(
-        distanceM: distanceM,
-        durationS: 1800,
-        movingS: 1700,
-        avgSpeedMps: 5.56,
-        movingAvgSpeedMps: 5.88,
-        maxSpeedMps: 11.1,
-        elevationGainM: 100,
-        pointCount: 1800,
-        avgPowerW: avgPowerW,
-        maxPowerW: maxPowerW,
-      ),
-    );
+}) => Workout(
+  id: id,
+  title: title,
+  startedAtMs: DateTime(y, m, d, 8).millisecondsSinceEpoch,
+  endedAtMs: DateTime(y, m, d, 9).millisecondsSinceEpoch,
+  status: WorkoutStatus.finished,
+  activityType: activityType,
+  summary: WorkoutSummary(
+    distanceM: distanceM,
+    durationS: 1800,
+    movingS: 1700,
+    avgSpeedMps: 5.56,
+    movingAvgSpeedMps: 5.88,
+    maxSpeedMps: 11.1,
+    elevationGainM: 100,
+    pointCount: 1800,
+    avgPowerW: avgPowerW,
+    maxPowerW: maxPowerW,
+  ),
+);
 
-Widget wrap({
-  required List<Workout> rides,
-  AppSettings settings = _settings,
-}) =>
+Widget wrap({required List<Workout> rides, AppSettings settings = _settings}) =>
     ProviderScope(
       overrides: <Override>[
         // 与真实 provider 同口径：筛选只过滤类型，null（全部）时原样返回。
@@ -68,12 +64,12 @@ Widget wrap({
           final ActivityType? filter = ref.watch(statsFilterProvider);
           return filter == null
               ? rides
-              : rides
-                    .where((Workout r) => r.activityType == filter)
-                    .toList();
+              : rides.where((Workout r) => r.activityType == filter).toList();
         }),
         nowProvider.overrideWithValue(() => nowMs),
-        appSettingsProvider.overrideWithValue(AsyncValue<AppSettings>.data(settings)),
+        appSettingsProvider.overrideWithValue(
+          AsyncValue<AppSettings>.data(settings),
+        ),
       ],
       child: MaterialApp(theme: buildAppTheme(), home: const StatsPage()),
     );
@@ -115,10 +111,10 @@ void main() {
   }
 
   testWidgets('默认显示本周累计距离、时长与爬升', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 22),
-      ride(2, 2026, 9, 24),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[ride(1, 2026, 9, 22), ride(2, 2026, 9, 24)],
+    );
 
     expect(totalsValue(tester, 'distance'), '20.0');
     expect(totalsValue(tester, 'duration'), '1:00:00');
@@ -126,9 +122,12 @@ void main() {
   });
 
   testWidgets('范围外的骑行不计入累计', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 20), // 上周日，不在 09-21..09-27 内
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 9, 20), // 上周日，不在 09-21..09-27 内
+      ],
+    );
 
     expect(totalsValue(tester, 'distance'), '0');
     expect(totalsValue(tester, 'gain'), '0');
@@ -136,10 +135,10 @@ void main() {
   });
 
   testWidgets('切到「年」后累计包含全年的骑行', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 3, 15),
-      ride(2, 2026, 9, 24),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[ride(1, 2026, 3, 15), ride(2, 2026, 9, 24)],
+    );
     expect(totalsValue(tester, 'distance'), '10.0');
 
     await tester.tap(find.text('年'));
@@ -149,10 +148,10 @@ void main() {
   });
 
   testWidgets('切到「月」后累计包含整月的骑行', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 2),
-      ride(2, 2026, 9, 24),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[ride(1, 2026, 9, 2), ride(2, 2026, 9, 24)],
+    );
     expect(totalsValue(tester, 'distance'), '10.0');
 
     await tester.tap(find.text('月'));
@@ -170,8 +169,9 @@ void main() {
 
     // 直接读 fl_chart 收到的数据，证明 7 个桶真的变成了 7 根柱子。
     expect(find.byType(BarChart), findsOneWidget);
-    final BarChartData data =
-        tester.widget<BarChart>(find.byType(BarChart)).data;
+    final BarChartData data = tester
+        .widget<BarChart>(find.byType(BarChart))
+        .data;
     expect(data.barGroups.length, chart.trend.buckets.length);
     // 09-22 是本周第 2 个桶（下标 1），距离 10000 m → 10 km。
     expect(data.barGroups[1].barRods.single.toY, 10.0);
@@ -183,19 +183,19 @@ void main() {
   });
 
   testWidgets('触摸读数保留两位小数，并标出日期与单位', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 12500)]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 12500)],
+    );
 
-    final BarChartData data =
-        tester.widget<BarChart>(find.byType(BarChart)).data;
+    final BarChartData data = tester
+        .widget<BarChart>(find.byType(BarChart))
+        .data;
     final BarChartGroupData group = data.barGroups[1];
     // fl_chart 默认的 tooltip 直接印 `rod.toY.toString()`：距离不是整数时会
     // 甩出一长串小数。直接调构建函数，钉住两位小数、日期与单位。
-    final BarTooltipItem item = data.barTouchData.touchTooltipData.getTooltipItem(
-      group,
-      1,
-      group.barRods.single,
-      0,
-    )!;
+    final BarTooltipItem item = data.barTouchData.touchTooltipData
+        .getTooltipItem(group, 1, group.barRods.single, 0)!;
     expect(item.text, '09-22', reason: '先标出是哪个日期桶');
     // 12500 米 → 12.5 km，两位小数要补成 12.50；用 toString() 时是 12.5。
     expect(item.children!.single.text!.trim(), '12.50 km');
@@ -222,8 +222,9 @@ void main() {
     expect(find.text('328 ft'), findsWidgets);
 
     // 纵轴数值也要换：只换标题的话会出现「标题写 mi、轴上还是 km 的数」。
-    final BarChartData data =
-        tester.widget<BarChart>(find.byType(BarChart)).data;
+    final BarChartData data = tester
+        .widget<BarChart>(find.byType(BarChart))
+        .data;
     expect(
       data.barGroups[1].barRods.single.toY,
       closeTo(10000 / 1609.344, 1e-6),
@@ -231,14 +232,18 @@ void main() {
   });
 
   testWidgets('渲染个人最佳卡片，四项都显示', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 22, distanceM: 30000),
-      ride(2, 2026, 9, 24, distanceM: 10000),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 9, 22, distanceM: 30000),
+        ride(2, 2026, 9, 24, distanceM: 10000),
+      ],
+    );
 
     expect(find.byType(PersonalBestsCard), findsOneWidget);
-    final PersonalBestsCard card =
-        tester.widget<PersonalBestsCard>(find.byType(PersonalBestsCard));
+    final PersonalBestsCard card = tester.widget<PersonalBestsCard>(
+      find.byType(PersonalBestsCard),
+    );
     expect(card.bests.longestDistanceM!.rideId, 1);
     expect(card.bests.longestDistanceM!.value, 30000);
 
@@ -263,16 +268,20 @@ void main() {
   });
 
   testWidgets('个人最佳跨范围统计，不受周月年切换影响', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 3, 15, distanceM: 40000),
-      ride(2, 2026, 9, 24, distanceM: 10000),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 3, 15, distanceM: 40000),
+        ride(2, 2026, 9, 24, distanceM: 10000),
+      ],
+    );
 
     await tester.tap(find.text('周'));
     await tester.pumpAndSettle();
 
-    final PersonalBestsCard card =
-        tester.widget<PersonalBestsCard>(find.byType(PersonalBestsCard));
+    final PersonalBestsCard card = tester.widget<PersonalBestsCard>(
+      find.byType(PersonalBestsCard),
+    );
     expect(card.bests.longestDistanceM!.value, 40000);
   });
 
@@ -286,10 +295,13 @@ void main() {
   });
 
   testWidgets('页眉显示记录总数、范围摘要与筛选入口', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 22, title: '晨骑'),
-      ride(2, 2026, 9, 24, title: '夜骑'),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 9, 22, title: '晨骑'),
+        ride(2, 2026, 9, 24, title: '夜骑'),
+      ],
+    );
 
     expect(find.text('长 期 统 计'), findsOneWidget);
     expect(find.text('里程'), findsOneWidget);
@@ -313,10 +325,13 @@ void main() {
   });
 
   testWidgets('个人最佳按 01–04 编号并标出日期与标题', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 22, title: '晨骑', distanceM: 30000),
-      ride(2, 2026, 9, 24, title: '夜骑', distanceM: 10000),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 9, 22, title: '晨骑', distanceM: 30000),
+        ride(2, 2026, 9, 24, title: '夜骑', distanceM: 10000),
+      ],
+    );
 
     expect(find.text('01'), findsOneWidget);
     expect(find.text('02'), findsOneWidget);
@@ -330,9 +345,12 @@ void main() {
   });
 
   testWidgets('配速筛选下个人最佳改为最快配速', (WidgetTester tester) async {
-    await pumpStats(tester, rides: <Workout>[
-      ride(1, 2026, 9, 22, title: '夜跑', activityType: ActivityType.running),
-    ]);
+    await pumpStats(
+      tester,
+      rides: <Workout>[
+        ride(1, 2026, 9, 22, title: '夜跑', activityType: ActivityType.running),
+      ],
+    );
 
     await selectFilter(tester, 'sport-filter-running');
     expect(find.text('最快配速'), findsOneWidget);
@@ -353,8 +371,7 @@ void main() {
   testWidgets('月 / 年视图的柱数跟着范围变化', (WidgetTester tester) async {
     await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22)]);
 
-    BarChartData data() =>
-        tester.widget<BarChart>(find.byType(BarChart)).data;
+    BarChartData data() => tester.widget<BarChart>(find.byType(BarChart)).data;
     expect(data().barGroups.length, 7);
 
     await tester.tap(find.text('月'));
@@ -368,10 +385,13 @@ void main() {
 
   group('功率', () {
     testWidgets('累计矩阵里的平均功率按移动时长加权', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[
-        ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300),
-        ride(2, 2026, 9, 24, avgPowerW: 180, maxPowerW: 420),
-      ]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[
+          ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300),
+          ride(2, 2026, 9, 24, avgPowerW: 180, maxPowerW: 420),
+        ],
+      );
 
       // 两次骑行移动时长一样（1700s），加权平均就是算术平均。
       expect(totalsValue(tester, 'avg-power'), '150 W');
@@ -379,10 +399,13 @@ void main() {
     });
 
     testWidgets('范围外的骑行功率不计入累计', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[
-        ride(1, 2026, 9, 20, avgPowerW: 400, maxPowerW: 900), // 上周日，范围外
-        ride(2, 2026, 9, 24, avgPowerW: 150, maxPowerW: 300),
-      ]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[
+          ride(1, 2026, 9, 20, avgPowerW: 400, maxPowerW: 900), // 上周日，范围外
+          ride(2, 2026, 9, 24, avgPowerW: 150, maxPowerW: 300),
+        ],
+      );
 
       expect(totalsValue(tester, 'avg-power'), '150 W');
       expect(totalsValue(tester, 'max-power'), '300 W');
@@ -400,10 +423,13 @@ void main() {
     });
 
     testWidgets('个人最佳里的最高功率取单次峰值最大的一次', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[
-        ride(1, 2026, 9, 22, avgPowerW: 260, maxPowerW: 380),
-        ride(2, 2026, 9, 24, avgPowerW: 140, maxPowerW: 520),
-      ]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[
+          ride(1, 2026, 9, 22, avgPowerW: 260, maxPowerW: 380),
+          ride(2, 2026, 9, 24, avgPowerW: 140, maxPowerW: 520),
+        ],
+      );
 
       // 累计矩阵里也有一格叫「最高功率」，这里只看个人最佳卡片里的那一行。
       final Finder card = find.byType(PersonalBestsCard);
@@ -411,10 +437,12 @@ void main() {
         find.descendant(of: card, matching: find.text('最高功率')),
         findsOneWidget,
       );
-      expect(find.descendant(of: card, matching: find.text('520 W')), findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('520 W')),
+        findsOneWidget,
+      );
 
-      final PersonalBestsCard widget =
-          tester.widget<PersonalBestsCard>(card);
+      final PersonalBestsCard widget = tester.widget<PersonalBestsCard>(card);
       expect(widget.bests.highestPowerW!.rideId, 2);
       expect(widget.bests.highestPowerW!.value, 520);
     });
@@ -422,11 +450,28 @@ void main() {
 
   group('类型筛选', () {
     testWidgets('筛选只统计选中类型的距离与次数，选「全部」恢复', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[
-        ride(1, 2026, 9, 22, distanceM: 10000), // 骑行
-        ride(2, 2026, 9, 23, activityType: ActivityType.running, distanceM: 5000),
-        ride(3, 2026, 9, 24, activityType: ActivityType.running, distanceM: 3000),
-      ]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[
+          ride(1, 2026, 9, 22, distanceM: 10000), // 骑行
+          ride(
+            2,
+            2026,
+            9,
+            23,
+            activityType: ActivityType.running,
+            distanceM: 5000,
+          ),
+          ride(
+            3,
+            2026,
+            9,
+            24,
+            activityType: ActivityType.running,
+            distanceM: 3000,
+          ),
+        ],
+      );
       expect(totalsValue(tester, 'distance'), '18.0');
 
       await selectFilter(tester, 'sport-filter-running');
@@ -439,10 +484,20 @@ void main() {
     });
 
     testWidgets('选「跑步」隐藏功率行，「全部」里有功率记录时显示', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[
-        ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300), // 骑行，有功率
-        ride(2, 2026, 9, 23, activityType: ActivityType.running, distanceM: 5000),
-      ]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[
+          ride(1, 2026, 9, 22, avgPowerW: 120, maxPowerW: 300), // 骑行，有功率
+          ride(
+            2,
+            2026,
+            9,
+            23,
+            activityType: ActivityType.running,
+            distanceM: 5000,
+          ),
+        ],
+      );
 
       // 「全部」里存在有功率的记录 → 功率行显示。
       expect(find.byKey(const Key('totals-avg-power')), findsOneWidget);
@@ -471,10 +526,14 @@ void main() {
     testWidgets('刻度标签不重复', (WidgetTester tester) async {
       // 单次 2 km → 轴上最大 2*1.2 = 2.4，正是真机上出现 `0/1/1/2/2` 的量级
       // （旧实现没给 interval，fl_chart 自己算出 0.5 的步长）。
-      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 2000)]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 2000)],
+      );
 
-      final BarChartData data =
-          tester.widget<BarChart>(find.byType(BarChart)).data;
+      final BarChartData data = tester
+          .widget<BarChart>(find.byType(BarChart))
+          .data;
       // 轴顶取步长的整数倍，2.4 向上补到 3。
       expect(data.maxY, 3);
 
@@ -484,7 +543,7 @@ void main() {
       final List<String> labels = <String>[
         for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
           axisLabel(v),
-        ];
+      ];
 
       expect(labels.toSet().length, labels.length, reason: '刻度标签重复了：$labels');
       // 具体值也钉一下，避免「只印一个 0」这种退化也满足「不重复」。
@@ -494,10 +553,14 @@ void main() {
     // 小数步长也要满足：轴顶不能落在步长序列之外（真机上曾出现末尾补一个
     // `1.7`，看着像刻度算错了）。
     testWidgets('轴顶落在步长序列上', (WidgetTester tester) async {
-      await pumpStats(tester, rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 1400)]);
+      await pumpStats(
+        tester,
+        rides: <Workout>[ride(1, 2026, 9, 22, distanceM: 1400)],
+      );
 
-      final BarChartData data =
-          tester.widget<BarChart>(find.byType(BarChart)).data;
+      final BarChartData data = tester
+          .widget<BarChart>(find.byType(BarChart))
+          .data;
       final SideTitles titles = data.titlesData.leftTitles.sideTitles;
       final double interval = titles.interval!;
 
@@ -508,7 +571,7 @@ void main() {
       final List<String> labels = <String>[
         for (double v = data.minY; v <= data.maxY + 1e-9; v += interval)
           axisLabel(v),
-        ];
+      ];
       expect(labels, <String>['0.0', '0.5', '1.0', '1.5', '2.0']);
     });
 

@@ -8,16 +8,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
-      theme: buildAppTheme(),
-      home: Scaffold(body: child),
-    );
+  theme: buildAppTheme(),
+  home: Scaffold(body: child),
+);
 
 void main() {
   testWidgets('筛选面板列出全部运动与五种类型', (WidgetTester tester) async {
-    await tester.pumpWidget(_wrap(SportFilterSheet(
-      current: null,
-      onSelected: (_) {},
-    )));
+    await tester.pumpWidget(
+      _wrap(SportFilterSheet(current: null, onSelected: (_) {})),
+    );
 
     expect(find.text('筛选运动类型'), findsOneWidget);
     expect(find.text('全部运动'), findsOneWidget);
@@ -29,10 +28,14 @@ void main() {
 
   testWidgets('选择类型后回调并关闭面板', (WidgetTester tester) async {
     ActivityType? picked;
-    await tester.pumpWidget(_wrap(SportFilterSheet(
-      current: null,
-      onSelected: (ActivityType? t) => picked = t,
-    )));
+    await tester.pumpWidget(
+      _wrap(
+        SportFilterSheet(
+          current: null,
+          onSelected: (ActivityType? t) => picked = t,
+        ),
+      ),
+    );
 
     await tester.tap(find.byKey(const Key('sport-filter-mountaineering')));
     expect(picked, ActivityType.mountaineering);

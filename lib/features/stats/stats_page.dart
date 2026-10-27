@@ -25,11 +25,12 @@ class StatsPage extends ConsumerWidget {
     final AsyncValue<List<Workout>> rides = ref.watch(finishedRidesProvider);
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
-            DistanceUnit.kilometer;
+        DistanceUnit.kilometer;
     final TrendRange range = ref.watch(trendRangeProvider);
     final ActivityType? filter = ref.watch(statsFilterProvider);
-    final DateTime now =
-        DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)());
+    final DateTime now = DateTime.fromMillisecondsSinceEpoch(
+      ref.read(nowProvider)(),
+    );
 
     return Scaffold(
       body: rides.when(
@@ -54,11 +55,9 @@ class StatsPage extends ConsumerWidget {
                 eyebrow: '长 期 统 计',
                 date: formatChineseYearMonth(now),
                 title: '里程',
-                trailing: Text(
-                  '共 ${list.length} 次',
-                  style: kLabelTextStyle,
-                ),
-                subtitle: '按${_rangeName(range)}归拢 · '
+                trailing: Text('共 ${list.length} 次', style: kLabelTextStyle),
+                subtitle:
+                    '按${_rangeName(range)}归拢 · '
                     '${_rangePeriodLabel(range)} ${trend.rideCount} 次',
                 subtitleTrailing: SportFilterTrigger(
                   current: filter,
@@ -82,11 +81,7 @@ class StatsPage extends ConsumerWidget {
               if (list.isEmpty)
                 _EmptyStats(filter: filter)
               else ...<Widget>[
-                _Totals(
-                  trend: trend,
-                  unit: unit,
-                  showPowerRow: showPowerRow,
-                ),
+                _Totals(trend: trend, unit: unit, showPowerRow: showPowerRow),
                 Divider(
                   height: 1,
                   indent: kSpaceL,
@@ -184,27 +179,27 @@ class StatsPage extends ConsumerWidget {
 }
 
 String _rangeName(TrendRange range) => switch (range) {
-      TrendRange.week => '周',
-      TrendRange.month => '月',
-      TrendRange.year => '年',
-    };
+  TrendRange.week => '周',
+  TrendRange.month => '月',
+  TrendRange.year => '年',
+};
 
 String _rangePeriodLabel(TrendRange range) => switch (range) {
-      TrendRange.week => '本周',
-      TrendRange.month => '本月',
-      TrendRange.year => '本年',
-    };
+  TrendRange.week => '本周',
+  TrendRange.month => '本月',
+  TrendRange.year => '本年',
+};
 
 String _chartBucketName(TrendRange range) => switch (range) {
-      TrendRange.week || TrendRange.month => '日',
-      TrendRange.year => '月',
-    };
+  TrendRange.week || TrendRange.month => '日',
+  TrendRange.year => '月',
+};
 
 String _bucketUnit(TrendRange range) => switch (range) {
-      TrendRange.week => '天',
-      TrendRange.month => '天',
-      TrendRange.year => '月',
-    };
+  TrendRange.week => '天',
+  TrendRange.month => '天',
+  TrendRange.year => '月',
+};
 
 /// 纸本周 / 月 / 年切换：选中项用主题色 + 2dp 下划线，右侧显示距离单位。
 class _RangeTabs extends StatelessWidget {
@@ -300,19 +295,16 @@ class _Totals extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    final ({String value, String unit}) distance =
-        formatDistanceParts(trend.distanceM, unit);
+    final ({String value, String unit}) distance = formatDistanceParts(
+      trend.distanceM,
+      unit,
+    );
     final ({String value, String unit}) climb = _splitUnit(
       formatElevation(trend.elevationGainM, unit),
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        kSpaceL,
-        kSpaceL,
-        kSpaceL,
-        kSpaceL,
-      ),
+      padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, kSpaceL),
       child: Column(
         children: <Widget>[
           Row(
@@ -340,10 +332,7 @@ class _Totals extends StatelessWidget {
             ],
           ),
           if (showPowerRow) ...<Widget>[
-            Divider(
-              height: kSpaceXl,
-              color: palette.hairline,
-            ),
+            Divider(height: kSpaceXl, color: palette.hairline),
             Row(
               children: <Widget>[
                 _PowerReadout(
@@ -439,11 +428,7 @@ class _MainTotal extends StatelessWidget {
 }
 
 class _PowerReadout extends StatelessWidget {
-  const _PowerReadout({
-    required this.label,
-    required this.value,
-    super.key,
-  });
+  const _PowerReadout({required this.label, required this.value, super.key});
 
   final String label;
   final String value;
@@ -488,26 +473,26 @@ class _EmptyStats extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: kSpaceL,
-          vertical: kSpaceXxl,
+    padding: const EdgeInsets.symmetric(
+      horizontal: kSpaceL,
+      vertical: kSpaceXxl,
+    ),
+    child: Column(
+      children: <Widget>[
+        Text(
+          filter == null ? '还没有运动记录' : '还没有${filter!.label}记录',
+          style: kMutedTextStyle,
         ),
-        child: Column(
-          children: <Widget>[
-            Text(
-              filter == null ? '还没有运动记录' : '还没有${filter!.label}记录',
-              style: kMutedTextStyle,
-            ),
-            if (filter != null) ...<Widget>[
-              const SizedBox(height: kSpaceS),
-              TextButton(
-                key: const Key('stats-show-all'),
-                onPressed: () =>
-                    ref.read(statsFilterProvider.notifier).state = null,
-                child: const Text('查看全部运动'),
-              ),
-            ],
-          ],
-        ),
-      );
+        if (filter != null) ...<Widget>[
+          const SizedBox(height: kSpaceS),
+          TextButton(
+            key: const Key('stats-show-all'),
+            onPressed: () =>
+                ref.read(statsFilterProvider.notifier).state = null,
+            child: const Text('查看全部运动'),
+          ),
+        ],
+      ],
+    ),
+  );
 }

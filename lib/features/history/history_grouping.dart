@@ -18,8 +18,7 @@ class HistoryMonthGroup {
 List<HistoryMonthGroup> groupRidesByMonth(List<Workout> rides) {
   final Map<String, List<Workout>> buckets = <String, List<Workout>>{};
   for (final Workout ride in rides) {
-    final DateTime t =
-        DateTime.fromMillisecondsSinceEpoch(ride.startedAtMs);
+    final DateTime t = DateTime.fromMillisecondsSinceEpoch(ride.startedAtMs);
     final String key = '${t.year}-${t.month}';
     (buckets[key] ??= <Workout>[]).add(ride);
   }
@@ -32,10 +31,13 @@ List<HistoryMonthGroup> groupRidesByMonth(List<Workout> rides) {
           DateTime.fromMillisecondsSinceEpoch(bucket.first.startedAtMs).month,
         ),
         rides: bucket.toList()
-          ..sort((Workout a, Workout b) => b.startedAtMs.compareTo(a.startedAtMs)),
+          ..sort(
+            (Workout a, Workout b) => b.startedAtMs.compareTo(a.startedAtMs),
+          ),
       ),
   ];
-  groups.sort((HistoryMonthGroup a, HistoryMonthGroup b) =>
-      b.month.compareTo(a.month));
+  groups.sort(
+    (HistoryMonthGroup a, HistoryMonthGroup b) => b.month.compareTo(a.month),
+  );
   return groups;
 }

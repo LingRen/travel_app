@@ -15,7 +15,10 @@ int? parseHeartRateMeasurement(List<int> data) {
 
 /// 骑行速度与踏频测量特征（0x2A2B）中的曲柄部分。
 class CscMeasurement {
-  const CscMeasurement({required this.crankRevolutions, required this.crankEventTime1024});
+  const CscMeasurement({
+    required this.crankRevolutions,
+    required this.crankEventTime1024,
+  });
 
   /// 累计曲柄转数（16 位，会回绕）。
   final int crankRevolutions;
@@ -36,7 +39,10 @@ CscMeasurement? parseCscMeasurement(List<int> data) {
   if (data.length < offset + 4) return null;
   final int revolutions = data[offset] | (data[offset + 1] << 8);
   final int eventTime = data[offset + 2] | (data[offset + 3] << 8);
-  return CscMeasurement(crankRevolutions: revolutions, crankEventTime1024: eventTime);
+  return CscMeasurement(
+    crankRevolutions: revolutions,
+    crankEventTime1024: eventTime,
+  );
 }
 
 /// 解析骑行功率测量特征值（0x2A63），返回瞬时功率（瓦）。长度不足时返回 null。

@@ -33,8 +33,10 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     // 筛选一变，展开状态归零；否则用户切到跑步后还停留在「已展开全部」。
-    ref.listen<ActivityType?>(historyFilterProvider,
-        (ActivityType? _, ActivityType? _) {
+    ref.listen<ActivityType?>(historyFilterProvider, (
+      ActivityType? _,
+      ActivityType? _,
+    ) {
       if (mounted && _expanded) setState(() => _expanded = false);
     });
 
@@ -42,14 +44,15 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final ActivityType? filter = ref.watch(historyFilterProvider);
     final DistanceUnit unit =
         ref.watch(appSettingsProvider).value?.distanceUnit ??
-            DistanceUnit.kilometer;
+        DistanceUnit.kilometer;
     final List<Workout>? list = rides.value;
-    final List<HistoryMonthGroup> groups =
-        list == null ? const <HistoryMonthGroup>[] : groupRidesByMonth(list);
-    final DateTime now =
-        DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)());
-    final DateTime displayedMonth =
-        groups.isEmpty ? now : groups.first.month;
+    final List<HistoryMonthGroup> groups = list == null
+        ? const <HistoryMonthGroup>[]
+        : groupRidesByMonth(list);
+    final DateTime now = DateTime.fromMillisecondsSinceEpoch(
+      ref.read(nowProvider)(),
+    );
+    final DateTime displayedMonth = groups.isEmpty ? now : groups.first.month;
     final HistoryMonthGroup? latest = groups.isEmpty ? null : groups.first;
     final double monthDistance = latest == null
         ? 0
@@ -70,14 +73,16 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final String? subtitle = latest == null
         ? null
         : '${narrow ? '' : '本月 '}${latest.rides.length} 次 · '
-            '${monthDistanceParts.value} ${monthDistanceParts.unit} · '
-            '${formatChineseDuration(monthSeconds)}';
+              '${monthDistanceParts.value} ${monthDistanceParts.unit} · '
+              '${formatChineseDuration(monthSeconds)}';
     final int earlierCount = groups.length <= 1
         ? 0
-        : groups.skip(1).fold<int>(
-            0,
-            (int sum, HistoryMonthGroup group) => sum + group.rides.length,
-          );
+        : groups
+              .skip(1)
+              .fold<int>(
+                0,
+                (int sum, HistoryMonthGroup group) => sum + group.rides.length,
+              );
 
     return Scaffold(
       body: SafeArea(
@@ -113,14 +118,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                   if (list.isEmpty) {
                     return _EmptyHistory(filter: filter);
                   }
-                  final List<HistoryMonthGroup> visible =
-                      _expanded ? groups : <HistoryMonthGroup>[groups.first];
+                  final List<HistoryMonthGroup> visible = _expanded
+                      ? groups
+                      : <HistoryMonthGroup>[groups.first];
                   return ListView(
                     padding: EdgeInsets.zero,
                     children: <Widget>[
                       for (int g = 0; g < visible.length; g++) ...<Widget>[
                         if (g > 0) _MonthLabel(group: visible[g]),
-                        for (int i = 0; i < visible[g].rides.length; i++) ...<Widget>[
+                        for (
+                          int i = 0;
+                          i < visible[g].rides.length;
+                          i++
+                        ) ...<Widget>[
                           if (i > 0)
                             Divider(
                               height: 1,
@@ -135,13 +145,13 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             onTap: visible[g].rides[i].id == null
                                 ? null
                                 : () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (BuildContext context) =>
-                                            DetailPage(
-                                          rideId: visible[g].rides[i].id!,
-                                        ),
-                                      ),
+                                    MaterialPageRoute<void>(
+                                      builder: (BuildContext context) =>
+                                          DetailPage(
+                                            rideId: visible[g].rides[i].id!,
+                                          ),
                                     ),
+                                  ),
                           ),
                         ],
                       ],
@@ -182,12 +192,12 @@ class _MonthLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceS),
-        child: Text(
-          formatChineseYearMonth(group.month),
-          style: kLabelTextStyle.copyWith(color: context.palette.muted),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceS),
+    child: Text(
+      formatChineseYearMonth(group.month),
+      style: kLabelTextStyle.copyWith(color: context.palette.muted),
+    ),
+  );
 }
 
 class _RideEntry extends StatelessWidget {
@@ -204,12 +214,8 @@ class _RideEntry extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => WorkoutCard(
-        ride: ride,
-        unit: unit,
-        onTap: onTap,
-        highlight: highlight,
-      );
+  Widget build(BuildContext context) =>
+      WorkoutCard(ride: ride, unit: unit, onTap: onTap, highlight: highlight);
 }
 
 /// 历史空态。筛选下没有记录时给出「查看全部运动」的回退入口。
@@ -220,23 +226,23 @@ class _EmptyHistory extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              filter == null ? '还没有运动记录' : '还没有${filter!.label}记录',
-              style: kMutedTextStyle,
-            ),
-            if (filter != null) ...<Widget>[
-              const SizedBox(height: kSpaceS),
-              TextButton(
-                key: const Key('history-show-all'),
-                onPressed: () =>
-                    ref.read(historyFilterProvider.notifier).state = null,
-                child: const Text('查看全部运动'),
-              ),
-            ],
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          filter == null ? '还没有运动记录' : '还没有${filter!.label}记录',
+          style: kMutedTextStyle,
         ),
-      );
+        if (filter != null) ...<Widget>[
+          const SizedBox(height: kSpaceS),
+          TextButton(
+            key: const Key('history-show-all'),
+            onPressed: () =>
+                ref.read(historyFilterProvider.notifier).state = null,
+            child: const Text('查看全部运动'),
+          ),
+        ],
+      ],
+    ),
+  );
 }

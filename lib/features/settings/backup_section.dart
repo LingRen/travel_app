@@ -88,9 +88,12 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
         points: points,
         exportedAtMs: ref.read(nowProvider)(),
       );
-      await ref.read(backupIoProvider).exportArchive(
+      await ref
+          .read(backupIoProvider)
+          .exportArchive(
             bytes,
-            fileName: 'cycling_backup_${DateTime.now().millisecondsSinceEpoch}.zip',
+            fileName:
+                'cycling_backup_${DateTime.now().millisecondsSinceEpoch}.zip',
           );
       final int exportedAt = ref.read(nowProvider)();
       await ref.read(settingsRepositoryProvider).saveLastBackupAt(exportedAt);
@@ -139,26 +142,26 @@ class _BackupSectionState extends ConsumerState<BackupSection> {
   }
 
   Future<bool?> _confirm(BackupPayload payload) => showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: const Text('确认恢复？'),
-          content: Text(
-            '将清空当前全部记录，替换成备份里的 '
-            '${payload.rides.length} 条记录、${payload.points.length} 个轨迹点。'
-            '这一步无法撤销。',
-          ),
-          actions: <Widget>[
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('恢复'),
-            ),
-          ],
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      title: const Text('确认恢复？'),
+      content: Text(
+        '将清空当前全部记录，替换成备份里的 '
+        '${payload.rides.length} 条记录、${payload.points.length} 个轨迹点。'
+        '这一步无法撤销。',
+      ),
+      actions: <Widget>[
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
         ),
-      );
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('恢复'),
+        ),
+      ],
+    ),
+  );
 
   void _setMessage(String message, {required bool isError}) {
     if (!mounted) return;

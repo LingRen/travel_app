@@ -139,7 +139,8 @@ TrendSummary buildTrend(
       powerWeightedSum += ridePower * summary.movingS;
       powerWeightS += summary.movingS;
     }
-    if (ridePeak != null && (highestPowerW == null || ridePeak > highestPowerW)) {
+    if (ridePeak != null &&
+        (highestPowerW == null || ridePeak > highestPowerW)) {
       highestPowerW = ridePeak;
     }
 
@@ -202,12 +203,8 @@ PersonalBests personalBests(List<Workout> rides) {
 
     PersonalBest? better(PersonalBest? current, double value) =>
         current == null || value > current.value
-            ? PersonalBest(
-                rideId: id,
-                startedAtMs: ride.startedAtMs,
-                value: value,
-              )
-            : current;
+        ? PersonalBest(rideId: id, startedAtMs: ride.startedAtMs, value: value)
+        : current;
 
     distance = better(distance, summary.distanceM);
     duration = better(duration, summary.durationS.toDouble());
@@ -244,8 +241,11 @@ class _Span {
 List<_Span> _spansFor(TrendRange range, DateTime now) {
   switch (range) {
     case TrendRange.week:
-      final DateTime monday =
-          DateTime(now.year, now.month, now.day - (now.weekday - 1));
+      final DateTime monday = DateTime(
+        now.year,
+        now.month,
+        now.day - (now.weekday - 1),
+      );
       return <_Span>[
         for (int i = 0; i < 7; i++)
           _daySpan(DateTime(monday.year, monday.month, monday.day + i)),

@@ -12,35 +12,34 @@ import 'package:flutter_test/flutter_test.dart';
 const int _nowMs = 1748822400000; // 2025-06-02 08:00 UTC，测试只关心本地桶数
 
 Workout _ride(double distanceM) => Workout(
-      id: 1,
-      startedAtMs: _nowMs,
-      endedAtMs: _nowMs + 3600000,
-      status: WorkoutStatus.finished,
-      summary: WorkoutSummary(
-        distanceM: distanceM,
-        durationS: 1800,
-        movingS: 1700,
-        avgSpeedMps: 3,
-        movingAvgSpeedMps: 3,
-        maxSpeedMps: 5,
-        elevationGainM: 10,
-        pointCount: 10,
-      ),
-    );
+  id: 1,
+  startedAtMs: _nowMs,
+  endedAtMs: _nowMs + 3600000,
+  status: WorkoutStatus.finished,
+  summary: WorkoutSummary(
+    distanceM: distanceM,
+    durationS: 1800,
+    movingS: 1700,
+    avgSpeedMps: 3,
+    movingAvgSpeedMps: 3,
+    maxSpeedMps: 5,
+    elevationGainM: 10,
+    pointCount: 10,
+  ),
+);
 
-Future<BarChartData> _pump(
-  WidgetTester tester,
-  TrendSummary trend,
-) async {
-  await tester.pumpWidget(MaterialApp(
-    theme: buildAppTheme(),
-    home: Scaffold(
-      body: SizedBox(
-        width: 390,
-        child: TrendChart(trend: trend, unit: DistanceUnit.kilometer),
+Future<BarChartData> _pump(WidgetTester tester, TrendSummary trend) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: buildAppTheme(),
+      home: Scaffold(
+        body: SizedBox(
+          width: 390,
+          child: TrendChart(trend: trend, unit: DistanceUnit.kilometer),
+        ),
       ),
     ),
-  ));
+  );
   await tester.pumpAndSettle();
   return tester.widget<BarChart>(find.byType(BarChart)).data;
 }
@@ -59,11 +58,7 @@ void main() {
         nowMs: _nowMs,
       );
       final BarChartData data = await _pump(tester, trend);
-      expect(
-        data.barGroups.length,
-        entry.value,
-        reason: entry.key.name,
-      );
+      expect(data.barGroups.length, entry.value, reason: entry.key.name);
       expect(data.barGroups.length, trend.buckets.length);
     }
   });
@@ -80,9 +75,8 @@ void main() {
       (BarChartGroupData g) => g.barRods.single.toY > 0,
     );
     final BarChartRodData rod = group.barRods.single;
-    final AppPalette palette = Theme.of(
-      tester.element(find.byType(TrendChart)),
-    ).extension<AppPalette>()!;
+    final AppPalette palette = Theme.of(tester.element(find.byType(TrendChart)))
+        .extension<AppPalette>()!;
     expect(rod.color, palette.accentInk);
     expect(
       rod.borderRadius,

@@ -8,11 +8,7 @@ import 'activity_type_visuals.dart';
 ///
 /// 只在未开始态出现：开始后类型已经落库，记录中不允许切换。
 class ActivityTypeChip extends StatelessWidget {
-  const ActivityTypeChip({
-    required this.type,
-    required this.onTap,
-    super.key,
-  });
+  const ActivityTypeChip({required this.type, required this.onTap, super.key});
 
   final ActivityType type;
   final VoidCallback onTap;

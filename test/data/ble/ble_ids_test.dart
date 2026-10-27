@@ -20,10 +20,14 @@ void main() {
     test('非标准 UUID 不会被归一化成标准短 UUID', () {
       // 相邻的 0x180E 与 0x2A38 归一化后必须与标准值不同，
       // 否则订阅时会误匹配到错误的特征值。
-      expect(shortUuid('0000180e-0000-1000-8000-00805f9b34fb'),
-          isNot(kHeartRateServiceShort));
-      expect(shortUuid('00002a38-0000-1000-8000-00805f9b34fb'),
-          isNot(kHeartRateMeasurementShort));
+      expect(
+        shortUuid('0000180e-0000-1000-8000-00805f9b34fb'),
+        isNot(kHeartRateServiceShort),
+      );
+      expect(
+        shortUuid('00002a38-0000-1000-8000-00805f9b34fb'),
+        isNot(kHeartRateMeasurementShort),
+      );
       expect(shortUuid('00010203-0405-0607-0809-0a0b0c0d0e0f'), '10203');
     });
   });

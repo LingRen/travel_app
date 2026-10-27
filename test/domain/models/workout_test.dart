@@ -6,11 +6,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('进行中的运动没有汇总指标', () {
-    const Workout workout = Workout(startedAtMs: 1000, status: WorkoutStatus.recording);
+    const Workout workout = Workout(
+      startedAtMs: 1000,
+      status: WorkoutStatus.recording,
+    );
     final Map<String, Object?> row = workout.toDbMap();
 
     expect(row['distance_m'], isNull);
-    expect(Workout.fromDbMap(<String, Object?>{...row, 'id': 1}).summary, isNull);
+    expect(
+      Workout.fromDbMap(<String, Object?>{...row, 'id': 1}).summary,
+      isNull,
+    );
   });
 
   test('已完成的运动汇总指标往返一致', () {
@@ -84,7 +90,10 @@ void main() {
     expect(back.activityType, ActivityType.running);
     // 默认类型是骑行，与迁移后旧记录一致。
     expect(
-      Workout.fromDbMap(const <String, Object?>{'started_at': 1, 'status': 'recording'}).activityType,
+      Workout.fromDbMap(const <String, Object?>{
+        'started_at': 1,
+        'status': 'recording',
+      }).activityType,
       ActivityType.cycling,
     );
   });

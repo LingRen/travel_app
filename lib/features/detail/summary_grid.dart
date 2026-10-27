@@ -37,10 +37,13 @@ class SummaryGrid extends StatelessWidget {
     }
 
     final bool usesPace = ride.activityType.usesPace;
-    final ({String value, String unit}) distance =
-        formatDistanceParts(s.distanceM, unit);
-    final ({String value, String unit}) climb =
-        _splitUnit(formatElevation(s.elevationGainM, unit));
+    final ({String value, String unit}) distance = formatDistanceParts(
+      s.distanceM,
+      unit,
+    );
+    final ({String value, String unit}) climb = _splitUnit(
+      formatElevation(s.elevationGainM, unit),
+    );
     final double? maxAltitude = ride.activityType.supportsPower
         ? null
         : _maxAltitude(points);
@@ -90,11 +93,11 @@ class SummaryGrid extends StatelessWidget {
   }
 
   static List<Widget> _cells(List<_SummaryCell> cells) => <Widget>[
-        for (int i = 0; i < cells.length; i++) ...<Widget>[
-          if (i > 0) const SizedBox(width: kSpaceM),
-          Expanded(child: cells[i]),
-        ],
-      ];
+    for (int i = 0; i < cells.length; i++) ...<Widget>[
+      if (i > 0) const SizedBox(width: kSpaceM),
+      Expanded(child: cells[i]),
+    ],
+  ];
 
   static ({String value, String unit}) _splitUnit(String text) {
     final int space = text.lastIndexOf(' ');

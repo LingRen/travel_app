@@ -91,7 +91,8 @@ class RouteMap extends StatelessWidget {
               for (final RouteSegment s in segments)
                 Polyline<Object>(
                   points: <LatLng>[
-                    for (final RouteVertex v in s.vertices) LatLng(v.lat, v.lon),
+                    for (final RouteVertex v in s.vertices)
+                      LatLng(v.lat, v.lon),
                   ],
                   strokeWidth: kRouteStrokeWidth,
                   color: trackColor,
@@ -164,10 +165,10 @@ class _GapEndDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: kAppWarning,
-          border: Border.all(color: kRouteCasing, width: 1.5),
-        ),
-      );
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: kAppWarning,
+      border: Border.all(color: kRouteCasing, width: 1.5),
+    ),
+  );
 }

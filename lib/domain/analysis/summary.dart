@@ -25,10 +25,9 @@ WorkoutSummary computeSummary({
 
   final double elevationGainM = elevationGainOf(points);
 
-  final double? maxSpeedMps = maxSmoothedSpeed(
-    <double?>[for (final TrackPoint p in points) p.speedMps],
-    kSpeedFilterWindow,
-  );
+  final double? maxSpeedMps = maxSmoothedSpeed(<double?>[
+    for (final TrackPoint p in points) p.speedMps,
+  ], kSpeedFilterWindow);
 
   final HrZoneBreakdown zones = hrZoneBreakdown(points, maxHeartRate);
 

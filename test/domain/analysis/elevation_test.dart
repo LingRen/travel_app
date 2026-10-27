@@ -15,9 +15,9 @@ TrackPoint _bare(int tMs, {double? alt}) =>
 
 /// 2 秒一个点、约 12 米一步（6 m/s）的轨迹。真实记录就是这个量级的采样。
 List<TrackPoint> _track(List<double> alts) => <TrackPoint>[
-      for (int i = 0; i < alts.length; i++)
-        _pt(i * 2000, 121.0 + i * 0.00013, alt: alts[i]),
-    ];
+  for (int i = 0; i < alts.length; i++)
+    _pt(i * 2000, 121.0 + i * 0.00013, alt: alts[i]),
+];
 
 void main() {
   group('medianFilterElevation', () {
@@ -32,8 +32,13 @@ void main() {
     });
 
     test('空值邻域内仍有非空值时会被填充', () {
-      final List<double?> out =
-          medianFilterElevation(<double?>[100, null, 102, null, 104], 3);
+      final List<double?> out = medianFilterElevation(<double?>[
+        100,
+        null,
+        102,
+        null,
+        104,
+      ], 3);
       expect(out[1], closeTo(101, 1e-9));
       expect(out[3], closeTo(103, 1e-9));
     });
@@ -67,8 +72,10 @@ void main() {
 
     test('线性爬升按滞回档位累加', () {
       final List<double?> raw = <double?>[100, 101, 102, 103, 104, 105, 106];
-      final List<double?> filtered =
-          medianFilterElevation(raw, kElevationFilterWindow);
+      final List<double?> filtered = medianFilterElevation(
+        raw,
+        kElevationFilterWindow,
+      );
       // 滞回只在跨过阈值时结算：从 100 涨到 106 跨过 3 米一档，已经结算 3 米；
       // 剩下不到 3 米的尾巴留作下一次的基准，所以这里是 3 而不是 6。
       expect(
@@ -83,8 +90,10 @@ void main() {
       final List<double?> raw = <double?>[
         for (int i = 0; i < 30; i++) i % 5 == 4 ? 106 : 100,
       ];
-      final List<double?> filtered =
-          medianFilterElevation(raw, kElevationFilterWindow);
+      final List<double?> filtered = medianFilterElevation(
+        raw,
+        kElevationFilterWindow,
+      );
       expect(
         elevationGainMeters(raw, kElevationGainThresholdM),
         closeTo(36, 1e-9),
@@ -94,18 +103,23 @@ void main() {
 
     test('下降段不计入爬升', () {
       final List<double?> raw = <double?>[200, 190, 180, 170, 160, 150];
-      final List<double?> filtered =
-          medianFilterElevation(raw, kElevationFilterWindow);
+      final List<double?> filtered = medianFilterElevation(
+        raw,
+        kElevationFilterWindow,
+      );
       expect(elevationGainMeters(filtered, kElevationGainThresholdM), 0);
     });
 
     test('空值被跳过', () {
       // 两个空位由邻域里的 106 / 112 补齐，序列变成 100 → 106 → 109 的阶梯，
       // 两档各跨过 3 米阈值，累计 6 米（最后一档 3 米已结算，尾巴留作基准）。
-      final List<double?> out = medianFilterElevation(
-        <double?>[100, null, 106, null, 112],
-        5,
-      );
+      final List<double?> out = medianFilterElevation(<double?>[
+        100,
+        null,
+        106,
+        null,
+        112,
+      ], 5);
       expect(
         elevationGainMeters(out, kElevationGainThresholdM),
         closeTo(9, 1e-9),
@@ -169,10 +183,9 @@ void main() {
         for (int i = 1; i < 20; i++)
           _pt(i * 1000, 121.4700 + i * 0.0001, alt: 500),
       ];
-      final List<double?> naive = medianFilterElevation(
-        <double?>[for (final TrackPoint p in points) p.altitudeM],
-        kElevationFilterWindow,
-      );
+      final List<double?> naive = medianFilterElevation(<double?>[
+        for (final TrackPoint p in points) p.altitudeM,
+      ], kElevationFilterWindow);
       final List<double?> guarded = medianFilterElevation(
         plausibleElevationSeries(points),
         kElevationFilterWindow,
@@ -193,10 +206,7 @@ void main() {
         _pt(3000, 121.4703, alt: 103),
       ];
 
-      expect(
-        plausibleElevationSeries(points),
-        <double?>[100, 101, 102, 103],
-      );
+      expect(plausibleElevationSeries(points), <double?>[100, 101, 102, 103]);
     });
 
     test('GPS 断点后的真实海拔突变被保留', () {

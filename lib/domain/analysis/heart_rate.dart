@@ -37,7 +37,10 @@ int? zoneIndexForHr(int hr, int maxHeartRate) {
 
 /// 各心率区间的停留时长分布。
 class HrZoneBreakdown {
-  const HrZoneBreakdown({required this.secondsByZone, required this.totalSeconds});
+  const HrZoneBreakdown({
+    required this.secondsByZone,
+    required this.totalSeconds,
+  });
 
   final Map<int, double> secondsByZone;
   final double totalSeconds;

@@ -35,50 +35,50 @@ const AppSettings _settings = AppSettings(
 );
 
 Workout _ride(int id, DateTime date, {String? title}) => Workout(
-      id: id,
-      title: title,
-      startedAtMs: date.millisecondsSinceEpoch,
-      endedAtMs: date.add(const Duration(hours: 1)).millisecondsSinceEpoch,
-      status: WorkoutStatus.finished,
-      activityType: ActivityType.cycling,
-      summary: const WorkoutSummary(
-        distanceM: 25300,
-        durationS: 3600,
-        movingS: 3400,
-        avgSpeedMps: 7.03,
-        movingAvgSpeedMps: 7.44,
-        maxSpeedMps: 12.5,
-        elevationGainM: 180,
-        avgHr: 142,
-        maxHr: 176,
-        avgCadence: 78,
-        avgPowerW: 187,
-        maxPowerW: 230,
-        pointCount: 4,
-      ),
-    );
+  id: id,
+  title: title,
+  startedAtMs: date.millisecondsSinceEpoch,
+  endedAtMs: date.add(const Duration(hours: 1)).millisecondsSinceEpoch,
+  status: WorkoutStatus.finished,
+  activityType: ActivityType.cycling,
+  summary: const WorkoutSummary(
+    distanceM: 25300,
+    durationS: 3600,
+    movingS: 3400,
+    avgSpeedMps: 7.03,
+    movingAvgSpeedMps: 7.44,
+    maxSpeedMps: 12.5,
+    elevationGainM: 180,
+    avgHr: 142,
+    maxHr: 176,
+    avgCadence: 78,
+    avgPowerW: 187,
+    maxPowerW: 230,
+    pointCount: 4,
+  ),
+);
 
 List<Workout> _rides() => <Workout>[
-      _ride(1, DateTime(2026, 10, 26, 6, 42), title: '龙泉山 · 晨骑'),
-      _ride(2, DateTime(2026, 10, 22, 18, 20), title: '驿都大道 · 通勤'),
-      _ride(3, DateTime(2026, 10, 18, 7, 5), title: '青龙湖 · 环湖'),
-      _ride(4, DateTime(2026, 10, 12, 8, 10), title: '三圣乡 · 闲骑'),
-    ];
+  _ride(1, DateTime(2026, 10, 26, 6, 42), title: '龙泉山 · 晨骑'),
+  _ride(2, DateTime(2026, 10, 22, 18, 20), title: '驿都大道 · 通勤'),
+  _ride(3, DateTime(2026, 10, 18, 7, 5), title: '青龙湖 · 环湖'),
+  _ride(4, DateTime(2026, 10, 12, 8, 10), title: '三圣乡 · 闲骑'),
+];
 
 List<TrackPoint> _points(int id) => <TrackPoint>[
-      for (int i = 0; i < 30; i++)
-        TrackPoint(
-          rideId: id,
-          tMs: 1000 + i * 1000,
-          lat: 30.0 + i * 0.00003,
-          lon: 120.0 + i * 0.00004,
-          altitudeM: 480 + i * 0.7,
-          speedMps: 5.0 + (i % 10) * 0.35,
-          hr: 138 + (i % 7),
-          cadence: 76 + (i % 5),
-          powerW: 180 + (i % 9),
-        ),
-    ];
+  for (int i = 0; i < 30; i++)
+    TrackPoint(
+      rideId: id,
+      tMs: 1000 + i * 1000,
+      lat: 30.0 + i * 0.00003,
+      lon: 120.0 + i * 0.00004,
+      altitudeM: 480 + i * 0.7,
+      speedMps: 5.0 + (i % 10) * 0.35,
+      hr: 138 + (i % 7),
+      cadence: 76 + (i % 5),
+      powerW: 180 + (i % 9),
+    ),
+];
 
 class _Pairing implements SensorPairingRepository {
   @override
@@ -90,81 +90,82 @@ class _Pairing implements SensorPairingRepository {
 }
 
 Widget _scaled(Widget child) => MaterialApp(
-      theme: buildAppTheme(),
-      builder: (BuildContext context, Widget? child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: const TextScaler.linear(1.3),
-        ),
-        child: child!,
-      ),
-      home: Scaffold(body: child),
-    );
+  theme: buildAppTheme(),
+  builder: (BuildContext context, Widget? child) => MediaQuery(
+    data: MediaQuery.of(context)
+        .copyWith(textScaler: const TextScaler.linear(1.3)),
+    child: child!,
+  ),
+  home: Scaffold(body: child),
+);
 
 Widget _record(RecordState state) => HandlebarView(
-      state: state,
-      unit: DistanceUnit.kilometer,
-      tileUrlTemplate: kDefaultMapTileUrlTemplate,
-      selectedActivityType: state.selectedActivityType,
-      now: DateTime(2026, 10, 27, 6, 42),
-      onSelectActivityType: (_) {},
-      onStart: () {},
-      onPause: () {},
-      onResume: () {},
-      onFinish: () {},
-      onPickDevice: (_) {},
-      onFixError: () {},
-    );
+  state: state,
+  unit: DistanceUnit.kilometer,
+  tileUrlTemplate: kDefaultMapTileUrlTemplate,
+  selectedActivityType: state.selectedActivityType,
+  now: DateTime(2026, 10, 27, 6, 42),
+  onSelectActivityType: (_) {},
+  onStart: () {},
+  onPause: () {},
+  onResume: () {},
+  onFinish: () {},
+  onPickDevice: (_) {},
+  onFixError: () {},
+);
 
 Widget _history() => ProviderScope(
-      overrides: <Override>[
-        historyRidesProvider.overrideWith((Ref ref) => _rides()),
-        appSettingsProvider
-            .overrideWithValue(AsyncValue<AppSettings>.data(_settings)),
-        nowProvider.overrideWithValue(
-          () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
-        ),
-        for (final Workout ride in _rides())
-          ridePointsProvider(ride.id!).overrideWith(
-            (Ref ref) => _points(ride.id!),
-          ),
-      ],
-      child: const HistoryPage(),
-    );
+  overrides: <Override>[
+    historyRidesProvider.overrideWith((Ref ref) => _rides()),
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(_settings),
+    ),
+    nowProvider.overrideWithValue(
+      () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
+    ),
+    for (final Workout ride in _rides())
+      ridePointsProvider(ride.id!).overrideWith((Ref ref) => _points(ride.id!)),
+  ],
+  child: const HistoryPage(),
+);
 
 Widget _detail() => ProviderScope(
-      overrides: <Override>[
-        rideDetailProvider(1).overrideWith(
-          (Ref ref) => WorkoutDetail(ride: _rides().first, points: _points(1)),
-        ),
-        appSettingsProvider
-            .overrideWithValue(AsyncValue<AppSettings>.data(_settings)),
-      ],
-      child: const DetailPage(rideId: 1),
-    );
+  overrides: <Override>[
+    rideDetailProvider(1).overrideWith(
+      (Ref ref) => WorkoutDetail(ride: _rides().first, points: _points(1)),
+    ),
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(_settings),
+    ),
+  ],
+  child: const DetailPage(rideId: 1),
+);
 
 Widget _stats() => ProviderScope(
-      overrides: <Override>[
-        finishedRidesProvider.overrideWith((Ref ref) => _rides()),
-        appSettingsProvider
-            .overrideWithValue(AsyncValue<AppSettings>.data(_settings)),
-        nowProvider.overrideWithValue(
-          () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
-        ),
-      ],
-      child: const StatsPage(),
-    );
+  overrides: <Override>[
+    finishedRidesProvider.overrideWith((Ref ref) => _rides()),
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(_settings),
+    ),
+    nowProvider.overrideWithValue(
+      () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
+    ),
+  ],
+  child: const StatsPage(),
+);
 
 Widget _settingsPage() => ProviderScope(
-      overrides: <Override>[
-        appSettingsProvider
-            .overrideWithValue(AsyncValue<AppSettings>.data(_settings)),
-        sensorPairingProvider.overrideWithValue(_Pairing()),
-        nowProvider.overrideWithValue(
-          () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
-        ),
-      ],
-      child: const SettingsPage(),
-    );
+  overrides: <Override>[
+    appSettingsProvider.overrideWithValue(
+      AsyncValue<AppSettings>.data(_settings),
+    ),
+    sensorPairingProvider.overrideWithValue(_Pairing()),
+    nowProvider.overrideWithValue(
+      () => DateTime(2026, 10, 27, 9).millisecondsSinceEpoch,
+    ),
+  ],
+  child: const SettingsPage(),
+);
 
 void main() {
   for (final Size size in <Size>[const Size(390, 844), const Size(360, 640)]) {
@@ -185,11 +186,7 @@ void main() {
       testWidgets('record idle with error', (WidgetTester tester) async {
         await pump(
           tester,
-          _record(
-            const RecordState(
-              errorMessage: '定位权限已被永久拒绝，请到系统设置中开启',
-            ),
-          ),
+          _record(const RecordState(errorMessage: '定位权限已被永久拒绝，请到系统设置中开启')),
         );
         expect(tester.takeException(), isNull);
       });
@@ -261,10 +258,7 @@ void main() {
         await pump(
           tester,
           SingleChildScrollView(
-            child: SportFilterSheet(
-              current: null,
-              onSelected: (_) {},
-            ),
+            child: SportFilterSheet(current: null, onSelected: (_) {}),
           ),
         );
         expect(tester.takeException(), isNull);

@@ -33,28 +33,28 @@ class Workout {
   final String? powerDeviceName;
 
   Map<String, Object?> toDbMap() => <String, Object?>{
-        if (id != null) 'id': id,
-        'started_at': startedAtMs,
-        'ended_at': endedAtMs,
-        'status': status.dbValue,
-        'title': title,
-        'activity_type': activityType.dbValue,
-        'hr_device_name': hrDeviceName,
-        'cadence_device_name': cadenceDeviceName,
-        'power_device_name': powerDeviceName,
-        if (summary != null) ...summary!.toDbColumns(),
-      };
+    if (id != null) 'id': id,
+    'started_at': startedAtMs,
+    'ended_at': endedAtMs,
+    'status': status.dbValue,
+    'title': title,
+    'activity_type': activityType.dbValue,
+    'hr_device_name': hrDeviceName,
+    'cadence_device_name': cadenceDeviceName,
+    'power_device_name': powerDeviceName,
+    if (summary != null) ...summary!.toDbColumns(),
+  };
 
   static Workout fromDbMap(Map<String, Object?> m) => Workout(
-        id: (m['id'] as num?)?.toInt(),
-        startedAtMs: (m['started_at'] as num).toInt(),
-        endedAtMs: (m['ended_at'] as num?)?.toInt(),
-        status: WorkoutStatus.fromDb(m['status'] as String),
-        title: m['title'] as String?,
-        activityType: ActivityType.fromDb(m['activity_type'] as String?),
-        summary: m['distance_m'] == null ? null : WorkoutSummary.fromDbColumns(m),
-        hrDeviceName: m['hr_device_name'] as String?,
-        cadenceDeviceName: m['cadence_device_name'] as String?,
-        powerDeviceName: m['power_device_name'] as String?,
-      );
+    id: (m['id'] as num?)?.toInt(),
+    startedAtMs: (m['started_at'] as num).toInt(),
+    endedAtMs: (m['ended_at'] as num?)?.toInt(),
+    status: WorkoutStatus.fromDb(m['status'] as String),
+    title: m['title'] as String?,
+    activityType: ActivityType.fromDb(m['activity_type'] as String?),
+    summary: m['distance_m'] == null ? null : WorkoutSummary.fromDbColumns(m),
+    hrDeviceName: m['hr_device_name'] as String?,
+    cadenceDeviceName: m['cadence_device_name'] as String?,
+    powerDeviceName: m['power_device_name'] as String?,
+  );
 }

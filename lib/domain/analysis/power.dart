@@ -19,7 +19,8 @@ double estimatePowerW({
   required double weightKg,
 }) {
   if (speedMps <= 0) return 0;
-  final double forceN = weightKg * kGravity * (kRollingResistance + grade) +
+  final double forceN =
+      weightKg * kGravity * (kRollingResistance + grade) +
       0.5 * kAirDensity * kDragArea * speedMps * speedMps;
   final double watts = speedMps * forceN;
   return watts < 0 ? 0 : watts;

@@ -12,11 +12,7 @@ void main() {
     int elapsedMs = 0,
     double speedMps = 0,
   }) =>
-      d.update(
-        distanceM: distanceM,
-        elapsedMs: elapsedMs,
-        speedMps: speedMps,
-      );
+      d.update(distanceM: distanceM, elapsedMs: elapsedMs, speedMps: speedMps);
 
   group('整公里提示', () {
     test('跨过 1 公里时报出该公里的耗时与均速', () {
@@ -37,8 +33,11 @@ void main() {
     test('第 2 公里的耗时只算第 2 公里，不含前一公里', () {
       final CueDetector d = CueDetector();
       step(d, distanceM: 1000, elapsedMs: 200000);
-      final LapCue lap =
-          step(d, distanceM: 2000, elapsedMs: 260000).whereType<LapCue>().single;
+      final LapCue lap = step(
+        d,
+        distanceM: 2000,
+        elapsedMs: 260000,
+      ).whereType<LapCue>().single;
 
       expect(lap.lapKm, 2);
       expect(lap.durationS, 60, reason: '是 260 − 200 秒，不是从出发算起的 260 秒');
@@ -49,8 +48,11 @@ void main() {
       // 这一拍已经冲到 1500 米，报的仍是「第 1 公里的 1000 米 / 200 秒」——
       // 若拿当前距离当分子，均速会被这一拍的位置带偏。
       final CueDetector d = CueDetector();
-      final LapCue lap =
-          step(d, distanceM: 1500, elapsedMs: 200000).whereType<LapCue>().single;
+      final LapCue lap = step(
+        d,
+        distanceM: 1500,
+        elapsedMs: 200000,
+      ).whereType<LapCue>().single;
       expect(lap.avgSpeedMps, closeTo(5.0, 1e-9));
     });
 
@@ -60,10 +62,11 @@ void main() {
       final CueDetector d = CueDetector();
       final List<RideCue> cues = step(d, distanceM: 3000, elapsedMs: 300000);
 
-      expect(
-        cues.whereType<LapCue>().map((LapCue c) => c.lapKm),
-        <int>[1, 2, 3],
-      );
+      expect(cues.whereType<LapCue>().map((LapCue c) => c.lapKm), <int>[
+        1,
+        2,
+        3,
+      ]);
     });
 
     test('停在同一公里里反复喂不重复播报', () {
@@ -77,8 +80,11 @@ void main() {
   group('整十公里提示', () {
     test('跨过 10 公里时报一次', () {
       final CueDetector d = CueDetector();
-      final DistanceCue cue =
-          step(d, distanceM: 10000, elapsedMs: 3600000).whereType<DistanceCue>().single;
+      final DistanceCue cue = step(
+        d,
+        distanceM: 10000,
+        elapsedMs: 3600000,
+      ).whereType<DistanceCue>().single;
       expect(cue.km, 10);
     });
 
@@ -102,7 +108,11 @@ void main() {
         reason: '还在 10 公里这一档里',
       );
       expect(
-        step(d, distanceM: 20000, elapsedMs: 3).whereType<DistanceCue>().single.km,
+        step(
+          d,
+          distanceM: 20000,
+          elapsedMs: 3,
+        ).whereType<DistanceCue>().single.km,
         20,
       );
     });
@@ -145,8 +155,10 @@ void main() {
     test('一次跨过多个档位时只报一条', () {
       // 起步就是 34 km/h：报 10、20、30 三遍太吵，只报一条，内容是当下的 34。
       final CueDetector d = CueDetector();
-      final List<SpeedCue> cues =
-          step(d, speedMps: 34 / 3.6).whereType<SpeedCue>().toList();
+      final List<SpeedCue> cues = step(
+        d,
+        speedMps: 34 / 3.6,
+      ).whereType<SpeedCue>().toList();
       expect(cues, hasLength(1));
       expect(cues.single.kmh, closeTo(34, 1e-9));
     });
@@ -164,29 +176,40 @@ void main() {
     });
 
     test('播种后不再补报，只从恢复那一刻继续判', () {
-      final CueDetector d =
-          CueDetector(initialDistanceM: 12500, initialElapsedMs: 3600000);
+      final CueDetector d = CueDetector(
+        initialDistanceM: 12500,
+        initialElapsedMs: 3600000,
+      );
 
       // 恢复后原地推进：没有任何提示。
       expect(step(d, distanceM: 12800, elapsedMs: 3610000), isEmpty);
 
       // 跨过第 13 公里：报 13，耗时从恢复那一刻算起（10 秒）。
-      final LapCue lap =
-          step(d, distanceM: 13000, elapsedMs: 3610000).whereType<LapCue>().single;
+      final LapCue lap = step(
+        d,
+        distanceM: 13000,
+        elapsedMs: 3610000,
+      ).whereType<LapCue>().single;
       expect(lap.lapKm, 13);
       expect(lap.durationS, 10);
     });
 
     test('播种后整十公里接着数：20 公里照报', () {
-      final CueDetector d =
-          CueDetector(initialDistanceM: 12500, initialElapsedMs: 0);
+      final CueDetector d = CueDetector(
+        initialDistanceM: 12500,
+        initialElapsedMs: 0,
+      );
 
       expect(
         step(d, distanceM: 19999, elapsedMs: 1000).whereType<DistanceCue>(),
         isEmpty,
       );
       expect(
-        step(d, distanceM: 20000, elapsedMs: 2000).whereType<DistanceCue>().single.km,
+        step(
+          d,
+          distanceM: 20000,
+          elapsedMs: 2000,
+        ).whereType<DistanceCue>().single.km,
         20,
       );
     });

@@ -43,21 +43,14 @@ class PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        kSpaceXl,
-        kSpaceL,
-        kSpaceXl,
-        kSpaceL,
-      ),
+      padding: const EdgeInsets.fromLTRB(kSpaceXl, kSpaceL, kSpaceXl, kSpaceL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: Text(eyebrow, style: kLabelTextStyle),
-              ),
+              Expanded(child: Text(eyebrow, style: kLabelTextStyle)),
               const SizedBox(width: kSpaceM),
               Text(date, style: kLabelTextStyle),
             ],
@@ -67,11 +60,7 @@ class PageHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
               if (accentRule) ...<Widget>[
-                Container(
-                  width: 3,
-                  height: 52,
-                  color: palette.accentInk,
-                ),
+                Container(width: 3, height: 52, color: palette.accentInk),
                 const SizedBox(width: kSpaceM),
               ],
               Expanded(
@@ -93,9 +82,7 @@ class PageHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 if (subtitle != null)
-                  Expanded(
-                    child: Text(subtitle!, style: kMutedTextStyle),
-                  )
+                  Expanded(child: Text(subtitle!, style: kMutedTextStyle))
                 else
                   const Spacer(),
                 if (subtitleTrailing != null) ...<Widget>[

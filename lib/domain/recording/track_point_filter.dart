@@ -24,7 +24,11 @@ bool shouldWriteTrackPoint({
   if (dtMs <= 0) return false;
   if (dtMs >= kMaxWriteIntervalMs) return true;
 
-  final double d =
-      haversineMeters(lastWritten.lat!, lastWritten.lon!, fix.lat!, fix.lon!);
+  final double d = haversineMeters(
+    lastWritten.lat!,
+    lastWritten.lon!,
+    fix.lat!,
+    fix.lon!,
+  );
   return d >= kMinWriteDistanceM;
 }

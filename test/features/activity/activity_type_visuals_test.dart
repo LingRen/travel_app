@@ -29,7 +29,10 @@ void main() {
       expect(desc.contains('步数'), isFalse);
     }
     expect(activityTypeDescription(ActivityType.cycling), '速度 · 踏频 · 功率');
-    expect(activityTypeDescription(ActivityType.mountaineering), '爬升 · 海拔 · 心率');
+    expect(
+      activityTypeDescription(ActivityType.mountaineering),
+      '爬升 · 海拔 · 心率',
+    );
   });
 
   test('每种类型都有印章字与图标', () {
