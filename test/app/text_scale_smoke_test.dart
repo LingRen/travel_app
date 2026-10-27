@@ -11,6 +11,8 @@ import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
+import 'package:cycling_app/features/activity/activity_type_sheet.dart';
+import 'package:cycling_app/features/activity/sport_filter_sheet.dart';
 import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/history/history_page.dart';
@@ -239,6 +241,32 @@ void main() {
 
       testWidgets('settings', (WidgetTester tester) async {
         await pump(tester, _settingsPage());
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('activity type sheet', (WidgetTester tester) async {
+        await pump(
+          tester,
+          SingleChildScrollView(
+            child: ActivityTypeSheet(
+              current: ActivityType.cycling,
+              onSelected: (_) {},
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('sport filter sheet', (WidgetTester tester) async {
+        await pump(
+          tester,
+          SingleChildScrollView(
+            child: SportFilterSheet(
+              current: null,
+              onSelected: (_) {},
+            ),
+          ),
+        );
         expect(tester.takeException(), isNull);
       });
     });
