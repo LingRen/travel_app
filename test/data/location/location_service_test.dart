@@ -303,6 +303,51 @@ void main() {
     });
   });
 
+  group('shouldSuggestAlwaysPermission', () {
+    test('iOS 只有「使用期间」权限时返回 true', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.whileInUse,
+      );
+
+      expect(
+        await LocationService(
+          platform: platform,
+          isIOS: true,
+        ).shouldSuggestAlwaysPermission(),
+        isTrue,
+      );
+    });
+
+    test('iOS 已是「始终允许」时返回 false', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.always,
+      );
+
+      expect(
+        await LocationService(
+          platform: platform,
+          isIOS: true,
+        ).shouldSuggestAlwaysPermission(),
+        isFalse,
+      );
+    });
+
+    test('Android 即使用「使用期间」也不提示，且不读权限', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform(
+        permission: LocationPermission.whileInUse,
+      );
+
+      expect(
+        await LocationService(
+          platform: platform,
+          isIOS: false,
+        ).shouldSuggestAlwaysPermission(),
+        isFalse,
+      );
+      expect(platform.checkPermissionCalls, 0);
+    });
+  });
+
   group('系统设置跳转', () {
     test('openAppSettings 委托给平台并返回其结果', () async {
       final FakeLocationPlatform platform = FakeLocationPlatform(

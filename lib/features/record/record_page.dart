@@ -103,6 +103,10 @@ class _RecordPageState extends ConsumerState<RecordPage>
     }
   }
 
+  /// 「始终允许」提示旁的「去设置」：只认定位权限，不受同时存在的错误文案影响。
+  Future<void> _openPermissionSettings() =>
+      ref.read(locationServiceProvider).openAppSettings();
+
   Future<void> _confirmFinish(RecordController controller) async {
     final bool? ok = await showDialog<bool>(
       context: context,
@@ -167,6 +171,7 @@ class _RecordPageState extends ConsumerState<RecordPage>
         onFinish: () => _confirmFinish(controller),
         onPickDevice: _pickDevice,
         onFixError: _openLocationHelp,
+        onFixAlwaysPermission: _openPermissionSettings,
       );
     }
 

@@ -144,9 +144,17 @@ LocationSettings buildPreviewSettings({required bool isAndroid}) {
 
 /// 定位采集。只负责权限校验与字段翻译，不含任何业务判断。
 class LocationService {
-  const LocationService({this._platform = const GeolocatorLocationPlatform()});
+  const LocationService({
+    this._platform = const GeolocatorLocationPlatform(),
+    bool? isIOS,
+  }) : _isIOSOverride = isIOS;
 
   final LocationPlatform _platform;
+
+  /// 测试里替代 `Platform.isIOS`，生产环境为 null。
+  final bool? _isIOSOverride;
+
+  bool get _isIOS => _isIOSOverride ?? Platform.isIOS;
 
   /// 检查定位服务与权限。不满足时返回具体原因，由 UI 引导用户处理。
   Future<LocationReadiness> checkReadiness() async {
@@ -175,6 +183,16 @@ class LocationService {
     final LocationPermission permission = await _platform.checkPermission();
     return permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
+  }
+
+  /// 是否需要引导用户把定位权限升级为「始终允许」。
+  ///
+  /// 只对 iOS 成立：geolocator 在 Info.plist 带 `NSLocationWhenInUseUsageDescription`
+  /// 时只申请「使用期间」，用户选了「允许一次」还会在退出 App 后失效；而 Android
+  /// 有定位前台服务，只要「使用期间」就能锁屏持续记录，不需要提示。
+  Future<bool> shouldSuggestAlwaysPermission() async {
+    if (!_isIOS) return false;
+    return await _platform.checkPermission() == LocationPermission.whileInUse;
   }
 
   /// 跳转系统设置页，供权限被拒时引导用户。

@@ -129,6 +129,10 @@ class _FakeLocationService implements LocationService {
 
   @override
   Future<bool> openLocationSettings() async => true;
+
+  /// 记录页测试默认不是 iOS，也没有「始终允许」提示。
+  @override
+  Future<bool> shouldSuggestAlwaysPermission() async => false;
 }
 
 /// 内存版配对仓储：记录页测试不关心传感器配对，等价于「从没配对过」。
@@ -210,6 +214,7 @@ void main() {
     ValueChanged<ActivityType>? onSelectActivityType,
     DateTime? now,
     VoidCallback? onFixError,
+    VoidCallback? onFixAlwaysPermission,
   }) => HandlebarView(
     state: state,
     unit: DistanceUnit.kilometer,
@@ -223,6 +228,7 @@ void main() {
     onFinish: onFinish ?? () {},
     onPickDevice: onPickDevice ?? (_) {},
     onFixError: onFixError,
+    onFixAlwaysPermission: onFixAlwaysPermission,
   );
 
   group('骑行界面', () {
@@ -838,6 +844,34 @@ void main() {
       );
       expect(find.text('去设置'), findsNothing);
       expect(find.text('打开定位'), findsNothing);
+    });
+
+    testWidgets('「始终允许」提示按状态出现，并给出设置入口', (WidgetTester tester) async {
+      int actions = 0;
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            const RecordState(
+              phase: RecordingPhase.recording,
+              suggestAlwaysPermission: true,
+            ),
+            onFixAlwaysPermission: () => actions++,
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('always-permission-notice')), findsOneWidget);
+      expect(
+        find.text('锁屏后继续记录，请把定位权限设为「始终允许」'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('always-permission-action')));
+      expect(actions, 1);
+
+      // 不要求提示时整条不出现（Android、iOS 已授权「始终允许」）。
+      await tester.pumpWidget(wrap(handlebar(const RecordState())));
+      expect(find.byKey(const Key('always-permission-notice')), findsNothing);
     });
 
     testWidgets('骑行中点传感器灯就是配对入口', (WidgetTester tester) async {

@@ -39,6 +39,7 @@ class RecordState {
     this.powerConnected = false,
     this.gpsWeak = false,
     this.errorMessage,
+    this.suggestAlwaysPermission = false,
     this.liveTrack = const <TrackPoint>[],
     this.liveTrackBreaks = const <int>{},
     this.previewFix,
@@ -75,6 +76,11 @@ class RecordState {
 
   /// 阻断类错误（定位权限 / 定位服务）或写入连续失败提示，非空时界面需展示。
   final String? errorMessage;
+
+  /// 是否提示用户把 iOS 定位权限从「使用期间」升级为「始终允许」。
+  ///
+  /// Android 有定位前台服务，「使用期间」已足够锁屏持续记录，恒为 false。
+  final bool suggestAlwaysPermission;
 
   /// 本次骑行已抽稀的轨迹，供缩略图绘制。见设计文档 9.4。
   ///
@@ -188,6 +194,9 @@ class RecordController extends Notifier<RecordState> {
   /// App 是否在前台。见设计文档 10.1 的「熄屏与后台」。
   bool _foreground = true;
 
+  /// 见 [RecordState.suggestAlwaysPermission]。
+  bool _suggestAlwaysPermission = false;
+
   /// 上一次节拍判定出的「信号弱」状态。只在翻转的那一刻播报一次，
   /// 否则每秒一条「GPS 信号弱」会把其它提示全淹掉。
   bool _wasGpsWeak = false;
@@ -245,6 +254,9 @@ class RecordController extends Notifier<RecordState> {
       _publish();
       return;
     }
+
+    // 权限刚确认完，此时读到的就是用户这次授权的级别（iOS 可达 whileInUse）。
+    _suggestAlwaysPermission = await _location.shouldSuggestAlwaysPermission();
 
     // 不 await：粗略定位只是「先把地图点亮」，慢一点也不能拖住记录开始。
     unawaited(_loadPreviewFix());
@@ -323,6 +335,8 @@ class RecordController extends Notifier<RecordState> {
       // 之间的空档不是骑行时间，不能计入时长。
       resumedAtMs: _now(),
     );
+    // 恢复的会话也按当前授权级别给提示，和新开的记录保持一致。
+    _suggestAlwaysPermission = await _location.shouldSuggestAlwaysPermission();
     _startStreams();
     _publish();
   }
@@ -402,6 +416,7 @@ class RecordController extends Notifier<RecordState> {
     _lastCue = null;
     _cueSeq = 0;
     _wasGpsWeak = false;
+    _suggestAlwaysPermission = false;
     state = RecordState(
       foreground: _foreground,
       selectedActivityType: _selectedActivityType,
@@ -475,9 +490,23 @@ class RecordController extends Notifier<RecordState> {
   /// 都挂在它上面，停了这些就全错。
   void handleLifecycle(AppLifecycleState state) {
     final bool foreground = state == AppLifecycleState.resumed;
-    if (foreground != _foreground) _foreground = foreground;
+    if (foreground != _foreground) {
+      _foreground = foreground;
+      // 回前台很可能是用户刚去过系统设置：重新核对授权级别，改成
+      // 「始终允许」后提示要撤掉，不然会一直挂着。
+      if (foreground && _session != null) {
+        unawaited(_refreshAlwaysPermissionHint());
+      }
+    }
     if (!foreground) unawaited(_flush(force: true));
     _publish();
+  }
+
+  Future<void> _refreshAlwaysPermissionHint() async {
+    final bool suggest = await _location.shouldSuggestAlwaysPermission();
+    if (suggest == _suggestAlwaysPermission) return;
+    _suggestAlwaysPermission = suggest;
+    if (ref.mounted) _publish();
   }
 
   /// 待机页预热定位：已有权限时先拿一次粗略定位，点亮地图并给出精度。
@@ -712,6 +741,7 @@ class RecordController extends Notifier<RecordState> {
       powerConnected: _connected.contains(SensorKind.power),
       gpsWeak: _isGpsWeak(),
       errorMessage: _error,
+      suggestAlwaysPermission: _suggestAlwaysPermission,
       // 直接透传引用，不拷贝：见 RecordState.liveTrack 的说明。
       liveTrack: session?.liveTrack ?? const <TrackPoint>[],
       liveTrackBreaks: session?.liveBreakIndexes ?? const <int>{},

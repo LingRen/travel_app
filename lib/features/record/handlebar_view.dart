@@ -60,6 +60,7 @@ class HandlebarView extends StatelessWidget {
     required this.onPickDevice,
     this.now,
     this.onFixError,
+    this.onFixAlwaysPermission,
     super.key,
   });
 
@@ -105,6 +106,9 @@ class HandlebarView extends StatelessWidget {
 
   /// 阻断类错误旁的「去设置 / 打开定位」。
   final VoidCallback? onFixError;
+
+  /// 「始终允许」提示旁的「去设置」。
+  final VoidCallback? onFixAlwaysPermission;
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +382,21 @@ class HandlebarView extends StatelessWidget {
                             message: error,
                             actionLabel: errorActionLabel,
                             onAction: onFixError,
+                          ),
+                        ],
+                        // iOS 只申请到「使用期间」：锁屏后的持续记录依赖这个权限，
+                        // 用户选「允许一次」还会在退出 App 后失效，所以给一句提示
+                        // 和一个直达设置的入口。Android 有前台服务，不会走到这里。
+                        if (state.suggestAlwaysPermission) ...<Widget>[
+                          const SizedBox(height: kSpaceS),
+                          _InlineNotice(
+                            key: const Key('always-permission-notice'),
+                            message: '锁屏后继续记录，请把定位权限设为「始终允许」',
+                            actionLabel: '去设置',
+                            onAction: onFixAlwaysPermission,
+                            icon: Icons.location_on_outlined,
+                            color: palette.warning,
+                            actionKey: const Key('always-permission-action'),
                           ),
                         ],
                         SizedBox(height: blockGap),
@@ -1098,30 +1117,45 @@ class _MetricCell extends StatelessWidget {
 /// 单行 + 省略号，不为了把整句文案排全而把这一屏撑成两行；能处理的错误
 /// 在右侧给一个明确入口（去设置 / 打开定位），不让用户只看到一句话。
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({required this.message, this.actionLabel, this.onAction});
+  const _InlineNotice({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.icon = Icons.error_outline,
+    this.color,
+    this.actionKey = const Key('error-action'),
+    super.key,
+  });
 
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// 默认是错误样式；权限提示这类「建议」用更缓和的图标与颜色，免得和
+  // 「记录无法开始」的红色错误混在一起。
+  final IconData icon;
+  final Color? color;
+  final Key actionKey;
+
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    final Color tint = color ?? palette.danger;
     return Row(
       children: <Widget>[
-        Icon(Icons.error_outline, size: 18, color: palette.danger),
+        Icon(icon, size: 18, color: tint),
         const SizedBox(width: kSpaceS),
         Expanded(
           child: Text(
             message,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: kFontMeta, color: palette.danger),
+            style: TextStyle(fontSize: kFontMeta, color: tint),
           ),
         ),
         if (actionLabel != null && onAction != null)
           TextButton(
-            key: const Key('error-action'),
+            key: actionKey,
             onPressed: onAction,
             style: TextButton.styleFrom(
               foregroundColor: palette.accentInk,

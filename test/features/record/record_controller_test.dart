@@ -164,6 +164,12 @@ class _FakeLocationService implements LocationService {
     return previewFix;
   }
 
+  /// 「始终允许」升级提示。生产由 iOS 权限级别决定，测试里直接设定。
+  bool suggestAlwaysPermission = false;
+
+  @override
+  Future<bool> shouldSuggestAlwaysPermission() async => suggestAlwaysPermission;
+
   void emit(LocationFix fix) => _fixes.add(fix);
 }
 
@@ -895,6 +901,55 @@ void main() {
     expect(state.foreground, isTrue);
     expect(state.elapsedMs, greaterThan(backgroundElapsedMs));
     expect(state.phase, RecordingPhase.recording);
+    container.dispose();
+  });
+
+  testWidgets('仅有「使用期间」权限时开始后给出始终允许提示，reset 撤掉', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = makeContainer();
+    location.suggestAlwaysPermission = true;
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+
+    await controller.start();
+
+    expect(
+      container.read(recordControllerProvider).suggestAlwaysPermission,
+      isTrue,
+    );
+
+    controller.reset();
+    expect(
+      container.read(recordControllerProvider).suggestAlwaysPermission,
+      isFalse,
+    );
+    container.dispose();
+  });
+
+  testWidgets('去系统设置改成始终允许后回前台，提示自动撤掉', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    location.suggestAlwaysPermission = true;
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    expect(
+      container.read(recordControllerProvider).suggestAlwaysPermission,
+      isTrue,
+    );
+
+    // 用户离开 App 去系统设置，把权限升到「始终允许」再回来。
+    controller.handleLifecycle(AppLifecycleState.paused);
+    location.suggestAlwaysPermission = false;
+    controller.handleLifecycle(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(
+      container.read(recordControllerProvider).suggestAlwaysPermission,
+      isFalse,
+    );
     container.dispose();
   });
 
