@@ -1007,6 +1007,83 @@ void main() {
       expect(find.text('等待定位…'), findsNothing);
     });
 
+    testWidgets('朝向还没建立时只画 12 dp 圆点，不画箭头', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            RecordState(
+              rideId: 1,
+              phase: RecordingPhase.recording,
+              elapsedMs: 2000,
+              liveTrack: <TrackPoint>[
+                const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('map-heading-arrow')), findsNothing);
+      expect(
+        tester.getSize(find.byKey(const Key('map-position-dot'))),
+        const Size.square(12),
+      );
+    });
+
+    testWidgets('箭头跨 0 度时沿最短弧累加 turns，不倒转一圈', (WidgetTester tester) async {
+      final List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+      ];
+      RecordState withHeading(double heading) => RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 3000,
+        // 同一个列表对象：只在朝向变化时不该触发折线重算。
+        liveTrack: track,
+        headingDeg: heading,
+      );
+      double turns() => tester
+          .widget<AnimatedRotation>(find.byKey(const Key('map-heading-arrow')))
+          .turns;
+
+      await tester.pumpWidget(wrap(handlebar(withHeading(359))));
+      await tester.pump();
+      expect(turns(), closeTo(359 / 360, 1e-9));
+
+      await tester.pumpWidget(wrap(handlebar(withHeading(1))));
+      await tester.pump();
+      expect(turns(), closeTo(361 / 360, 1e-9), reason: '359° → 1° 只该转 2°');
+    });
+
+    testWidgets('起点落位后画起点环，没落位时不画', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            RecordState(
+              rideId: 1,
+              phase: RecordingPhase.recording,
+              elapsedMs: 3000,
+              liveTrack: <TrackPoint>[
+                const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+                const TrackPoint(
+                  rideId: 1,
+                  tMs: 2000,
+                  lat: 30.001,
+                  lon: 120.001,
+                ),
+              ],
+              startPoint: const LocationFix(tMs: 1000, lat: 30.0, lon: 120.0),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('map-start-marker')), findsOneWidget);
+    });
+
     testWidgets('未开始态显示类型浮标，点开面板可选五种类型', (WidgetTester tester) async {
       final List<ActivityType> picked = <ActivityType>[];
       await tester.pumpWidget(

@@ -151,12 +151,13 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     if (oldWidget.headingDeg != widget.headingDeg) {
       _updateHeading(widget.headingDeg);
     }
-    final bool startChanged = oldWidget.startPoint != widget.startPoint;
-    if (startChanged) _updateStart(widget.startPoint);
+    if (oldWidget.startPoint != widget.startPoint) {
+      _updateStart(widget.startPoint);
+    }
     // 没变就不重算：每秒重建一次折线会逼 flutter_map 重走一遍折线布局，
-    // 而轨迹实际只在攒够 25 米时才多一个点。
-    if (!startChanged &&
-        identical(oldWidget.points, widget.points) &&
+    // 而轨迹实际只在攒够 25 米时才多一个点。起点不参与顶点与取景，换它只需
+    // 重新 build 时画新环，不必重跑分段。
+    if (identical(oldWidget.points, widget.points) &&
         identical(oldWidget.breakIndexes, widget.breakIndexes) &&
         identical(oldWidget.previewFix, widget.previewFix)) {
       return;
@@ -376,8 +377,14 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
               if (_currentVertex != null)
                 Marker(
                   point: _currentVertex!,
-                  width: _HeadingArrow.box,
-                  height: _HeadingArrow.box,
+                  // 盒子要按内容给：还没建立朝向时只画 12 dp 圆点，仍按箭头盒
+                  // 的 28 dp 开会被撑成一个大墨团。
+                  width: widget.headingDeg == null
+                      ? _PositionDot.size
+                      : _HeadingArrow.box,
+                  height: widget.headingDeg == null
+                      ? _PositionDot.size
+                      : _HeadingArrow.box,
                   // 还没建立朝向时只画圆点，不能凭空指一个方向。
                   child: widget.headingDeg == null
                       ? const _PositionDot()

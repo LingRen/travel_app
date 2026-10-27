@@ -58,10 +58,8 @@ class RouteMap extends StatelessWidget {
 
     // 起终点直接取首段首点与末段末点：断口会把一条轨迹切成多段，这样取才和
     // 画出来的线一致。不另外接收参数，避免两处取点口径分叉。
-    final RouteVertex first = segments.first.vertices.first;
-    final RouteVertex last = segments.last.vertices.last;
-    final LatLng start = LatLng(first.lat, first.lon);
-    final LatLng finish = LatLng(last.lat, last.lon);
+    final LatLng start = all.first;
+    final LatLng finish = all.last;
 
     return SizedBox(
       height: height,

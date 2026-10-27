@@ -727,6 +727,29 @@ void main() {
       expect(s.snapshot.headingDeg, isNull);
     });
 
+    test('静止时的多径抖动不锁死首个朝向', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 0));
+      // 2 秒 2 米：低于落盘距离，方向全是噪声，不能锁死。
+      s.ingestFix(fixAt(2000, lat: 31.00002, speedMps: 0));
+      expect(s.snapshot.headingDeg, isNull);
+
+      // 真的挪出 10 米后再定方向，用的是最初的锚点。
+      s.ingestFix(fixAt(4000, lat: 31.0001, speedMps: 3));
+      expect(s.snapshot.headingDeg, closeTo(0, 1));
+    });
+
+    test('跨信号中断的两点不拿来定方向', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 0));
+      // 20 秒空档：两侧的方位角没有意义。
+      s.ingestFix(fixAt(20000, lat: 31.0001, speedMps: 3));
+      expect(s.snapshot.headingDeg, isNull);
+
+      s.ingestFix(fixAt(22000, lat: 31.0001, lon: 121.0001, speedMps: 3));
+      expect(s.snapshot.headingDeg, closeTo(90, 1));
+    });
+
     test('速度达标时采用上报朝向', () {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
       s.ingestFix(fixAt(0, speedMps: 3, headingDeg: 45));

@@ -457,11 +457,7 @@ void main() {
     expect(find.textContaining('信号中断 1 段'), findsOneWidget);
     expect(find.textContaining('共 00:14'), findsOneWidget);
 
-    final MarkerLayer layer = tester.widget<MarkerLayer>(
-      find.byType(MarkerLayer),
-    );
-    // 断口两侧各一个端点，加上起终点各一个。
-    expect(layer.markers.length, 4);
+    // 断口两侧各一个端点，加上起终点各一个；用 key 断言，不绑数量。
     expect(find.byKey(const Key('detail-gap-end')), findsNWidgets(2));
     expect(find.byKey(const Key('detail-start-marker')), findsOneWidget);
     expect(find.byKey(const Key('detail-finish-marker')), findsOneWidget);

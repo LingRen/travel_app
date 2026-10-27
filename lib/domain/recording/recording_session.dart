@@ -65,7 +65,7 @@ class RecordingSnapshot {
 
   /// 起点标记的位置。还没落位时为 null。
   ///
-  /// 落位后不再移动；只有 [RecordingSession._updateStartPoint] 会改它。
+  /// 落位后不再移动，由会话内部在写点时判定一次。
   final LocationFix? startPoint;
 
   int get elapsedSeconds => elapsedMs ~/ 1000;
@@ -599,15 +599,26 @@ class RecordingSession {
 
   /// 首个朝向：拿最近两个落盘点的方位角，等上报朝向接管。
   ///
-  /// 只有两个落盘点真的分开了，方位角才有意义——原地写点（时间触发）算出来
-  /// 全是 0，不能拿来当方向。
+  /// 相邻点要真的挪够一个落盘距离才算：静止时按 2 秒节拍写下的点常带几米多径
+  /// 抖动，那个方位角是噪声，一旦锁上就再没有机会改正（设备不给朝向时箭头会
+  /// 整程指错）。跨过真实信号中断的两点同理——隧道两侧的方位角没有意义。
   void _updateInitialHeading(TrackPoint point) {
     final TrackPoint? prev = _lastPositionedWritten;
-    _lastPositionedWritten = point;
-    if (_currentHeadingDeg != null || prev == null) return;
-    if (haversineMeters(prev.lat!, prev.lon!, point.lat!, point.lon!) <= 0) {
+    if (_currentHeadingDeg != null) {
+      _lastPositionedWritten = point;
       return;
     }
+    // 锚点留在原处，直到真的挪够距离；否则每次时间触发的小位移都会重置基线，
+    // 慢速骑行永远攒不出一个可信的方位角。
+    if (prev == null || point.tMs - prev.tMs > kGpsGapMs) {
+      _lastPositionedWritten = point;
+      return;
+    }
+    if (haversineMeters(prev.lat!, prev.lon!, point.lat!, point.lon!) <
+        kMinWriteDistanceM) {
+      return;
+    }
+    _lastPositionedWritten = point;
     _currentHeadingDeg = bearingDegrees(
       prev.lat!,
       prev.lon!,
