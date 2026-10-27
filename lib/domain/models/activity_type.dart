@@ -32,7 +32,7 @@ enum ActivityType {
   /// 是否支持功率（实测与估算）。
   final bool supportsPower;
 
-  /// 主读数是否为配速（跑步/健走/徒步）。
+  /// 主读数是否为配速（跑步/健走/徒步/登山）。
   final bool usesPace;
 
   /// 速度跨档提示只有骑行启用。速度档本身按 km/h 定义，跑步类型无意义。
