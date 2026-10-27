@@ -57,8 +57,8 @@ void main() {
     expect((await repo.load()).maxHeartRate, 190);
   });
 
-  test('首次读取的主题色是天青', () async {
-    expect((await repo.load()).accent, ThemeAccent.sky);
+  test('首次读取的主题色是朱砂', () async {
+    expect((await repo.load()).accent, ThemeAccent.cinnabar);
   });
 
   test('保存后可读回主题色', () async {
@@ -68,22 +68,28 @@ void main() {
         weightKg: 70,
         distanceUnit: DistanceUnit.kilometer,
         mapTileUrlTemplate: kDefaultMapTileUrlTemplate,
-        accent: ThemeAccent.sky,
+        accent: ThemeAccent.celadon,
       ),
     );
 
-    expect((await repo.load()).accent, ThemeAccent.sky);
+    expect((await repo.load()).accent, ThemeAccent.celadon);
   });
 
-  test('存储的主题色未知时回退到天青', () async {
+  test('旧主题值映射到新颜料', () async {
+    for (final (String raw, ThemeAccent want) in <(String, ThemeAccent)>[
+      ('mint', ThemeAccent.celadon),
+      ('sky', ThemeAccent.indigo),
+      ('violet', ThemeAccent.indigo),
+      ('amber', ThemeAccent.gamboge),
+    ]) {
+      await SettingsDao(db).setString('accent_theme', raw);
+      expect((await repo.load()).accent, want, reason: raw);
+    }
+  });
+
+  test('存储的主题色未知时回退到朱砂', () async {
     await SettingsDao(db).setString('accent_theme', 'no-such-theme');
-    expect((await repo.load()).accent, ThemeAccent.sky);
-  });
-
-  test('存储的主题色是已下线的琥珀时回退到天青', () async {
-    // 老库里可能存着 'amber'：那一组已随「轨迹跟随主题色」一起移除。
-    await SettingsDao(db).setString('accent_theme', 'amber');
-    expect((await repo.load()).accent, ThemeAccent.sky);
+    expect((await repo.load()).accent, ThemeAccent.cinnabar);
   });
 
   group('上次选中的运动类型', () {

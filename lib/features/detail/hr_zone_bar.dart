@@ -15,12 +15,16 @@ class HrZoneBar extends StatelessWidget {
   final HrZoneBreakdown breakdown;
 
   /// 各区间在条上的颜色，由慢到快。
+  ///
+  /// Z5 用深墨褐而不是正红：朱砂是默认主题色，心率曲线与轨迹都用它绘制，
+  /// 正红 Z5 会和朱砂线在纸底上糊成同一条；深墨褐既保留「最高区间」的
+  /// 重量感，又与朱砂拉开明度。设计稿的 Z5 也是近墨色。
   static const List<Color> zoneColors = <Color>[
     Color(0xFF64B5F6),
     Color(0xFF4CAF50),
     Color(0xFFFFB300),
     Color(0xFFFB8C00),
-    Color(0xFFB71C1C),
+    Color(0xFF3A2B25),
   ];
 
   @override

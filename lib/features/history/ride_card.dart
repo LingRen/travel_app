@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
-import '../../domain/models/activity_type.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_summary.dart';
+import '../activity/activity_type_visuals.dart';
 import 'history_providers.dart';
 import 'mini_speed_curve.dart';
 
@@ -55,7 +55,7 @@ class WorkoutCard extends ConsumerWidget {
                 // 类型图标：不占色（装饰一律不上色，见 app/theme.dart），
                 // 只让混合类型的列表在扫读时能一眼分出骑行与跑步。
                 Icon(
-                  _activityIcon(ride.activityType),
+                  activityTypeIcon(ride.activityType),
                   size: 16,
                   color: kAppTextMuted,
                 ),
@@ -156,14 +156,6 @@ class WorkoutCard extends ConsumerWidget {
     );
   }
 }
-
-/// 各运动类型的图标。图标只做类型区分，四个值都要能映射到，缺一个卡片就崩。
-IconData _activityIcon(ActivityType t) => switch (t) {
-      ActivityType.cycling => Icons.directions_bike,
-      ActivityType.running => Icons.directions_run,
-      ActivityType.walking => Icons.directions_walk,
-      ActivityType.hiking => Icons.terrain,
-    };
 
 /// 四列读数里的一格。内容为 null 时留空占位，保住其余各列的位置。
 ///

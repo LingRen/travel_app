@@ -408,18 +408,18 @@ void main() {
       // 名称写出来，色觉障碍用户与不知道色名的用户都能分辨。
       expect(find.text(accent.label), findsOneWidget);
     }
-    // 默认是天青，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
+    // 默认是朱砂，选中态的对勾只出现在这一颗圆点里（SegmentedButton 的选中
     // 分段也带对勾，所以必须限定在圆点内部去找）。
     expect(
       find.descendant(
-        of: find.byKey(const Key('accent-sky')),
+        of: find.byKey(const Key('accent-cinnabar')),
         matching: find.byIcon(Icons.check),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('accent-mint')),
+        of: find.byKey(const Key('accent-celadon')),
         matching: find.byIcon(Icons.check),
       ),
       findsNothing,
@@ -429,20 +429,20 @@ void main() {
   testWidgets('点选主题色圆点即存即生效，不需要点保存', (WidgetTester tester) async {
     await pumpSettings(tester);
 
-    // 默认是天青，这里点另一组，确保验证的是「切换」而不是「点已选中的那颗」。
-    await tester.tap(find.byKey(const Key('accent-mint')));
+    // 默认是朱砂，这里点另一组，确保验证的是「切换」而不是「点已选中的那颗」。
+    await tester.tap(find.byKey(const Key('accent-celadon')));
     await tester.pumpAndSettle();
 
     expect(settings.saveCalls, 1);
-    expect(settings.saved.accent, ThemeAccent.mint);
+    expect(settings.saved.accent, ThemeAccent.celadon);
     // 其余设置项不能被这次点选改动。
     expect(settings.saved.maxHeartRate, _settings.maxHeartRate);
     expect(settings.saved.weightKg, _settings.weightKg);
   });
 
   testWidgets('保存个人参数时保留当前主题色，不重置回默认', (WidgetTester tester) async {
-    final AppSettings violet = _settings.copyWith(accent: ThemeAccent.violet);
-    await pumpSettings(tester, current: violet);
+    final AppSettings indigo = _settings.copyWith(accent: ThemeAccent.indigo);
+    await pumpSettings(tester, current: indigo);
 
     await tester.tap(find.text('190'));
     await tester.pumpAndSettle();
@@ -451,6 +451,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(settings.saved.maxHeartRate, 175);
-    expect(settings.saved.accent, ThemeAccent.violet);
+    expect(settings.saved.accent, ThemeAccent.indigo);
   });
 }

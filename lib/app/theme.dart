@@ -3,107 +3,184 @@ import 'package:flutter/material.dart';
 import '../data/settings_repository.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
-// 颜色
+// 纸本令牌
 //
-// 冷调沥青石墨。饱和度在这个 app 里是稀缺资源：屏幕上唯一允许带颜色的东西
-// 是数据本身（心率区间色，见 features/detail/hr_zone_bar.dart）与主题强调色。
-// 速度色带（黄→橙→深红）已随地图轨迹一起改成跟随主题色——地图上的黄白路面
-// 会把浅黄轨迹吃掉，颜色分档那点信息不值得让整条轨迹看不见。装饰一律不上色，
-// 所以分区靠细线而不靠色块与阴影。
+// 行迹只有一套亮色纸本主题：纸色承担背景，墨色承担正文与读数，发丝线承担
+// 分区，主题颜料只出现在「正在发生 / 可交互 / 已选中」与轨迹上。页面不再
+// 使用阴影与抬升来表达层级——纸上的分区是一条线或一段留白。
 //
-// 强调色（[ThemeAccent]，定义在设置层）只承担一个语义：**正在发生**
-// （记录中 / 可交互 / 已选中）。色相由用户在设置页挑，语义不随色相变。
+// 颜色分两层：`kApp*` 常量是过渡期兼容名，值已指向纸本令牌；新代码一律通过
+// `context.palette` 读取语义名，主题色切换时整树重着色。
 // ─────────────────────────────────────────────────────────────────────────
 
-/// 沥青底色。
-const Color kAppBackground = Color(0xFF0B0E12);
+/// 纸底。
+const Color kPaper = Color(0xFFF5F0E5);
 
-/// 面板底色：卡片、输入框、底栏。
-const Color kAppSurface = Color(0xFF141A21);
+/// 纸面：输入框、面板、卡片这类比纸底略亮的表面。
+const Color kSheet = Color(0xFFFCF9F2);
 
-/// 抬高一层：嵌套面板、按压态、模态表面。
-const Color kAppSurfaceRaised = Color(0xFF1D252E);
+/// 墨：正文与主读数。
+const Color kInk = Color(0xFF1D1B17);
 
-/// 结构细线。分区靠它，不靠阴影。
-const Color kAppHairline = Color(0xFF2A343F);
+/// 次级墨：标签、说明、未选中态。
+const Color kMutedInk = Color(0xFF746D60);
 
-/// 正文色。用冷白而不是纯白：纯白在户外强光下会晕开，笔画边界反而糊掉。
-const Color kAppTextPrimary = Color(0xFFE8EDF2);
+/// 发丝线：只用于分区，不用阴影代替。
+const Color kHairlineColor = Color(0xFFD8CEBB);
 
-/// 次级文字与标签。
-const Color kAppTextMuted = Color(0xFF8A97A6);
+/// 抬高一层的纸面：旧页面里的嵌套面板、按压态。
+const Color kPaperRaised = Color(0xFFEFE8DA);
 
-/// 强调色上的文字色。4 组强调色都偏亮，统一压深墨，无需逐色计算。
-const Color kAppOnAccent = Color(0xFF0B0E12);
+// 过渡期兼容名。旧页面仍直接引用这些常量；值已切换到纸本，避免一次改完
+// 所有页面才能编译。新代码不要再用 `kApp*`。
+const Color kAppBackground = kPaper;
+const Color kAppSurface = kSheet;
+const Color kAppSurfaceRaised = kPaperRaised;
+const Color kAppHairline = kHairlineColor;
+const Color kAppTextPrimary = kInk;
+const Color kAppTextMuted = kMutedInk;
+const Color kAppOnAccent = kPaper;
 
-/// 运行时可变的强调色令牌。挂在 [ThemeData.extensions] 上，widget 通过
-/// `context.palette.accent` 读取——强调色不再是编译期常量，切主题即整树重着色。
+/// 警告：GPS 弱、传感器断开。深琥珀在纸底上仍有 7.6:1，并与藤黄文字色
+/// 靠明度拉开距离。
+const Color kAppWarning = Color(0xFF6B4300);
+
+/// 危险：结束记录、解除配对、清空数据。
+const Color kAppDanger = Color(0xFF8C1D18);
+
+/// 危险色上的纸色字。
+const Color kAppOnDanger = kPaper;
+
+/// 运行时可变的纸本令牌。挂在 [ThemeData.extensions] 上，widget 通过
+/// `context.palette` 读取——主题色不再是编译期常量，切主题即整树重着色。
 class AppPalette extends ThemeExtension<AppPalette> {
-  const AppPalette({required this.accent});
+  const AppPalette({
+    required this.paper,
+    required this.sheet,
+    required this.ink,
+    required this.muted,
+    required this.hairline,
+    required this.accent,
+    required this.accentInk,
+    required this.warning,
+    required this.danger,
+  });
 
+  /// 纸底。
+  final Color paper;
+
+  /// 纸面。
+  final Color sheet;
+
+  /// 正文与主读数。
+  final Color ink;
+
+  /// 次级文字与标签。
+  final Color muted;
+
+  /// 发丝线。
+  final Color hairline;
+
+  /// 原始颜料：色点、大面积标记。
   final Color accent;
 
-  Color get onAccent => kAppOnAccent;
+  /// 文字安全色：文字、图标、按钮、选中态、轨迹与图表线。
+  final Color accentInk;
+
+  /// 警告。
+  final Color warning;
+
+  /// 危险。
+  final Color danger;
+
+  /// 强调色上的文字色。
+  Color get onAccent => paper;
 
   @override
-  AppPalette copyWith({Color? accent}) =>
-      AppPalette(accent: accent ?? this.accent);
+  AppPalette copyWith({
+    Color? paper,
+    Color? sheet,
+    Color? ink,
+    Color? muted,
+    Color? hairline,
+    Color? accent,
+    Color? accentInk,
+    Color? warning,
+    Color? danger,
+  }) =>
+      AppPalette(
+        paper: paper ?? this.paper,
+        sheet: sheet ?? this.sheet,
+        ink: ink ?? this.ink,
+        muted: muted ?? this.muted,
+        hairline: hairline ?? this.hairline,
+        accent: accent ?? this.accent,
+        accentInk: accentInk ?? this.accentInk,
+        warning: warning ?? this.warning,
+        danger: danger ?? this.danger,
+      );
 
   @override
   AppPalette lerp(ThemeExtension<AppPalette>? other, double t) {
     if (other is! AppPalette) return this;
-    return AppPalette(accent: Color.lerp(accent, other.accent, t)!);
+    return AppPalette(
+      paper: Color.lerp(paper, other.paper, t)!,
+      sheet: Color.lerp(sheet, other.sheet, t)!,
+      ink: Color.lerp(ink, other.ink, t)!,
+      muted: Color.lerp(muted, other.muted, t)!,
+      hairline: Color.lerp(hairline, other.hairline, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      accentInk: Color.lerp(accentInk, other.accentInk, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+    );
   }
 }
 
-/// 便捷读取当前主题色。
+/// 便捷读取当前纸本令牌。
 extension AppPaletteContext on BuildContext {
   AppPalette get palette => Theme.of(this).extension<AppPalette>()!;
 }
-
-/// 淡金：降级提示（GPS 弱、传感器断开）。与主题色的区别在于语义是「在提醒你」
-/// 而不是「在等你操作」，同屏出现时靠语义与明度差区分。
-const Color kAppWarning = Color(0xFFFFD166);
-
-/// 危险：结束记录、解除配对、清空数据。
-const Color kAppDanger = Color(0xFFFF5A4E);
-
-/// 危险色上的墨色。
-const Color kAppOnDanger = Color(0xFF1A0806);
 
 // ─────────────────────────────────────────────────────────────────────────
 // 地图轨迹
 // ─────────────────────────────────────────────────────────────────────────
 
-/// 轨迹线的描边色。
-///
-/// 轨迹现在用主题色绘制，但主题色是用户挑的、底图明度也不可控：浅色主题色落在
-/// 高德底图的黄白路面上会糊成一片（真机反馈「地图上轨迹线条看不清」）。深色描边
-/// 把线从底图上剥出来，与 HUD 文字加投影是同一个思路。
-///
-/// 不是数据色，所以不参与「颜色只表示数据」的约束：它只提高对比度，不表达任何量。
-const Color kRouteCasing = Color(0xCC0B0E12);
+/// 轨迹线的描边色。纸色底图上仍用墨色描边把主题色轨迹剥出来。
+const Color kRouteCasing = Color(0xCC1D1B17);
 
 /// 轨迹线宽。骑行界面是整页地图，4pt 骑行中扫一眼就滑过去了。
 const double kRouteStrokeWidth = 5;
 
-/// 轨迹描边宽（整圈，两侧各占一半）。3pt 即两侧各 1.5pt，浅色路面与深色
-/// 路面都立得住，又不会把 25 米间隔的相邻轨迹段连成一条粗带。
+/// 轨迹描边宽（整圈，两侧各占一半）。
 const double kRouteCasingWidth = 3;
 
 // ─────────────────────────────────────────────────────────────────────────
 // 字体
 //
-// 数字一律等宽 + tabular figures。这不是审美取舍而是功能要求：码表上的速度
-// 每 200ms 更新一次，比例数字的宽度随位数变化，读数会在横向抖动，瞄一眼反而
-// 更费劲。等宽数字保证「2」跳成「18」时整数位不移动。
-//
-// 不打包自定义字体：这是个离线 app，用系统的等宽家族（Android 上是
-// Roboto Mono / Droid Sans Mono），新增字体资产不值得。
+// 标题衬线、正文无衬线、数据等宽。不打包中文字体，全部走平台回退链；
+// 数字一律启用 tabular figures，实时读数不会随位数变化横向抖动。
 // ─────────────────────────────────────────────────────────────────────────
 
-/// 系统等宽家族。
-const String kMonoFamily = 'monospace';
+/// 标题衬线字体栈。
+const String kSerifFamily = 'Noto Serif SC';
+const List<String> kSerifFallback = <String>[
+  'Songti SC',
+  'Noto Serif CJK SC',
+  'serif',
+];
+
+/// 正文无衬线字体栈。
+const String kSansFamily = 'Noto Sans SC';
+const List<String> kSansFallback = <String>[
+  'PingFang SC',
+  'Noto Sans CJK SC',
+  'sans-serif',
+];
+
+/// 数据等宽字体栈。
+const String kMonoFamily = 'IBM Plex Mono';
+const List<String> kMonoFallback = <String>['Menlo', 'Courier New', 'monospace'];
 
 /// 等宽数字的字形特性。只影响数字，字母标点不受影响。
 const List<FontFeature> kTabularFigures = <FontFeature>[
@@ -116,80 +193,118 @@ const double kInstrumentNumeralSize = 120;
 
 /// 字号刻度。所有文本走这里，不再往 widget 里塞 13 / 15 / 26 这类魔数。
 const double kFontLabel = 11;
-
-/// 次级读数：卡片上那几项轻量读数（时长 / 均速 / 爬升 / 功率）。
-///
-/// 比正文小一档，但不取 [kFontLabel]：11 号在列表里扫一列容易串行。也不能升到
-/// 14——历史条目把四项读数排成固定四列，360dp 宽度下每列只有 76dp，`22.7 km/h`
-/// 在 14 号下已经贴着列宽，字号稍一缩放就换行。
 const double kFontMeta = 13;
-
-/// 正文。
 const double kFontBody = 14;
 const double kFontSubtitle = 15;
 const double kFontTitle = 20;
 const double kFontMetric = 26;
+const double kFontPageTitle = 34;
 const double kFontDisplay = 56;
 
-/// 标签：小号疏排。刻意不用全大写——中文没有大小写，英文标签跟着保持句首
-/// 大写即可，全大写标签是模板页的通病。
+/// 标签：小号疏排。中文没有大小写，英文标签保持句首大写。
 const TextStyle kLabelTextStyle = TextStyle(
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: kFontLabel,
   fontWeight: FontWeight.w500,
-  letterSpacing: 0.6,
-  color: kAppTextMuted,
+  letterSpacing: 1.4,
+  height: 1.4,
+  color: kMutedInk,
+);
+
+/// 页面大标题：衬线。
+const TextStyle kPageTitleTextStyle = TextStyle(
+  fontFamily: kSerifFamily,
+  fontFamilyFallback: kSerifFallback,
+  fontSize: kFontPageTitle,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 2,
+  height: 1.2,
+  color: kInk,
+);
+
+/// 区块衬线标题。
+const TextStyle kSerifHeadingTextStyle = TextStyle(
+  fontFamily: kSerifFamily,
+  fontFamilyFallback: kSerifFallback,
+  fontSize: 22,
+  fontWeight: FontWeight.w600,
+  height: 1.3,
+  color: kInk,
+);
+
+/// 静态大数字：历史距离、详情汇总、统计累计。衬线，接近设计稿的 Bodoni 观感。
+const TextStyle kSerifDisplayTextStyle = TextStyle(
+  fontFamily: kSerifFamily,
+  fontFamilyFallback: kSerifFallback,
+  fontSize: kFontDisplay,
+  fontWeight: FontWeight.w500,
+  height: 1.05,
+  letterSpacing: 1,
+  color: kInk,
 );
 
 /// 仪表读数：车把模式的主数字。
 const TextStyle kInstrumentTextStyle = TextStyle(
   fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
   fontSize: kInstrumentNumeralSize,
   fontWeight: FontWeight.w700,
   height: 1.0,
   letterSpacing: -2,
-  color: kAppTextPrimary,
+  color: kInk,
   fontFeatures: kTabularFigures,
 );
 
 /// 中号数字：卡片主数值、汇总指标。
 const TextStyle kMetricTextStyle = TextStyle(
   fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
   fontSize: kFontMetric,
   fontWeight: FontWeight.w700,
   height: 1.1,
   letterSpacing: -0.5,
-  color: kAppTextPrimary,
+  color: kInk,
   fontFeatures: kTabularFigures,
 );
 
 /// 大号数字：未完赛结算、个人最佳这类一次性读数。
 const TextStyle kDisplayTextStyle = TextStyle(
   fontFamily: kMonoFamily,
+  fontFamilyFallback: kMonoFallback,
   fontSize: kFontDisplay,
   fontWeight: FontWeight.w700,
   height: 1.0,
   letterSpacing: -1,
-  color: kAppTextPrimary,
+  color: kInk,
   fontFeatures: kTabularFigures,
 );
 
 /// 区块标题。
 const TextStyle kSectionTextStyle = TextStyle(
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: kFontSubtitle,
   fontWeight: FontWeight.w600,
-  color: kAppTextPrimary,
+  color: kInk,
 );
 
 /// 正文。
 const TextStyle kBodyTextStyle = TextStyle(
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: kFontBody,
-  color: kAppTextPrimary,
+  height: 1.5,
+  color: kInk,
 );
 
 /// 次级正文。
 const TextStyle kMutedTextStyle = TextStyle(
+  fontFamily: kSansFamily,
+  fontFamilyFallback: kSansFallback,
   fontSize: kFontBody,
-  color: kAppTextMuted,
+  height: 1.5,
+  color: kMutedInk,
 );
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -206,159 +321,224 @@ const double kSpaceXxl = 32;
 /// 细线元素（刻度、分隔）用的近直角。
 const double kRadiusLine = 2;
 
-/// 面板。
-const double kRadiusPanel = 6;
+/// 印章与按钮。
+const double kRadiusSeal = 3;
+const double kRadiusButton = 3;
 
-/// 控件：按钮、输入框、sheet。
-const double kRadiusControl = 10;
+/// 面板。纸本不再用大圆角卡片。
+const double kRadiusPanel = 3;
+
+/// 控件：按钮、输入框。
+const double kRadiusControl = 3;
+
+/// 底部面板只圆上方两角。
+const double kRadiusSheet = 18;
 
 /// 1 像素结构线。用 [BorderSide] 而不是 [Divider] 的地方都该用它。
-const BorderSide kHairline = BorderSide(color: kAppHairline, width: 1);
+const BorderSide kHairline = BorderSide(color: kHairlineColor, width: 1);
 
-ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.sky]) {
-  final Color accentColor = accent.color;
+ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.cinnabar]) {
+  final Color accentInk = accent.inkColor;
   final ColorScheme scheme = ColorScheme.fromSeed(
-    seedColor: accentColor,
-    brightness: Brightness.dark,
+    seedColor: accentInk,
+    brightness: Brightness.light,
   ).copyWith(
-    primary: accentColor,
-    onPrimary: kAppOnAccent,
-    secondary: accentColor,
-    onSecondary: kAppOnAccent,
+    primary: accentInk,
+    onPrimary: kPaper,
+    primaryContainer: accentInk.withValues(alpha: 0.12),
+    onPrimaryContainer: accentInk,
+    secondary: accentInk,
+    onSecondary: kPaper,
     error: kAppDanger,
-    onError: kAppOnDanger,
-    surface: kAppSurface,
-    onSurface: kAppTextPrimary,
-    surfaceContainerHighest: kAppSurfaceRaised,
-    onSurfaceVariant: kAppTextMuted,
-    outline: kAppHairline,
-    outlineVariant: kAppHairline,
+    onError: kPaper,
+    errorContainer: kAppDanger.withValues(alpha: 0.12),
+    onErrorContainer: kAppDanger,
+    surface: kSheet,
+    onSurface: kInk,
+    surfaceDim: kPaper,
+    surfaceBright: kSheet,
+    surfaceContainerLowest: kSheet,
+    surfaceContainerLow: kSheet,
+    surfaceContainer: kSheet,
+    surfaceContainerHigh: kPaperRaised,
+    surfaceContainerHighest: kPaperRaised,
+    onSurfaceVariant: kMutedInk,
+    outline: kHairlineColor,
+    outlineVariant: kHairlineColor,
+    surfaceTint: Colors.transparent,
+    inverseSurface: kInk,
+    onInverseSurface: kPaper,
+    inversePrimary: accentInk,
+    scrim: kInk.withValues(alpha: 0.4),
   );
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: Brightness.light,
     colorScheme: scheme,
-    scaffoldBackgroundColor: kAppBackground,
-    extensions: <ThemeExtension<dynamic>>[AppPalette(accent: accentColor)],
-    textTheme: const TextTheme(
-      titleMedium: TextStyle(
-        fontSize: kFontSubtitle,
-        fontWeight: FontWeight.w600,
-        color: kAppTextPrimary,
+    scaffoldBackgroundColor: kPaper,
+    canvasColor: kPaper,
+    dividerColor: kHairlineColor,
+    extensions: <ThemeExtension<dynamic>>[
+      AppPalette(
+        paper: kPaper,
+        sheet: kSheet,
+        ink: kInk,
+        muted: kMutedInk,
+        hairline: kHairlineColor,
+        accent: accent.color,
+        accentInk: accentInk,
+        warning: kAppWarning,
+        danger: kAppDanger,
       ),
+    ],
+    textTheme: const TextTheme(
+      displayLarge: kSerifDisplayTextStyle,
+      displayMedium: kSerifDisplayTextStyle,
+      displaySmall: kSerifHeadingTextStyle,
+      headlineMedium: kPageTitleTextStyle,
+      headlineSmall: kSerifHeadingTextStyle,
+      titleLarge: kSerifHeadingTextStyle,
+      titleMedium: kSectionTextStyle,
+      bodyLarge: kBodyTextStyle,
       bodyMedium: kBodyTextStyle,
-      bodySmall: TextStyle(fontSize: 12, color: kAppTextMuted),
+      bodySmall: TextStyle(
+        fontFamily: kSansFamily,
+        fontFamilyFallback: kSansFallback,
+        fontSize: 12,
+        height: 1.5,
+        color: kMutedInk,
+      ),
+      labelLarge: TextStyle(
+        fontFamily: kSansFamily,
+        fontFamilyFallback: kSansFallback,
+        fontSize: kFontBody,
+        fontWeight: FontWeight.w600,
+        color: kInk,
+      ),
+      labelMedium: kLabelTextStyle,
       labelSmall: kLabelTextStyle,
     ),
+    iconTheme: const IconThemeData(color: kInk),
     dividerTheme: const DividerThemeData(
-      color: kAppHairline,
+      color: kHairlineColor,
       thickness: 1,
       space: 1,
     ),
-    // 顶栏做成器件边框而不是 Material 的彩色 header：无阴影、无色调叠加，
-    // 只留一条底部细线把「边框」和「面板」分开。
+    // 旧页面仍在使用 AppBar；纸本版式会逐步换成 PageHeader。
     appBarTheme: const AppBarTheme(
-      backgroundColor: kAppBackground,
+      backgroundColor: kPaper,
       surfaceTintColor: Colors.transparent,
-      foregroundColor: kAppTextPrimary,
+      foregroundColor: kInk,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
+        fontFamily: kSerifFamily,
+        fontFamilyFallback: kSerifFallback,
         fontSize: kFontTitle,
         fontWeight: FontWeight.w600,
-        color: kAppTextPrimary,
+        color: kInk,
       ),
       shape: Border(bottom: kHairline),
     ),
-    // 选中态用主题色，与强调色一致。强调色在令牌层写的语义就是「正在发生 /
-    // 可交互 / 已选中」（见文首），底栏选中态本来就是它该占的位置；此前
-    // 为了把颜色全留给数据而让底栏走中性色，收敛过头了。未选中仍是次级灰，
-    // 抬高面板继续承担形状上的区分，颜色只负责「哪个被选中」。
+    // 旧外壳仍用 NavigationBar；阶段一结束会换成 PaperNavBar。
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: kAppSurface,
+      backgroundColor: kSheet,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: kAppSurfaceRaised,
+      indicatorColor: accentInk.withValues(alpha: 0.10),
       indicatorShape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(kRadiusLine)),
       ),
       elevation: 0,
-      height: 64,
+      height: 58,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       iconTheme: WidgetStateProperty.resolveWith(
         (Set<WidgetState> states) => IconThemeData(
-          size: 22,
-          color: states.contains(WidgetState.selected)
-              ? accentColor
-              : kAppTextMuted,
+          size: 20,
+          color: states.contains(WidgetState.selected) ? accentInk : kMutedInk,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (Set<WidgetState> states) => TextStyle(
-          fontSize: kFontLabel,
+          fontFamily: kSansFamily,
+          fontFamilyFallback: kSansFallback,
+          fontSize: 10,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.4,
-          color: states.contains(WidgetState.selected)
-              ? accentColor
-              : kAppTextMuted,
+          color: states.contains(WidgetState.selected) ? accentInk : kMutedInk,
         ),
       ),
     ),
-    cardTheme: CardThemeData(
-      color: kAppSurface,
+    cardTheme: const CardThemeData(
+      color: kSheet,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(kRadiusPanel)),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: accentColor,
-        foregroundColor: kAppOnAccent,
-        disabledBackgroundColor: kAppSurfaceRaised,
-        disabledForegroundColor: kAppTextMuted,
+        backgroundColor: accentInk,
+        foregroundColor: kPaper,
+        disabledBackgroundColor: kPaperRaised,
+        disabledForegroundColor: kMutedInk,
         elevation: 0,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: kSpaceXl),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
         ),
-        textStyle: const TextStyle(fontSize: kFontSubtitle, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: kSansFamily,
+          fontFamilyFallback: kSansFallback,
+          fontSize: kFontSubtitle,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: kAppTextPrimary,
-        disabledForegroundColor: kAppTextMuted,
+        foregroundColor: kInk,
+        disabledForegroundColor: kMutedInk,
         side: kHairline,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: kSpaceL),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(kRadiusControl)),
         ),
-        textStyle: const TextStyle(fontSize: kFontBody, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(
+          fontFamily: kSansFamily,
+          fontFamilyFallback: kSansFallback,
+          fontSize: kFontBody,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: accentColor,
-        textStyle: const TextStyle(fontSize: kFontBody, fontWeight: FontWeight.w600),
+        foregroundColor: accentInk,
+        textStyle: const TextStyle(
+          fontFamily: kSansFamily,
+          fontFamilyFallback: kSansFallback,
+          fontSize: kFontBody,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
-              ? accentColor
+              ? accentInk
               : Colors.transparent,
         ),
         foregroundColor: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
-              ? kAppOnAccent
-              : kAppTextMuted,
+              ? kPaper
+              : kMutedInk,
         ),
         side: const WidgetStatePropertyAll<BorderSide>(kHairline),
         shape: const WidgetStatePropertyAll<OutlinedBorder>(
@@ -367,16 +547,26 @@ ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.sky]) {
           ),
         ),
         textStyle: const WidgetStatePropertyAll<TextStyle>(
-          TextStyle(fontSize: kFontBody, fontWeight: FontWeight.w600),
+          TextStyle(
+            fontFamily: kSansFamily,
+            fontFamilyFallback: kSansFallback,
+            fontSize: kFontBody,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: kAppSurface,
+      fillColor: kSheet,
       labelStyle: kMutedTextStyle,
-      floatingLabelStyle: TextStyle(color: accentColor),
-      helperStyle: const TextStyle(fontSize: 12, color: kAppTextMuted),
+      floatingLabelStyle: TextStyle(color: accentInk),
+      helperStyle: const TextStyle(
+        fontFamily: kSansFamily,
+        fontFamilyFallback: kSansFallback,
+        fontSize: 12,
+        color: kMutedInk,
+      ),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: kSpaceM,
         vertical: kSpaceM,
@@ -391,43 +581,70 @@ ThemeData buildAppTheme([ThemeAccent accent = ThemeAccent.sky]) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: const BorderRadius.all(Radius.circular(kRadiusControl)),
-        borderSide: BorderSide(color: accentColor, width: 1.5),
+        borderSide: BorderSide(color: accentInk, width: 1.5),
       ),
     ),
     snackBarTheme: const SnackBarThemeData(
-      backgroundColor: kAppSurfaceRaised,
-      contentTextStyle: kBodyTextStyle,
+      backgroundColor: kInk,
+      contentTextStyle: TextStyle(
+        fontFamily: kSansFamily,
+        fontFamilyFallback: kSansFallback,
+        fontSize: kFontBody,
+        color: kPaper,
+      ),
       behavior: SnackBarBehavior.floating,
       elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(kRadiusPanel)),
+      ),
     ),
     dialogTheme: const DialogThemeData(
-      backgroundColor: kAppSurface,
+      backgroundColor: kSheet,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(kRadiusPanel)),
       ),
       titleTextStyle: TextStyle(
-        fontSize: kFontSubtitle,
+        fontFamily: kSerifFamily,
+        fontFamilyFallback: kSerifFallback,
+        fontSize: kFontTitle,
         fontWeight: FontWeight.w600,
-        color: kAppTextPrimary,
+        color: kInk,
       ),
       contentTextStyle: kMutedTextStyle,
     ),
     bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: kAppSurface,
+      backgroundColor: kSheet,
       surfaceTintColor: Colors.transparent,
+      modalBackgroundColor: kSheet,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusControl)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusSheet)),
       ),
+      dragHandleColor: kHairlineColor,
     ),
     listTileTheme: const ListTileThemeData(
-      iconColor: kAppTextMuted,
-      textColor: kAppTextPrimary,
+      iconColor: kMutedInk,
+      textColor: kInk,
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(
-      color: accentColor,
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: accentInk),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: accentInk,
+      selectionColor: accentInk.withValues(alpha: 0.20),
+      selectionHandleColor: accentInk,
+    ),
+    tooltipTheme: const TooltipThemeData(
+      decoration: BoxDecoration(
+        color: kInk,
+        borderRadius: BorderRadius.all(Radius.circular(kRadiusPanel)),
+      ),
+      textStyle: TextStyle(
+        fontFamily: kSansFamily,
+        fontFamilyFallback: kSansFallback,
+        fontSize: 12,
+        color: kPaper,
+      ),
     ),
   );
 }

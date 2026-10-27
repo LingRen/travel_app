@@ -129,6 +129,13 @@ Future<void> pumpHistory(
 }
 
 void main() {
+  Future<void> selectFilter(WidgetTester tester, String key) async {
+    await tester.tap(find.byKey(const Key('sport-filter-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key(key)));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('没有记录时显示空态提示', (WidgetTester tester) async {
     await pumpHistory(tester, rides: const <Workout>[]);
 
@@ -185,15 +192,13 @@ void main() {
 
     expect(find.byType(WorkoutCard), findsNWidgets(2));
 
-    await tester.tap(find.text('跑步'));
-    await tester.pumpAndSettle();
+    await selectFilter(tester, 'sport-filter-running');
 
     expect(find.text('晨骑'), findsNothing);
     expect(find.text('夜跑'), findsOneWidget);
     expect(find.byType(WorkoutCard), findsOneWidget);
 
-    await tester.tap(find.text('全部'));
-    await tester.pumpAndSettle();
+    await selectFilter(tester, 'sport-filter-all');
 
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.text('夜跑'), findsOneWidget);
@@ -205,8 +210,7 @@ void main() {
 
     expect(find.text('还没有运动记录'), findsOneWidget);
 
-    await tester.tap(find.text('跑步'));
-    await tester.pumpAndSettle();
+    await selectFilter(tester, 'sport-filter-running');
 
     expect(find.text('还没有跑步记录'), findsOneWidget);
   });

@@ -1,6 +1,7 @@
 import 'package:cycling_app/app/home_shell.dart';
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
+import 'package:cycling_app/app/ui/paper_nav_bar.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
@@ -8,6 +9,8 @@ import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
+import 'package:cycling_app/features/detail/detail_page.dart';
+import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/history/history_page.dart';
 import 'package:cycling_app/features/history/history_providers.dart';
 import 'package:cycling_app/features/history/ride_card.dart';
@@ -80,6 +83,13 @@ void main() {
             ridePointsProvider(_ride.id!).overrideWith(
               (Ref ref) => const <TrackPoint>[],
             ),
+            // 点卡片进入详情时详情页会读整份详情；不 override 就会去碰数据库。
+            rideDetailProvider(_ride.id!).overrideWith(
+              (Ref ref) => const WorkoutDetail(
+                ride: _ride,
+                points: <TrackPoint>[],
+              ),
+            ),
             sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
           ],
           child: MaterialApp(theme: buildAppTheme(), home: const HomeShell()),
@@ -90,20 +100,17 @@ void main() {
       tester.widget<IndexedStack>(find.byType(IndexedStack)).index!;
 
   int selectedIndex(WidgetTester tester) =>
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex;
+      tester.widget<PaperNavBar>(find.byType(PaperNavBar)).selectedIndex;
 
   List<String> tabLabels(WidgetTester tester) {
-    final NavigationBar bar =
-        tester.widget<NavigationBar>(find.byType(NavigationBar));
-    return bar.destinations
-        .map((Widget d) => (d as NavigationDestination).label)
-        .toList();
+    final PaperNavBar bar = tester.widget<PaperNavBar>(find.byType(PaperNavBar));
+    return bar.items.map((PaperNavItem item) => item.label).toList();
   }
 
-  /// 底部导航里的 tab 按钮。「历史」等文本在页面 AppBar 里也会出现，必须限定在
-  /// `NavigationBar` 内才不会撞上。
+  /// 底部导航里的 tab 按钮。「历史」等文本在页面页眉里也会出现，必须限定在
+  /// `PaperNavBar` 内才不会撞上。
   Finder tab(String label) => find.descendant(
-        of: find.byType(NavigationBar),
+        of: find.byType(PaperNavBar),
         matching: find.text(label),
       );
 
@@ -111,7 +118,7 @@ void main() {
     await pumpShell(tester);
 
     expect(tabLabels(tester), <String>['记录', '历史', '统计', '设置']);
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.byType(PaperNavBar), findsOneWidget);
   });
 
   testWidgets('默认停在「记录」tab', (WidgetTester tester) async {
@@ -139,6 +146,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(stackIndex(tester), 1);
     expect(selectedIndex(tester), 1);
+  });
+
+  testWidgets('详情在历史 tab 内推入且底栏保持可见', (WidgetTester tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(tab('历史'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(WorkoutCard));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailPage), findsOneWidget);
+    expect(find.byType(PaperNavBar), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailPage), findsNothing);
+    expect(find.byType(HistoryPage), findsOneWidget);
+    expect(find.byType(PaperNavBar), findsOneWidget);
   });
 
   testWidgets('同一时刻只渲染当前 tab 的内容', (WidgetTester tester) async {

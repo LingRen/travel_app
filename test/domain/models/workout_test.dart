@@ -69,6 +69,9 @@ void main() {
     expect(ActivityType.running.usesPace, isTrue);
     expect(ActivityType.walking.usesPace, isTrue);
     expect(ActivityType.hiking.usesPace, isTrue);
+    expect(ActivityType.mountaineering.usesPace, isTrue);
+    expect(ActivityType.mountaineering.supportsCadence, isFalse);
+    expect(ActivityType.mountaineering.supportsPower, isFalse);
   });
 
   test('toDbMap/fromDbMap 往返携带 activity_type', () {

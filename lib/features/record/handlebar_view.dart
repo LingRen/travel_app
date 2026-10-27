@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../app/ui/paper_sheet.dart';
 import '../../core/format.dart';
 import '../../data/ble/sensor_monitor.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/models/activity_type.dart';
+import '../activity/activity_type_chip.dart';
+import '../activity/activity_type_sheet.dart';
 import 'live_route_map.dart';
 import 'record_controller.dart';
 import 'ride_cue_banner.dart';
@@ -293,24 +296,22 @@ class HandlebarView extends StatelessWidget {
                       _InlineNotice(message: state.errorMessage!),
                     ],
                     const SizedBox(height: kSpaceS),
-                    // 运动类型选择：4 个 chip 一行。只在未开始态出现——开始后类型
-                    // 已冻结落库，记录中不可切换。
+                    // 运动类型浮标：只在未开始态出现——开始后类型已冻结落库，
+                    // 记录中不可切换。点开底部面板选择，面板里写明各类型的
+                    // 真实能力，不承诺没有采集的步频、步数。
                     if (idle) ...<Widget>[
                       const SizedBox(height: kSpaceS),
-                      SizedBox(
-                        width: double.infinity,
-                        child: SegmentedButton<ActivityType>(
-                          segments: <ButtonSegment<ActivityType>>[
-                            for (final ActivityType t in ActivityType.values)
-                              ButtonSegment<ActivityType>(
-                                value: t,
-                                label: Text(t.label),
-                              ),
-                          ],
-                          selected: <ActivityType>{selectedActivityType},
-                          onSelectionChanged: (Set<ActivityType> selected) =>
-                              onSelectActivityType(selected.first),
-                          showSelectedIcon: false,
+                      Center(
+                        child: ActivityTypeChip(
+                          key: const Key('activity-type-chip'),
+                          type: selectedActivityType,
+                          onTap: () => showPaperSheet<void>(
+                            context: context,
+                            builder: (_) => ActivityTypeSheet(
+                              current: selectedActivityType,
+                              onSelected: onSelectActivityType,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -325,7 +326,7 @@ class HandlebarView extends StatelessWidget {
                           ? FilledButton(
                               onPressed: onStart,
                               style: FilledButton.styleFrom(
-                                backgroundColor: context.palette.accent,
+                                backgroundColor: context.palette.accentInk,
                                 foregroundColor: context.palette.onAccent,
                               ),
                               child: Text(
@@ -368,7 +369,7 @@ class HandlebarView extends StatelessWidget {
                                   child: FilledButton(
                                     onPressed: paused ? onResume : onPause,
                                     style: FilledButton.styleFrom(
-                                      backgroundColor: context.palette.accent,
+                                      backgroundColor: context.palette.accentInk,
                                       foregroundColor: context.palette.onAccent,
                                     ),
                                     child: Text(

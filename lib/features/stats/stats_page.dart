@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../app/theme.dart';
+import '../../app/ui/page_header.dart';
+import '../../app/ui/paper_sheet.dart';
 import '../../core/format.dart';
 import '../../data/settings_repository.dart';
 import '../../domain/analysis/trend.dart';
 import '../../domain/models/activity_type.dart';
 import '../../domain/models/workout.dart';
+import '../activity/sport_filter_sheet.dart';
+import '../activity/sport_filter_trigger.dart';
 import 'personal_bests_card.dart';
 import 'stats_providers.dart';
 import 'trend_chart.dart';
@@ -24,9 +28,10 @@ class StatsPage extends ConsumerWidget {
             DistanceUnit.kilometer;
     final TrendRange range = ref.watch(trendRangeProvider);
     final ActivityType? filter = ref.watch(statsFilterProvider);
+    final DateTime now =
+        DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)());
 
     return Scaffold(
-      appBar: AppBar(title: const Text('统计')),
       body: rides.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) =>
@@ -40,25 +45,30 @@ class StatsPage extends ConsumerWidget {
 
           return ListView(
             children: <Widget>[
-              // 类型筛选条。null = 全部。选中态读写 `statsFilterProvider`，
-              // 列表 provider 跟着它重查。
-              Padding(
-                padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
-                child: SegmentedButton<ActivityType?>(
-                  segments: <ButtonSegment<ActivityType?>>[
-                    const ButtonSegment<ActivityType?>(
-                      value: null,
-                      label: Text('全部'),
+              PageHeader(
+                eyebrow: '长 期 统 计',
+                date: formatChineseYearMonth(now),
+                title: '里程',
+                trailing: Text(
+                  '共 ${trend.rideCount} 次',
+                  style: kLabelTextStyle,
+                ),
+                subtitle: '按${_rangeName(range)}归拢 · '
+                    '${formatDistance(trend.distanceM, unit)}',
+                subtitleTrailing: SportFilterTrigger(
+                  current: filter,
+                  onTap: () => showPaperSheet<void>(
+                    context: context,
+                    builder: (_) => SportFilterSheet(
+                      current: filter,
+                      onSelected: (ActivityType? type) => ref
+                          .read(statsFilterProvider.notifier)
+                          .state = type,
                     ),
-                    for (final ActivityType t in ActivityType.values)
-                      ButtonSegment<ActivityType?>(value: t, label: Text(t.label)),
-                  ],
-                  selected: <ActivityType?>{filter},
-                  onSelectionChanged: (Set<ActivityType?> selected) =>
-                      ref.read(statsFilterProvider.notifier).state = selected.first,
-                  showSelectedIcon: false,
+                  ),
                 ),
               ),
+              const Divider(height: 1, indent: kSpaceXl, endIndent: kSpaceXl),
               Padding(
                 padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceL, kSpaceL, 0),
                 child: SegmentedButton<TrendRange>(
@@ -106,6 +116,12 @@ class StatsPage extends ConsumerWidget {
     );
   }
 }
+
+String _rangeName(TrendRange range) => switch (range) {
+      TrendRange.week => '周',
+      TrendRange.month => '月',
+      TrendRange.year => '年',
+    };
 
 /// 范围内的累计距离 / 时长 / 爬升 / 次数 / 平均功率 / 最高功率。
 ///

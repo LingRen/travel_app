@@ -10,22 +10,19 @@ import 'db/settings_dao.dart';
 /// 它放在这里（而不是 app 的主题文件）是为了让数据层不反向依赖 UI 层——主题色
 /// 的定义属于「有哪些值可选」，怎么渲染属于 UI 层。
 ///
-/// 每组色相都必须能和**数据色**（心率区间色）与**安全色**（警告、危险）区分开：
-/// 色相相差 ≥30°，或相对亮度比 ≥1.30。详情页上心率曲线用主题色绘制、心率区间条
-/// 用区间色，两者同屏，撞色就读不出来。该约束由 `test/app/theme_test.dart` 的
-/// 门禁守住。
+/// 每组颜料有**两个**颜色：
+///   - [color]：原始颜料，用于设置页色点与大面积标记；
+///   - [inkColor]：文字安全色，用于文字、图标、按钮、选中态、轨迹与图表线。
 ///
-/// 曾经有第四组暖色（琥珀）作为默认色：它落在心率「暖身」段上，只能靠亮度与
-/// 语义区分，靠门禁豁免放行。轨迹与速度曲线改为跟随主题色之后，暖色与地图黄白
-/// 路面对撞的问题凸显出来，于是整组移除，默认改为天青。
+/// 青瓷与藤黄的原始颜料在纸底上只有 2.70:1 / 2.12:1，不能直接承担文字；
+/// 文字安全色都 ≥4.5:1。该约束由 `test/app/theme_test.dart` 的门禁守住。
 enum ThemeAccent {
-  mint('mint', '薄荷', Color(0xFF33D69F)),
-  // 比初版 #38BDF8 更亮：初版与心率区间蓝（#64B5F6）色相仅差 8°、亮度几乎相同，
-  // 详情页上心率曲线（主题色）与区间条会撞色。提亮后亮度比 1.33，可区分。
-  sky('sky', '天青', Color(0xFF7DD3FC)),
-  violet('violet', '紫罗兰', Color(0xFFA78BFA));
+  cinnabar('cinnabar', '朱砂', Color(0xFFB4452F), Color(0xFFB4452F)),
+  celadon('celadon', '青瓷', Color(0xFF7C9A8B), Color(0xFF4F6E60)),
+  indigo('indigo', '黛蓝', Color(0xFF3E5A6B), Color(0xFF3E5A6B)),
+  gamboge('gamboge', '藤黄', Color(0xFFC5A25E), Color(0xFF7E5F27));
 
-  const ThemeAccent(this.dbValue, this.label, this.color);
+  const ThemeAccent(this.dbValue, this.label, this.color, this.inkColor);
 
   /// 落库用的稳定标识，改显示名不影响已存数据。
   final String dbValue;
@@ -33,13 +30,28 @@ enum ThemeAccent {
   /// 设置页显示名。
   final String label;
 
-  /// 强调色本体。
+  /// 原始标记色：色点与大面积标记。
   final Color color;
 
-  static ThemeAccent fromDb(String? value) => ThemeAccent.values.firstWhere(
-        (ThemeAccent a) => a.dbValue == value,
-        orElse: () => ThemeAccent.sky,
-      );
+  /// 文字安全色：文字、图标、选中态、轨迹与图表线。
+  final Color inkColor;
+
+  /// 读取设置时迁移旧主题值；未知值回退朱砂，不写回损坏值。
+  static ThemeAccent fromDb(String? value) {
+    switch (value) {
+      case 'mint':
+        return ThemeAccent.celadon;
+      case 'sky':
+      case 'violet':
+        return ThemeAccent.indigo;
+      case 'amber':
+        return ThemeAccent.gamboge;
+    }
+    return ThemeAccent.values.firstWhere(
+      (ThemeAccent a) => a.dbValue == value,
+      orElse: () => ThemeAccent.cinnabar,
+    );
+  }
 }
 
 /// 距离单位。仅支持公里与英里两种，不涉及多语言。
@@ -78,7 +90,7 @@ class AppSettings {
     required this.weightKg,
     required this.distanceUnit,
     required this.mapTileUrlTemplate,
-    this.accent = ThemeAccent.sky,
+    this.accent = ThemeAccent.cinnabar,
     this.lastActivityType = ActivityType.cycling,
   });
 
@@ -87,7 +99,7 @@ class AppSettings {
   final DistanceUnit distanceUnit;
   final String mapTileUrlTemplate;
 
-  /// 主题强调色。缺省为天青。
+  /// 主题强调色。缺省为朱砂。
   final ThemeAccent accent;
 
   /// 上次在记录页选中的运动类型。下次冷启动沿用，避免选好类型后进程被回收、

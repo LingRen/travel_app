@@ -16,6 +16,7 @@ import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
+import 'package:cycling_app/features/activity/activity_type_sheet.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/record/record_page.dart';
@@ -683,7 +684,7 @@ void main() {
       expect(find.text('等待定位…'), findsNothing);
     });
 
-    testWidgets('未开始态有运动类型 chip 行，点「跑步」回调收到 running',
+    testWidgets('未开始态显示类型浮标，点开面板可选五种类型',
         (WidgetTester tester) async {
       final List<ActivityType> picked = <ActivityType>[];
       await tester.pumpWidget(wrap(handlebar(
@@ -691,16 +692,39 @@ void main() {
         onSelectActivityType: picked.add,
       )));
 
-      // 未开始时 4 个类型都在（主按钮文案「开始骑行」里的「骑行」不算）。
-      for (final ActivityType t in ActivityType.values) {
-        expect(find.text(t.label), findsOneWidget);
-      }
-      await tester.tap(find.text('跑步'));
-      expect(picked, <ActivityType>[ActivityType.running]);
+      // 未开始时浮标显示当前类型；五种类型在面板里（主按钮文案「开始骑行」
+      // 里的「骑行」不算）。
+      expect(find.byKey(const Key('activity-type-chip')), findsOneWidget);
+      expect(find.text('骑行'), findsOneWidget);
 
-      // 记录中 chip 行整体消失：类型已冻结落库，不可再切。
+      await tester.tap(find.byKey(const Key('activity-type-chip')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('选择运动'), findsOneWidget);
+      for (final ActivityType t in ActivityType.values) {
+        // 浮标在面板底下仍然挂着，当前类型的名字会出现两次；断言限定在面板内。
+        expect(
+          find.descendant(
+            of: find.byType(ActivityTypeSheet),
+            matching: find.text(t.label),
+          ),
+          findsOneWidget,
+          reason: t.dbValue,
+        );
+      }
+
+      await tester.tap(find.descendant(
+        of: find.byType(ActivityTypeSheet),
+        matching: find.text('跑步'),
+      ));
+      await tester.pumpAndSettle();
+      expect(picked, <ActivityType>[ActivityType.running]);
+      expect(find.text('选择运动'), findsNothing);
+
+      // 记录中浮标整体消失：类型已冻结落库，不可再切。
       await tester.pumpWidget(wrap(handlebar(active)));
-      expect(find.text('跑步'), findsNothing);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('activity-type-chip')), findsNothing);
       expect(find.text('健走'), findsNothing);
     });
 
@@ -901,8 +925,10 @@ void main() {
     testWidgets('结束确认弹窗跟着所选运动类型', (WidgetTester tester) async {
       await pumpRecordPage(tester);
 
-      await tester.tap(find.text('跑步'));
-      await tester.pump();
+      await tester.tap(find.byKey(const Key('activity-type-chip')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('activity-type-running')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('开始跑步'));
       await tester.pump();
       await tester.pump();

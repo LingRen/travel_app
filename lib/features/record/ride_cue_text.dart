@@ -43,6 +43,7 @@ String _distanceVerb(ActivityType type) => switch (type) {
       ActivityType.running => '已跑',
       ActivityType.walking => '已走',
       ActivityType.hiking => '已徒步',
+      ActivityType.mountaineering => '已登山',
     };
 
 /// 速度单位的念法。

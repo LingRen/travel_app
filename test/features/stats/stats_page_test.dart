@@ -105,6 +105,13 @@ String totalsValue(WidgetTester tester, String tile) {
 }
 
 void main() {
+  Future<void> selectFilter(WidgetTester tester, String key) async {
+    await tester.tap(find.byKey(const Key('sport-filter-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key(key)));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('默认显示本周累计距离、时长与爬升', (WidgetTester tester) async {
     await pumpStats(tester, rides: <Workout>[
       ride(1, 2026, 9, 22),
@@ -336,14 +343,12 @@ void main() {
       expect(totalsValue(tester, 'distance'), '18.00 km');
       expect(totalsValue(tester, 'count'), '3');
 
-      await tester.tap(find.text('跑步'));
-      await tester.pumpAndSettle();
+      await selectFilter(tester, 'sport-filter-running');
 
       expect(totalsValue(tester, 'distance'), '8.00 km');
       expect(totalsValue(tester, 'count'), '2');
 
-      await tester.tap(find.text('全部'));
-      await tester.pumpAndSettle();
+      await selectFilter(tester, 'sport-filter-all');
 
       expect(totalsValue(tester, 'distance'), '18.00 km');
       expect(totalsValue(tester, 'count'), '3');
@@ -359,8 +364,7 @@ void main() {
       expect(find.byKey(const Key('totals-avg-power')), findsOneWidget);
       expect(find.byKey(const Key('totals-max-power')), findsOneWidget);
 
-      await tester.tap(find.text('跑步'));
-      await tester.pumpAndSettle();
+      await selectFilter(tester, 'sport-filter-running');
 
       // 跑步不支持功率 → 功率行整行隐藏。
       expect(find.text('平均功率'), findsNothing);
@@ -368,8 +372,7 @@ void main() {
       expect(find.byKey(const Key('totals-avg-power')), findsNothing);
       expect(find.byKey(const Key('totals-max-power')), findsNothing);
 
-      await tester.tap(find.text('全部'));
-      await tester.pumpAndSettle();
+      await selectFilter(tester, 'sport-filter-all');
 
       // 个人最佳卡片里有功率记录时也有一行「最高功率」，这里用 tile 的 Key
       // 钉住累计矩阵里那一格，避免两个「最高功率」互相干扰。

@@ -62,6 +62,34 @@ String formatDuration(int seconds) {
 /// 功率文本。没配功率计时没有功率数据，用破折号占位。
 String formatPower(double? watts) => watts == null ? '—' : '${watts.round()} W';
 
+/// 纸本页眉的中文年月，形如 `二〇二六 · 十月`。
+String formatChineseYearMonth(DateTime t) {
+  const List<String> digits = <String>[
+    '〇',
+    '一',
+    '二',
+    '三',
+    '四',
+    '五',
+    '六',
+    '七',
+    '八',
+    '九',
+  ];
+  final String year = t.year
+      .toString()
+      .split('')
+      .map((String d) => digits[int.parse(d)])
+      .join();
+  final String month = switch (t.month) {
+    10 => '十',
+    11 => '十一',
+    12 => '十二',
+    _ => digits[t.month],
+  };
+  return '$year · $month月';
+}
+
 /// 日期时间文本，形如 `2026-09-21 08:05`。用本地时区。
 ///
 /// 不做「今年省略年份」的压缩：列表里跨年的记录混在一起时，省略年份会看不出
