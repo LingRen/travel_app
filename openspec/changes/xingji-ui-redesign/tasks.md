@@ -73,7 +73,7 @@
 ## 8. 集成验收
 
 - [ ] 8.1 运行 `flutter analyze` 与 `dart format --output=none --set-exit-if-changed lib test`，确认无新增告警与格式差异；同时检查 `git status`，确认未覆盖工作区已有的领域层未提交改动。
-- [ ] 8.2 运行 `flutter test` 全量通过，重点确认 `test/app/**`、`test/features/**` 中旧深色主题、AppBar、SegmentedButton 与旧文案断言已全部更新。
+- [x] 8.2 运行 `flutter test` 全量通过，重点确认 `test/app/**`、`test/features/**` 中旧深色主题、AppBar、SegmentedButton 与旧文案断言已全部更新。
 - [ ] 8.3 在 390×844 与 360×640 两种逻辑尺寸、系统文字缩放 1.3 下逐页截图，对照 `design/exports/` 检查封面、记录待机 / 进行中、历史、详情、统计、设置与两个面板无裁切、无重叠、地图带 ≥120dp。
 - [ ] 8.4 用旧版本数据库（含 `mint` / `sky` / `amber` 主题值与 `walking` 记录）走一次升级启动，确认主题映射、健走记录展示与新类型选择正常，记录数量与汇总不变。
 - [ ] 8.5 真机户外强光下确认记录页速度 / 距离读数与 HUD 对比度；若不足，只调整纸色渐变不透明度与瓦片滤镜参数，不改交互与规格。
