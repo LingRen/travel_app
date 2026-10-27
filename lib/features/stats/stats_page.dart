@@ -114,12 +114,17 @@ class StatsPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      Text(
-                        '${formatChineseYearMonth(now)} · '
-                        '${trend.buckets.length} ${_bucketUnit(range)}',
-                        style: kLabelTextStyle.copyWith(
-                          color: context.palette.muted,
-                          letterSpacing: 0,
+                      Flexible(
+                        child: Text(
+                          '${formatChineseYearMonth(now)} · '
+                          '${trend.buckets.length} ${_bucketUnit(range)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: kLabelTextStyle.copyWith(
+                            color: context.palette.muted,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ),
                     ],
@@ -447,24 +452,29 @@ class _PowerReadout extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return Expanded(
-      child: Row(
-        children: <Widget>[
-          Text(
-            label,
-            style: kLabelTextStyle.copyWith(
-              color: palette.muted,
-              letterSpacing: 0,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              label,
+              style: kLabelTextStyle.copyWith(
+                color: palette.muted,
+                letterSpacing: 0,
+              ),
             ),
-          ),
-          const SizedBox(width: kSpaceS),
-          Text(
-            value,
-            style: kMetricTextStyle.copyWith(
-              fontSize: 15,
-              color: palette.ink,
+            const SizedBox(width: kSpaceS),
+            Text(
+              value,
+              style: kMetricTextStyle.copyWith(
+                fontSize: 15,
+                color: palette.ink,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

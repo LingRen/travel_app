@@ -87,13 +87,16 @@ class _CoverBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
+    // 文字放大时把设计高度一起放大，再交给 FittedBox 等比缩回屏幕；
+    // 否则固定 760 高的 Column 会先溢出，FittedBox 来不及救。
+    final double textScale = MediaQuery.textScalerOf(context).scale(1);
     return SafeArea(
       child: Center(
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: SizedBox(
             width: 390,
-            height: 760,
+            height: 760 * (textScale < 1 ? 1 : textScale),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: kSpaceXl),
               child: Column(

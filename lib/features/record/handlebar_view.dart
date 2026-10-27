@@ -411,20 +411,25 @@ class HandlebarView extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: <Widget>[
-                                        const Icon(Icons.stop_rounded, size: 18),
-                                        const SizedBox(width: kSpaceS),
-                                        Text(
-                                          '结束',
-                                          style: const TextStyle(
-                                            fontSize: kFontTitle,
-                                            fontWeight: FontWeight.w700,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          const Icon(
+                                            Icons.stop_rounded,
+                                            size: 18,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: kSpaceS),
+                                          Text(
+                                            '结束',
+                                            style: const TextStyle(
+                                              fontSize: kFontTitle,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -443,25 +448,27 @@ class HandlebarView extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: <Widget>[
-                                        Icon(
-                                          paused
-                                              ? Icons.play_arrow_rounded
-                                              : Icons.pause_rounded,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: kSpaceS),
-                                        Text(
-                                          paused ? '继续' : '暂停',
-                                          style: const TextStyle(
-                                            fontSize: kFontTitle,
-                                            fontWeight: FontWeight.w700,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          Icon(
+                                            paused
+                                                ? Icons.play_arrow_rounded
+                                                : Icons.pause_rounded,
+                                            size: 20,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: kSpaceS),
+                                          Text(
+                                            paused ? '继续' : '暂停',
+                                            style: const TextStyle(
+                                              fontSize: kFontTitle,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -986,9 +993,13 @@ class _MetricCell extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              label,
-              style: kLabelTextStyle.copyWith(color: palette.muted),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: kLabelTextStyle.copyWith(color: palette.muted),
+              ),
             ),
             if (onTap != null) ...<Widget>[
               const SizedBox(width: kSpaceXs),
