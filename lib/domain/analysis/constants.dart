@@ -53,6 +53,26 @@ const int kSensorCurveFilterWindow = 21;
 /// 静止判定速度阈值（m/s），等于 1 km/h。见设计文档 8.2。
 const double kStationarySpeedMps = 1.0 / 3.6;
 
+/// 静止死区：入场阈值（m/s），约 1.8 km/h。
+///
+/// 手机 GPS 停着不动时也会报出 0.2~0.6 m/s 的速度——这是多径与星历抖动的
+/// 解算残差，不是位移。真机上「原地不动也有一两公里的速度」就是这个。真实
+/// 最慢的运动（步行起步）也在 1 m/s 以上，0.5 的门槛不会吃掉真速度。
+const double kSpeedDeadbandEnterMps = 0.5;
+
+/// 静止死区：出场阈值（m/s），约 3.6 km/h。
+///
+/// 比入场阈值高一些形成滞回：抖动正好在门槛附近时，读数不会在 0 与 2 km/h
+/// 之间反复闪烁。已经动起来后要真的超过它才重新显示速度。
+const double kSpeedDeadbandExitMps = 1.0;
+
+/// 里程累计的最小位移（米）。
+///
+/// 静止时定位点会在几米范围内来回抖，逐段求和会白送里程（停十分钟能涨几百
+/// 米）。改为以锚点为基准：位移攒够这个门槛才记一笔，抖动只在锚点附近打转就
+/// 数不出来。真实移动的总量一分不少，只是读数按几米一跳。
+const double kDistanceNoiseFloorM = 4.0;
+
 /// 轨迹点写入：与上一点的最小距离（米）。见设计文档 6.3 规则 1。
 const double kMinWriteDistanceM = 5.0;
 

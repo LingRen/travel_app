@@ -17,10 +17,9 @@ WorkoutSummary computeSummary({
   required int maxHeartRate,
   required double weightKg,
 }) {
-  double distanceM = 0;
-  for (int i = 1; i < points.length; i++) {
-    distanceM += segmentDistanceMeters(points[i - 1], points[i]);
-  }
+  // 里程口径与实时累计一致（锚点 + 噪声门槛），否则停车时的位置抖动会在
+  // 结算里又重新涨一遍。
+  final double distanceM = trackDistanceMeters(points);
 
   final MovingStats moving = splitMovingStationary(points, kStationarySpeedMps);
 

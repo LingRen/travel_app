@@ -76,6 +76,40 @@ void main() {
     expect(s.maxSpeedMps! < 30, isTrue);
   });
 
+  test('停车时的位置抖动不计入里程', () {
+    // 停着不动，定位点在一两米范围内来回抖：逐段求和会白送几十米。
+    final List<TrackPoint> points = <TrackPoint>[
+      for (int i = 0; i < 10; i++)
+        _p(i * 1000, 121.4700 + (i.isEven ? 0.00002 : -0.00002), speed: 0),
+    ];
+    final WorkoutSummary s = computeSummary(
+      points: points,
+      durationS: 9,
+      maxHeartRate: 190,
+      weightKg: 70,
+    );
+    expect(s.distanceM, 0);
+  });
+
+  test('起步那一段仍算里程，不被静止判定吞掉', () {
+    // 前两点停着（抖动不计），第三点动起来：这一小段位移是真的，不能因为
+    // 起点速度为 0 就一起丢掉。
+    final double segment =
+        haversineMeters(31.23, 121.4701, 31.23, 121.4702);
+    final List<TrackPoint> points = <TrackPoint>[
+      _p(0, 121.4700, speed: 0),
+      _p(1000, 121.4701, speed: 0),
+      _p(2000, 121.4702, speed: 5),
+    ];
+    final WorkoutSummary s = computeSummary(
+      points: points,
+      durationS: 2,
+      maxHeartRate: 190,
+      weightKg: 70,
+    );
+    expect(s.distanceM, closeTo(segment, 1e-6));
+  });
+
   test('首个定位点的高程异常不会变成爬升', () {
     // 模拟定位验证时的真实场景：首点高程为 0，次点跳到 500，水平只差几米。
     // 修复前这条轨迹会算出 500 米爬升。

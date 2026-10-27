@@ -101,6 +101,63 @@ void main() {
       s.tick(11000);
       expect(s.snapshot.currentSpeedMps, 0);
     });
+
+    test('原地不动时芯片报出的低速被压成 0', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 停在原地，位置在一两米内抖动，GPS 仍会解算出 0.3 m/s 的残差速度。
+      for (int i = 0; i < 5; i++) {
+        s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.00001, speedMps: 0.3));
+        expect(s.snapshot.currentSpeedMps, 0,
+            reason: '第 ${i + 1} 秒：静止时的幻影速度不能显示');
+      }
+    });
+
+    test('死区带滞回，门槛附近不闪烁', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 0.3));
+      expect(s.snapshot.currentSpeedMps, 0);
+      // 高于入场阈值（0.5）但低于出场阈值（1.0）：保持 0，避免 0↔2 km/h 跳变。
+      s.ingestFix(fixAt(1000, speedMps: 0.7));
+      expect(s.snapshot.currentSpeedMps, 0);
+      // 真的动起来了才恢复读数。
+      s.ingestFix(fixAt(2000, speedMps: 1.2));
+      expect(s.snapshot.currentSpeedMps, 1.2);
+      // 减速时低于出场阈值仍照常显示，跌破入场阈值才归零。
+      s.ingestFix(fixAt(3000, speedMps: 0.6));
+      expect(s.snapshot.currentSpeedMps, 0.6);
+      s.ingestFix(fixAt(4000, speedMps: 0.4));
+      expect(s.snapshot.currentSpeedMps, 0);
+    });
+
+    test('落盘点写的是死区后的速度，停车不会被算成移动时间', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      s.ingestFix(fixAt(0, speedMps: 0.3));
+      expect(s.takePendingPoints().single.speedMps, 0);
+    });
+
+    test('停在原地时位置抖动不涨里程', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 停车 10 秒，位置在一两米内来回抖，芯片一直报 0.3 m/s。
+      for (int i = 0; i < 10; i++) {
+        s.ingestFix(fixAt(
+          i * 1000,
+          lat: 31.0 + (i.isEven ? 0.00001 : -0.00001),
+          speedMps: 0.3,
+        ));
+      }
+      expect(s.snapshot.distanceM, 0,
+          reason: '静止时的位置漂移不是里程');
+    });
+
+    test('慢速移动的里程按锚点累计，总量不丢', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 步行 1.4 m/s，每秒 1.39 米；门槛 4 米，读数几米一跳但总量基本不变。
+      for (int i = 0; i < 11; i++) {
+        s.ingestFix(fixAt(i * 1000, lat: 31.0 + i * 0.0000125, speedMps: 1.4));
+      }
+      // 实际走了 13.9 米，最后一次记账停在 4 米的整数倍上。
+      expect(s.snapshot.distanceM, closeTo(13.9, 4.0));
+    });
   });
 
   group('RecordingSession 落盘', () {

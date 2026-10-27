@@ -119,7 +119,13 @@ class RecordingSession {
   int _lastTickMs;
   int _lastWrittenMs;
   double _distanceM;
+
+  /// 里程锚点：累计距离以它为准，只有真的挪出 [kDistanceNoiseFloorM] 才记一笔。
+  LocationFix? _distanceAnchor;
   double _currentSpeedMps = 0;
+
+  /// 速度是否已被静止死区压成 0。死区靠它做滞回（见 [_applySpeedDeadband]）。
+  bool _speedZeroed = false;
   int? _hr;
   double? _cadence;
   int? _power;
@@ -231,17 +237,12 @@ class RecordingSession {
     double segmentM = 0;
     if (prev != null && prev.hasPosition) {
       segmentM = segmentDistanceMeters(_toPoint(prev), _toPoint(fix));
-      _distanceM += segmentM;
     }
 
-    final double? reported = fix.speedMps;
-    if (reported != null && reported >= 0 && reported <= kMaxPlausibleSpeedMps) {
-      _currentSpeedMps = reported;
-    } else {
-      // GPS 没给速度，或给的数值不合理，就用位移除以时间推算。
-      final int dtMs = prev == null ? 0 : fix.tMs - prev.tMs;
-      _currentSpeedMps = dtMs > 0 ? segmentM / (dtMs / 1000.0) : 0;
-    }
+    final double rawSpeed = _resolveSpeedMps(fix, segmentM);
+    final bool wasStationary = _speedZeroed;
+    _currentSpeedMps = _applySpeedDeadband(rawSpeed);
+    _trackDistance(fix, prev, segmentM, wasStationary: wasStationary);
 
     _lastFix = fix;
     _trackGradeSample(fix);
@@ -249,11 +250,64 @@ class RecordingSession {
     _estimatedPower = _estimatePower();
 
     if (shouldWriteTrackPoint(lastWritten: _lastWritten, fix: fix)) {
-      _write(_toPoint(fix), gpsLostBefore: gpsLostBefore);
+      // 落盘的速度同样过死区：结算里的移动/静止时长与平均速度都读这个值，
+      // 写原始幻影速度的话，停车十分钟会被算成十分钟的移动时间。
+      _write(_toPoint(fix, speedMps: _currentSpeedMps),
+          gpsLostBefore: gpsLostBefore);
     } else if (gpsLostBefore) {
       // 这个点没落盘（几乎没位移），但它标记的断点不能丢：留给下一个落盘点。
       _liveBreakPending = true;
     }
+  }
+
+  /// 原始速度：优先用 GPS 上报值，缺失或不合理时用位移除以时间推算。
+  double _resolveSpeedMps(LocationFix fix, double segmentM) {
+    final double? reported = fix.speedMps;
+    if (reported != null &&
+        reported >= 0 &&
+        reported <= kMaxPlausibleSpeedMps) {
+      return reported;
+    }
+    final LocationFix? prev = _lastFix;
+    final int dtMs = prev == null ? 0 : fix.tMs - prev.tMs;
+    return dtMs > 0 ? segmentM / (dtMs / 1000.0) : 0;
+  }
+
+  /// 静止死区：把 GPS 抖动解算出的幻影速度压成 0。见 [kSpeedDeadbandEnterMps]。
+  double _applySpeedDeadband(double raw) {
+    if (_speedZeroed) {
+      if (raw < kSpeedDeadbandExitMps) return 0;
+      _speedZeroed = false;
+    } else if (raw < kSpeedDeadbandEnterMps) {
+      _speedZeroed = true;
+      return 0;
+    }
+    return raw;
+  }
+
+  /// 累计里程，口径见 [kDistanceNoiseFloorM]。
+  ///
+  /// 只记锚点到当前位置够得上噪声门槛的位移：静止时位置在一两米内抖动，逐段
+  /// 累加会白送里程。段被判为不可信（断点、跳变）时锚点跟到当前点，否则锚点
+  /// 会停在空档之前，之后每一段都跨着它，永远数不出来。
+  void _trackDistance(
+    LocationFix fix,
+    LocationFix? prev,
+    double segmentM, {
+    required bool wasStationary,
+  }) {
+    // 只有前后都在静止状态才算「这一段没动」；起步与刹停那一段的一端还带着
+    // 速度，位移是真的。
+    if (prev == null || segmentM <= 0 || (wasStationary && _speedZeroed)) {
+      _distanceAnchor = fix;
+      return;
+    }
+    final LocationFix anchor = _distanceAnchor ??= prev;
+    final double d =
+        haversineMeters(anchor.lat!, anchor.lon!, fix.lat!, fix.lon!);
+    if (d < kDistanceNoiseFloorM) return;
+    _distanceM += d;
+    _distanceAnchor = fix;
   }
 
   /// 把本次定位压进坡度窗口，并丢掉窗口外的老样点。
@@ -400,6 +454,8 @@ class RecordingSession {
     _lastFix = null;
     _lastWritten = null;
     _lastWrittenMs = nowMs;
+    _speedZeroed = false;
+    _distanceAnchor = null;
     // 坡度窗口横跨暂停段会把两段不同位置的样点连成一条假坡，一起清掉。
     _gradeSamples.clear();
   }
@@ -519,13 +575,13 @@ class RecordingSession {
     _liveTrack = kept;
   }
 
-  TrackPoint _toPoint(LocationFix fix) => TrackPoint(
+  TrackPoint _toPoint(LocationFix fix, {double? speedMps}) => TrackPoint(
         rideId: rideId,
         tMs: fix.tMs,
         lat: fix.lat,
         lon: fix.lon,
         altitudeM: fix.altitudeM,
-        speedMps: fix.speedMps,
+        speedMps: speedMps ?? fix.speedMps,
         accuracyM: fix.accuracyM,
         hr: _hr,
         cadence: _cadence?.round(),

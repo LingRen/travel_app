@@ -57,3 +57,37 @@ bool isTrustedSegment(TrackPoint a, TrackPoint b) {
 /// 不可信时返回 0，判定规则见 [isTrustedSegment]。
 double segmentDistanceMeters(TrackPoint a, TrackPoint b) =>
     isTrustedSegment(a, b) ? haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) : 0;
+
+/// 整条轨迹的有效里程（米），口径见 [kDistanceNoiseFloorM]。
+///
+/// 与实时累计同一套规则：以锚点为基准，位移够得上噪声门槛才记一笔；死区判定
+/// 为静止的段直接跳过。逐段求和会把停车时的位置抖动也算成里程。
+double trackDistanceMeters(List<TrackPoint> points) {
+  double total = 0;
+  TrackPoint? anchor;
+  for (int i = 1; i < points.length; i++) {
+    final TrackPoint a = points[i - 1];
+    final TrackPoint b = points[i];
+    final double segment = segmentDistanceMeters(a, b);
+    // 只有「两端都静止」的段才是真没动。起步或刹停那一段的一端还带着速度，
+    // 位移是真的，不能一起丢掉。
+    final bool stationary = _isStationaryPoint(a) && _isStationaryPoint(b);
+    if (segment <= 0 || stationary) {
+      // 断点/跳变，或停着不动：锚点跟到当前点，这一段不记。
+      anchor = b.hasPosition ? b : null;
+      continue;
+    }
+    anchor ??= a;
+    final TrackPoint from = anchor;
+    final double d = haversineMeters(from.lat!, from.lon!, b.lat!, b.lon!);
+    if (d < kDistanceNoiseFloorM) continue;
+    total += d;
+    anchor = b;
+  }
+  return total;
+}
+
+/// 该点是否按静止死区判定为「没在动」。速度为 0 的点（落盘前已过死区）即静止。
+bool _isStationaryPoint(TrackPoint p) =>
+    p.speedMps != null && p.speedMps! < kSpeedDeadbandEnterMps;
+
