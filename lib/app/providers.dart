@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // StateProvider 在 riverpod 3 里只从 legacy 入口导出。
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 
+import '../config/app_config.dart';
 import '../data/ble/ble_platform.dart';
 import '../data/ble/ble_scanner.dart';
 import '../data/db/settings_dao.dart';
@@ -10,16 +12,17 @@ import '../data/db/track_point_dao.dart';
 import '../data/db/workout_dao.dart';
 import '../data/export/backup_io.dart';
 import '../data/export/backup_store.dart';
+import '../data/geocode/place_service.dart';
 import '../data/location/location_service.dart';
 import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
+import '../data/weather/weather_service.dart';
 import '../data/workout_repository.dart';
 
 /// 数据库连接。`main()` 发起打开、`CyclingApp` 在连接就绪后 override 注入，
 /// 因此这里不需要异步；测试里直接 override 成内存库。
 final Provider<Database> databaseProvider = Provider<Database>(
-  (Ref ref) =>
-      throw UnimplementedError('databaseProvider 必须在启动时 override'),
+  (Ref ref) => throw UnimplementedError('databaseProvider 必须在启动时 override'),
 );
 
 final Provider<SettingsRepository> settingsRepositoryProvider =
@@ -63,6 +66,32 @@ final FutureProvider<AppSettings> appSettingsProvider =
 
 final Provider<LocationService> locationServiceProvider =
     Provider<LocationService>((Ref ref) => const LocationService());
+
+/// 待机页查地名与天气共用的 HTTP 客户端。
+///
+/// 单独做成 provider 是为了让测试一次替换掉两处网络，也方便在 provider
+/// 销毁时关掉连接池。
+final Provider<http.Client> httpClientProvider = Provider<http.Client>((
+  Ref ref,
+) {
+  final http.Client client = http.Client();
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// 逆地理编码。没有配置 `AMAP_WEB_KEY` 时服务内部直接返回 null，
+/// 待机页回退成「当前位置」。
+final Provider<PlaceService> placeServiceProvider = Provider<PlaceService>(
+  (Ref ref) =>
+      AmapPlaceService(client: ref.watch(httpClientProvider), key: kAmapWebKey),
+);
+
+/// 当前气温。免 Key 的 Open-Meteo，失败时返回 null，待机页省略温度。
+final Provider<WeatherService> weatherServiceProvider =
+    Provider<WeatherService>(
+      (Ref ref) =>
+          OpenMeteoWeatherService(client: ref.watch(httpClientProvider)),
+    );
 
 /// 当前时间（epoch 毫秒）。做成 provider 是为了让记录控制器能在测试里
 /// 用假时钟驱动，而不必等待真实时间流逝。

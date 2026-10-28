@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/app/theme.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
+import 'package:cycling_app/data/geocode/place_service.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/data/weather/weather_service.dart';
 import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/analysis/constants.dart';
 import 'package:cycling_app/domain/analysis/gcj02.dart';
@@ -19,6 +21,7 @@ import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/activity/activity_type_sheet.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
+import 'package:cycling_app/features/record/idle_conditions.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/record/record_page.dart';
 import 'package:flutter/material.dart';
@@ -136,6 +139,33 @@ class _FakeLocationService implements LocationService {
   Future<bool> shouldSuggestAlwaysPermission() async => false;
 }
 
+/// 内存版地名服务：记录页测试不碰高德接口。
+class _FakePlaceService implements PlaceService {
+  String? place;
+  int calls = 0;
+
+  @override
+  Future<String?> placeName({required double lat, required double lon}) async {
+    calls++;
+    return place;
+  }
+}
+
+/// 内存版天气服务：记录页测试不碰 Open-Meteo。
+class _FakeWeatherService implements WeatherService {
+  int? temperatureC;
+  int calls = 0;
+
+  @override
+  Future<int?> currentTemperatureC({
+    required double lat,
+    required double lon,
+  }) async {
+    calls++;
+    return temperatureC;
+  }
+}
+
 /// 内存版配对仓储：记录页测试不关心传感器配对，等价于「从没配对过」。
 class _FakeSensorPairing implements SensorPairingRepository {
   @override
@@ -216,9 +246,11 @@ void main() {
     DateTime? now,
     VoidCallback? onFixError,
     VoidCallback? onFixAlwaysPermission,
+    IdleConditions idleConditions = IdleConditions.none,
   }) => HandlebarView(
     state: state,
     unit: DistanceUnit.kilometer,
+    idleConditions: idleConditions,
     tileUrlTemplate: kDefaultMapTileUrlTemplate,
     selectedActivityType: selectedActivityType,
     now: now,
@@ -658,6 +690,80 @@ void main() {
       expect(find.text('开始骑行'), findsOneWidget);
     });
 
+    testWidgets('待机页在定位就绪后显示地名与气温', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            RecordState(
+              previewFix: const LocationFix(
+                tMs: 1000,
+                lat: 30.0,
+                lon: 120.0,
+                accuracyM: 4,
+              ),
+            ),
+            idleConditions: const IdleConditions(
+              place: '成都市 · 武侯区',
+              temperatureC: 20,
+            ),
+            now: DateTime(2026, 10, 27, 6, 42),
+          ),
+        ),
+      );
+
+      expect(find.text('定位已就绪'), findsOneWidget);
+      expect(find.text('成都市 · 武侯区 · 20°C'), findsOneWidget);
+    });
+
+    testWidgets('地名缺失回退「当前位置」，气温缺失时只显示地名', (WidgetTester tester) async {
+      RecordState idleWithFix() => const RecordState(
+        previewFix: LocationFix(tMs: 1000, lat: 30.0, lon: 120.0),
+      );
+
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            idleWithFix(),
+            idleConditions: const IdleConditions(temperatureC: 20),
+          ),
+        ),
+      );
+      expect(find.text('当前位置 · 20°C'), findsOneWidget);
+
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            idleWithFix(),
+            idleConditions: const IdleConditions(place: '成都市 · 武侯区'),
+          ),
+        ),
+      );
+      expect(find.text('成都市 · 武侯区'), findsOneWidget);
+      expect(find.textContaining('°C'), findsNothing);
+
+      // 两个都没查到时仍给一句「当前位置」，不让卡片空着。
+      await tester.pumpWidget(wrap(handlebar(idleWithFix())));
+      expect(find.text('当前位置'), findsOneWidget);
+    });
+
+    testWidgets('等待定位与记录中都不显示地名 / 气温', (WidgetTester tester) async {
+      const IdleConditions conditions = IdleConditions(
+        place: '成都市 · 武侯区',
+        temperatureC: 20,
+      );
+
+      await tester.pumpWidget(
+        wrap(handlebar(const RecordState(), idleConditions: conditions)),
+      );
+      expect(find.byKey(const Key('idle-place-weather')), findsNothing);
+
+      await tester.pumpWidget(
+        wrap(handlebar(active, idleConditions: conditions)),
+      );
+      expect(find.byKey(const Key('idle-place-weather')), findsNothing);
+      expect(find.text('成都市 · 武侯区 · 20°C'), findsNothing);
+    });
+
     testWidgets('待机页未锁星时说明等待定位，开始按钮仍在', (WidgetTester tester) async {
       await tester.pumpWidget(
         wrap(
@@ -781,9 +887,7 @@ void main() {
       );
     });
 
-    testWidgets('骑行中相机会跟着当前位置走，不会把箭头留在画面外', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('骑行中相机会跟着当前位置走，不会把箭头留在画面外', (WidgetTester tester) async {
       List<TrackPoint> track = <TrackPoint>[
         const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
         const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
@@ -904,10 +1008,7 @@ void main() {
       );
 
       expect(find.byKey(const Key('always-permission-notice')), findsOneWidget);
-      expect(
-        find.text('锁屏后继续记录，请把定位权限设为「始终允许」'),
-        findsOneWidget,
-      );
+      expect(find.text('锁屏后继续记录，请把定位权限设为「始终允许」'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('always-permission-action')));
       expect(actions, 1);
@@ -1337,6 +1438,8 @@ void main() {
     Future<void> pumpRecordPage(
       WidgetTester tester, {
       AppSettings settings = _testSettings,
+      _FakePlaceService? placeService,
+      _FakeWeatherService? weatherService,
     }) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -1348,6 +1451,14 @@ void main() {
             locationServiceProvider.overrideWithValue(location),
             nowProvider.overrideWithValue(() => 1000),
             sensorPairingProvider.overrideWithValue(_FakeSensorPairing()),
+            // 待机页拿到定位后会查地名与天气，测试里一律换成内存实现，
+            // 避免碰真实接口。
+            placeServiceProvider.overrideWithValue(
+              placeService ?? _FakePlaceService(),
+            ),
+            weatherServiceProvider.overrideWithValue(
+              weatherService ?? _FakeWeatherService(),
+            ),
           ],
           child: MaterialApp(theme: buildAppTheme(), home: const RecordPage()),
         ),
@@ -1458,6 +1569,37 @@ void main() {
       expect(find.text('定位已就绪'), findsOneWidget);
       expect(find.text('精度 4 m · 按下开始，记录这一程。'), findsOneWidget);
       expect(find.text(' · GPS 已锁定'), findsOneWidget);
+    });
+
+    testWidgets('待机页查地名与天气，开始记录后收起', (WidgetTester tester) async {
+      location.previewFix = const LocationFix(
+        tMs: 1000,
+        lat: 30.0,
+        lon: 120.0,
+        accuracyM: 4,
+      );
+      final _FakePlaceService places = _FakePlaceService()..place = '成都市 · 武侯区';
+      final _FakeWeatherService weather = _FakeWeatherService()
+        ..temperatureC = 20;
+
+      await pumpRecordPage(
+        tester,
+        placeService: places,
+        weatherService: weather,
+      );
+      // 第一帧让预热定位落到状态上，第二帧让两个异步查询回来。
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('成都市 · 武侯区 · 20°C'), findsOneWidget);
+      expect(places.calls, 1);
+      expect(weather.calls, 1);
+
+      await tester.tap(find.text('开始骑行'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('成都市 · 武侯区 · 20°C'), findsNothing);
     });
 
     testWidgets('结束后显示结算页，完成后回到待机并保留类型', (WidgetTester tester) async {

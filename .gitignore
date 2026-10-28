@@ -60,3 +60,5 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+# 本地 API Key（高德 Web 服务）
+config/amap_key.txt

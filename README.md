@@ -7,7 +7,8 @@
 ## 功能
 
 - **五种运动类型**：骑行 / 跑步 / 健走 / 徒步 / 登山。骑行支持速度、踏频、功率与速度档提示；其余类型以配速、心率、海拔与爬升为主。不采集、不展示步频或步数。
-- **记录界面**：记录 tab 落地就是全屏实时地图，读数与按钮以纸色渐变浮在地图上。待机页有类型浮标、日期时间、定位精度与整宽「开始{类型}」；记录中按动作频率分配宽度——「结束」1/3 靠左，「暂停 / 继续」2/3 靠右。顶部四格是距离 / 时长 / 海拔 / 爬升，底部按类型显示速度或配速、刻度尺与传感器读数。
+- **记录界面**：记录 tab 落地就是全屏实时地图，读数与按钮以纸色渐变浮在地图上。待机页有类型浮标、日期时间、定位精度与整宽「开始{类型}」；拿到定位后还会显示「城市 · 区县 · 气温」，开始记录即收起。记录中按动作频率分配宽度——「结束」1/3 靠左，「暂停 / 继续」2/3 靠右。顶部四格是距离 / 时长 / 海拔 / 爬升，底部按类型显示速度或配速、刻度尺与传感器读数。
+- **待机页位置与天气**：地名用高德逆地理编码、气温用 Open-Meteo，只在未开始时查询；网络失败或没有配置 Key 时安静降级为「当前位置」或省略温度。坐标只用于当次请求，不落库、不写日志，也不进入历史与详情。
 - **运动中的提示**：每满 1km 报该公里成绩，每满 10km 报累计里程，骑行还会在速度跨档时提示。屏内横幅 + 中文语音同时走，熄屏放口袋里也听得到；配速类型按配速口径播报。
 - **崩溃恢复**：启动时检测到未结束的会话，提示继续续写或结算保存。
 - **封面与纸本主题**：冷启动封面 1.2 秒后淡出，可点击跳过；全站亮色纸本，朱砂 / 青瓷 / 黛蓝 / 藤黄四色颜料可选，点选即生效。
@@ -23,6 +24,7 @@
 | --- | --- |
 | 框架 | Flutter 3.47.4 / Dart 3.13.3（fvm 管理） |
 | 定位 | `geolocator` |
+| 地名 / 天气 | 高德逆地理编码 / Open-Meteo（`http`） |
 | 蓝牙 | `flutter_blue_plus` |
 | 本地存储 | `sqflite`（测试用 `sqflite_common_ffi` 内存库） |
 | 状态管理 | `flutter_riverpod` |
@@ -56,6 +58,8 @@ lib/
     db/         SQLite 打开、迁移、DAO
     ble/        心率 / 踏频 / 功率订阅
     location/   定位采集
+    geocode/    高德逆地理编码（WGS-84 → GCJ-02）
+    weather/    Open-Meteo 当前气温
     export/     GPX 生成、备份打包
   core/         单位换算、格式化
 ```
@@ -72,11 +76,31 @@ fvm flutter run      # 连接设备后运行
 
 不装 fvm 时，直接用 3.47.4 版本的 `flutter` 命令亦可。
 
+### 待机页地名（可选）
+
+气温走 Open-Meteo，免 Key；地名走高德「Web 服务」逆地理编码，需要一个 Key。Key 不进入版本库：
+
+```bash
+cp config/amap_key.example.txt config/amap_key.txt
+# 编辑 config/amap_key.txt，填入高德 Web 服务 Key
+tool/run_local.sh                 # 读取 Key 并以 --dart-define 注入后运行
+```
+
+也可以直接传：
+
+```bash
+fvm flutter run --dart-define=AMAP_WEB_KEY=你的Key
+```
+
+没有配置 Key、网络失败或请求超时时，地名回退成「当前位置」，温度整段省略，不会阻塞开始记录。坐标只用于当次查询，不写入数据库或日志。
+
 ### Android 说明
 
 `android/app/build.gradle.kts` 里 `compileSdk = 37`，因为 `permission_handler_android` 13.x 要求依赖方 `compileSdk >= 37`，而 `flutter.compileSdkVersion` 目前是 36。
 
 release 签名从 `android/key.properties` 读取（该文件不进版本库，见 `android/.gitignore`）。本地没有这个文件时会退回 debug 密钥，`flutter run --release` 无需先配 keystore。
+
+主 manifest 声明了 `INTERNET` 权限，地图瓦片、地名与天气查询在 release 包里才能联网；debug / profile 的 manifest 原本就带这一条。
 
 ## 测试
 
@@ -123,6 +147,8 @@ fvm flutter build apk --release --build-name=1.0.0 --build-number=10000
 
 - [纸本改版设计](openspec/changes/xingji-ui-redesign/design.md)
 - [纸本改版任务清单](openspec/changes/xingji-ui-redesign/tasks.md)
+- [待机页位置与天气设计](openspec/changes/record-location-weather/design.md)
+- [待机页位置与天气任务清单](openspec/changes/record-location-weather/tasks.md)
 - [旧版核心设计文档](docs/superpowers/specs/2026-09-21-cycling-app-design.md)
 - [实施计划 · 核心](docs/superpowers/plans/2026-09-21-cycling-app-core.md)
 - [实施计划 · 详情/历史/统计/设置/地图/导出](docs/superpowers/plans/2026-09-21-cycling-app-plan-b.md)

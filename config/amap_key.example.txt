@@ -1,0 +1,3 @@
+# 复制本文件为 config/amap_key.txt，填入高德开放平台的「Web 服务」Key。
+# config/amap_key.txt 已被 .gitignore 忽略，不会进入版本库。
+YOUR_AMAP_WEB_KEY

@@ -18,6 +18,7 @@ import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/history/history_page.dart';
 import 'package:cycling_app/features/history/history_providers.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
+import 'package:cycling_app/features/record/idle_conditions.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/settings/settings_page.dart';
 import 'package:cycling_app/features/stats/stats_page.dart';
@@ -99,9 +100,13 @@ Widget _scaled(Widget child) => MaterialApp(
   home: Scaffold(body: child),
 );
 
-Widget _record(RecordState state) => HandlebarView(
+Widget _record(
+  RecordState state, {
+  IdleConditions conditions = IdleConditions.none,
+}) => HandlebarView(
   state: state,
   unit: DistanceUnit.kilometer,
+  idleConditions: conditions,
   tileUrlTemplate: kDefaultMapTileUrlTemplate,
   selectedActivityType: state.selectedActivityType,
   now: DateTime(2026, 10, 27, 6, 42),
@@ -189,6 +194,30 @@ void main() {
           _record(const RecordState(errorMessage: '定位权限已被永久拒绝，请到系统设置中开启')),
         );
         expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('record idle with place and weather', (
+        WidgetTester tester,
+      ) async {
+        await pump(
+          tester,
+          _record(
+            const RecordState(
+              previewFix: LocationFix(
+                tMs: 1000,
+                lat: 30.0,
+                lon: 120.0,
+                accuracyM: 4,
+              ),
+            ),
+            conditions: const IdleConditions(
+              place: '成都市 · 龙泉驿区',
+              temperatureC: 18,
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.text('成都市 · 龙泉驿区 · 18°C'), findsOneWidget);
       });
 
       testWidgets('record active', (WidgetTester tester) async {

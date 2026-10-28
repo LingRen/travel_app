@@ -366,19 +366,33 @@ class _AboutRow extends StatelessWidget {
     final AppPalette palette = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceM),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
-            child: Text(
-              '行迹 XINGJI · 1.0.0',
-              style: TextStyle(
-                fontSize: 12,
-                color: palette.muted,
-                letterSpacing: 0.4,
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '行迹 XINGJI · 1.0.0',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: palette.muted,
+                    letterSpacing: 0.4,
+                  ),
+                ),
               ),
-            ),
+              Text(
+                '记录仅存本机',
+                style: TextStyle(fontSize: 12, color: palette.muted),
+              ),
+            ],
           ),
-          Text('数据仅存本机', style: TextStyle(fontSize: 12, color: palette.muted)),
+          const SizedBox(height: kSpaceXs),
+          Text(
+            '位置名称与天气查询会联网，坐标不落库。',
+            key: const Key('settings-about-network'),
+            style: TextStyle(fontSize: 12, color: palette.muted),
+          ),
         ],
       ),
     );

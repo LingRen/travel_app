@@ -13,6 +13,7 @@ import '../../data/location/location_service.dart';
 import '../../data/settings_repository.dart';
 import 'device_picker_sheet.dart';
 import 'handlebar_view.dart';
+import 'idle_conditions.dart';
 import 'record_controller.dart';
 
 /// 记录页。见设计文档 10.1：落地就是骑行界面，底部那颗键在「开始」与
@@ -56,6 +57,8 @@ class _RecordPageState extends ConsumerState<RecordPage>
   /// 没有待恢复的会话时预热一次定位：待机页要显示「GPS 已锁定 / 精度 N m」，
   /// 不能等用户按下开始才第一次问位置。
   void _consumeResumeRequest() {
+    final RecordState state = ref.read(recordControllerProvider);
+    _syncIdleConditions(state);
     final int? rideId = ref.read(resumeRideIdProvider);
     if (rideId == null) {
       unawaited(ref.read(recordControllerProvider.notifier).loadIdlePreview());
@@ -65,6 +68,17 @@ class _RecordPageState extends ConsumerState<RecordPage>
     unawaited(
       ref.read(recordControllerProvider.notifier).resumeExisting(rideId),
     );
+  }
+
+  /// 只在待机时查地名与天气。开始记录、结束或定位丢失后控制器会清空状态，
+  /// 并丢弃仍在途的响应。
+  void _syncIdleConditions(RecordState state) {
+    ref
+        .read(idleConditionsProvider.notifier)
+        .update(
+          idle: !state.isActive && !state.isFinished,
+          fix: state.previewFix,
+        );
   }
 
   Future<void> _setWakelock(bool enable) async {
@@ -133,6 +147,7 @@ class _RecordPageState extends ConsumerState<RecordPage>
   @override
   Widget build(BuildContext context) {
     final RecordState state = ref.watch(recordControllerProvider);
+    final IdleConditions idleConditions = ref.watch(idleConditionsProvider);
     final RecordController controller = ref.read(
       recordControllerProvider.notifier,
     );
@@ -150,6 +165,7 @@ class _RecordPageState extends ConsumerState<RecordPage>
       unawaited(
         _setWakelock(next.isActive && !next.isPaused && next.foreground),
       );
+      _syncIdleConditions(next);
     });
 
     final Widget body;
@@ -161,6 +177,7 @@ class _RecordPageState extends ConsumerState<RecordPage>
       body = HandlebarView(
         state: state,
         unit: unit,
+        idleConditions: idleConditions,
         tileUrlTemplate: tileUrl,
         selectedActivityType: state.selectedActivityType,
         now: DateTime.fromMillisecondsSinceEpoch(ref.read(nowProvider)()),

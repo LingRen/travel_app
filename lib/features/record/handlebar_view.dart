@@ -9,6 +9,7 @@ import '../../domain/analysis/constants.dart';
 import '../../domain/models/activity_type.dart';
 import '../activity/activity_type_chip.dart';
 import '../activity/activity_type_sheet.dart';
+import 'idle_conditions.dart';
 import 'live_route_map.dart';
 import 'record_controller.dart';
 import 'ride_cue_banner.dart';
@@ -50,6 +51,7 @@ class HandlebarView extends StatelessWidget {
   const HandlebarView({
     required this.state,
     required this.unit,
+    this.idleConditions = IdleConditions.none,
     required this.tileUrlTemplate,
     required this.selectedActivityType,
     required this.onSelectActivityType,
@@ -80,6 +82,10 @@ class HandlebarView extends StatelessWidget {
 
   final RecordState state;
   final DistanceUnit unit;
+
+  /// 待机卡片上的位置名称与气温。只在未开始且已拿到定位时显示；
+  /// 开始记录后由记录页清空，不再出现在这一页。
+  final IdleConditions idleConditions;
 
   /// 瓦片源，与详情页同一个口径（来自设置，接口失效时可换源）。
   final String tileUrlTemplate;
@@ -298,6 +304,7 @@ class HandlebarView extends StatelessWidget {
                                     now: now ?? DateTime.now(),
                                     accuracyM: state.previewFix?.accuracyM,
                                     locationReady: locationReady,
+                                    conditions: idleConditions,
                                   ),
                                 ],
                               ),
@@ -728,11 +735,13 @@ class _IdleCard extends StatelessWidget {
     required this.now,
     required this.accuracyM,
     required this.locationReady,
+    required this.conditions,
   });
 
   final DateTime now;
   final double? accuracyM;
   final bool locationReady;
+  final IdleConditions conditions;
 
   @override
   Widget build(BuildContext context) {
@@ -765,6 +774,21 @@ class _IdleCard extends StatelessWidget {
           Container(width: 28, height: 2, color: palette.accentInk),
           const SizedBox(height: kSpaceS),
           Text(title, style: kSerifHeadingTextStyle.copyWith(fontSize: 24)),
+          if (locationReady) ...<Widget>[
+            const SizedBox(height: kSpaceXs),
+            Text(
+              conditions.label,
+              key: const Key('idle-place-weather'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: kMutedTextStyle.copyWith(
+                fontSize: kFontMeta,
+                color: palette.ink,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
           const SizedBox(height: kSpaceXs),
           Text(
             subtitle,
