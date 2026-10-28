@@ -4,6 +4,11 @@
 # 本地草稿（实施计划等临时文档，不入库）
 .trae/
 
+# 本地验证截图、工具目录与设计源文件
+.screenshots/
+.opencode/
+design/
+
 # FVM Version Cache
 .fvm/
 
