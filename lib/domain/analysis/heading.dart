@@ -5,8 +5,8 @@ import 'constants.dart';
 /// 朝向相关的纯函数。见 ADR-0002：朝向只用于实时显示，不落库、不进 GPX、
 /// 不参与统计。
 ///
-/// 角度统一用**度**，0 为正北、90 为正东，顺时针增长。地图本身保持北向上，
-/// 转向只由当前位置箭头承担（ADR-0001）。
+/// 角度统一用**度**，0 为正北、90 为正东，顺时针增长。记录页地图按它做
+/// heading-up 旋转（行进方向朝上），见 `live_route_map.dart` 的 `_updateHeading`。
 
 /// 把任意角度归一化到 [0, 360)。
 double normalizeDegrees(double degrees) {

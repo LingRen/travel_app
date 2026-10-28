@@ -1218,7 +1218,9 @@ void main() {
       );
     });
 
-    testWidgets('箭头跨 0 度时沿最短弧累加 turns，不倒转一圈', (WidgetTester tester) async {
+    testWidgets('地图按朝向 heading-up 旋转，跨 0 度时沿最短弧累加', (
+      WidgetTester tester,
+    ) async {
       final List<TrackPoint> track = <TrackPoint>[
         const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
         const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
@@ -1231,17 +1233,32 @@ void main() {
         liveTrack: track,
         headingDeg: heading,
       );
-      double turns() => tester
-          .widget<AnimatedRotation>(find.byKey(const Key('map-heading-arrow')))
-          .turns;
+      // 地图旋转与朝向反向：朝东（90°）时地图转 -90°，东就落到屏幕正上方。
+      double rotation() =>
+          MapCamera.of(tester.element(find.byKey(const Key('map-north'))))
+              .rotation;
 
-      await tester.pumpWidget(wrap(handlebar(withHeading(359))));
+      await tester.pumpWidget(wrap(handlebar(withHeading(356))));
       await tester.pump();
-      expect(turns(), closeTo(359 / 360, 1e-9));
+      expect(rotation(), closeTo(-356, 1e-9));
+      // 朝向交给整张地图表达：当前位置标记反向抵消地图旋转，箭头永远朝上。
+      expect(
+        tester
+            .widget<MarkerLayer>(find.byType(MarkerLayer))
+            .markers
+            .single
+            .rotate,
+        isTrue,
+      );
 
       await tester.pumpWidget(wrap(handlebar(withHeading(1))));
-      await tester.pump();
-      expect(turns(), closeTo(361 / 360, 1e-9), reason: '359° → 1° 只该转 2°');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(rotation(), closeTo(-361, 1e-9), reason: '356° → 1° 只该转 5°');
+
+      // 几度以内的变化当 GPS 噪声忽略：地图不能被逐秒的朝向抖动拖着晃。
+      await tester.pumpWidget(wrap(handlebar(withHeading(3))));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(rotation(), closeTo(-361, 1e-9));
     });
 
     testWidgets('起点落位后画起点环，没落位时不画', (WidgetTester tester) async {
