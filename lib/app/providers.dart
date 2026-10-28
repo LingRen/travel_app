@@ -15,10 +15,11 @@ import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
 import '../data/workout_repository.dart';
 
-/// 数据库连接。在 `main()` 里打开后用 override 注入，因此这里不需要异步。
+/// 数据库连接。`main()` 发起打开、`CyclingApp` 在连接就绪后 override 注入，
+/// 因此这里不需要异步；测试里直接 override 成内存库。
 final Provider<Database> databaseProvider = Provider<Database>(
   (Ref ref) =>
-      throw UnimplementedError('databaseProvider 必须在 main() 中 override'),
+      throw UnimplementedError('databaseProvider 必须在启动时 override'),
 );
 
 final Provider<SettingsRepository> settingsRepositoryProvider =

@@ -51,7 +51,7 @@ void main() {
     return id;
   }
 
-  test('databaseProvider 未 override 时抛 UnimplementedError，强制在 main() 注入', () {
+  test('databaseProvider 未 override 时抛 UnimplementedError，强制在启动时注入', () {
     final ProviderContainer bare = ProviderContainer(
       retry: (int retryCount, Object error) => null,
     );

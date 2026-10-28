@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cycling_app/app/app.dart';
 import 'package:cycling_app/app/home_shell.dart';
 import 'package:cycling_app/app/providers.dart';
@@ -58,6 +60,36 @@ void main() {
 
     expect(find.byType(HomeShell), findsOneWidget);
     expect(find.byType(PaperNavBar), findsOneWidget);
+  });
+
+  testWidgets('数据库还没打开时先画封面，打开后再进入主界面', (WidgetTester tester) async {
+    final Completer<Database> opening = Completer<Database>();
+    await tester.pumpWidget(CyclingApp(opening: opening.future));
+    await tester.pump();
+
+    // 连接还在打开：首帧必须是封面，不能是空纸面或主界面。
+    expect(find.text('行迹'), findsOneWidget);
+    expect(find.byType(HomeShell), findsNothing);
+
+    opening.complete(db);
+    await tester.pump();
+    // 封面停留 1.2 秒，再淡出 300 毫秒；`pumpAndSettle` 不会推进尚未到期的定时器。
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeShell), findsOneWidget);
+  });
+
+  testWidgets('建库失败时给出兜底提示，而不是停在黑屏', (WidgetTester tester) async {
+    // ignore 掉「暂时没人监听」的窗口期，否则测试框架会把它当作未处理异常。
+    final Future<Database> failure = Future<Database>.error(
+      StateError('建库失败'),
+    )..ignore();
+    await tester.pumpWidget(CyclingApp(opening: failure));
+    await tester.pump();
+
+    expect(find.text('本地数据打不开，关闭应用后重试一次。'), findsOneWidget);
   });
 
   testWidgets('CyclingApp 以亮色纸本启动并进入四 tab 主界面', (WidgetTester tester) async {
