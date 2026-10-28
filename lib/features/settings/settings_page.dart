@@ -389,7 +389,7 @@ class _AboutRow extends StatelessWidget {
           ),
           const SizedBox(height: kSpaceXs),
           Text(
-            '位置名称与天气查询会联网，坐标不落库。',
+            '地点与天气随记录保存在本机；查询会联网，不额外保存坐标。',
             key: const Key('settings-about-network'),
             style: TextStyle(fontSize: 12, color: palette.muted),
           ),

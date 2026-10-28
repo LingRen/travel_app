@@ -15,6 +15,7 @@ import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_conditions.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
@@ -100,6 +101,12 @@ class _FakeWorkoutRepository implements WorkoutRepository {
   Future<void> updateTitle(int rideId, String? title) async {}
 
   @override
+  Future<void> updateConditions(
+    int rideId,
+    WorkoutConditions conditions,
+  ) async {}
+
+  @override
   Future<void> deleteRide(int rideId) async {}
 
   @override
@@ -141,13 +148,13 @@ class _FakeLocationService implements LocationService {
 
 /// 内存版地名服务：记录页测试不碰高德接口。
 class _FakePlaceService implements PlaceService {
-  String? place;
+  PlaceInfo? result;
   int calls = 0;
 
   @override
-  Future<String?> placeName({required double lat, required double lon}) async {
+  Future<PlaceInfo?> place({required double lat, required double lon}) async {
     calls++;
-    return place;
+    return result;
   }
 }
 
@@ -157,12 +164,14 @@ class _FakeWeatherService implements WeatherService {
   int calls = 0;
 
   @override
-  Future<int?> currentTemperatureC({
+  Future<WeatherNow?> currentWeather({
     required double lat,
     required double lon,
   }) async {
     calls++;
-    return temperatureC;
+    final int? temperature = temperatureC;
+    if (temperature == null) return null;
+    return WeatherNow(temperatureC: temperature, weatherCode: 0);
   }
 }
 
@@ -1578,7 +1587,13 @@ void main() {
         lon: 120.0,
         accuracyM: 4,
       );
-      final _FakePlaceService places = _FakePlaceService()..place = '成都市 · 武侯区';
+      final _FakePlaceService places = _FakePlaceService()
+        ..result = const PlaceInfo(
+          city: '成都市',
+          district: '武侯区',
+          township: '',
+          province: '四川省',
+        );
       final _FakeWeatherService weather = _FakeWeatherService()
         ..temperatureC = 20;
 

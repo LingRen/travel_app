@@ -108,6 +108,25 @@ void main() {
     final List<Map<String, Object?>> rows = await v3.query('workouts');
     expect(rows.single['activity_type'], 'cycling');
     expect(rows.single['started_at'], 1000);
+    // v3 → v4 补的地点 / 天气列：旧记录保持 null。
+    expect(rows.single['place_name'], isNull);
+    expect(rows.single['weather_temp_c'], isNull);
+
+    final List<Map<String, Object?>> workoutCols = await v3.rawQuery(
+      'PRAGMA table_info(workouts)',
+    );
+    final Set<String> workoutColNames = workoutCols
+        .map((Map<String, Object?> r) => r['name'] as String)
+        .toSet();
+    expect(
+      workoutColNames,
+      containsAll(<String>[
+        'place_name',
+        'place_short',
+        'weather_text',
+        'weather_temp_c',
+      ]),
+    );
 
     // 迁移后外键仍指向改名后的 workouts：插入引用行不应抛错。
     final int rideId = rows.single['id'] as int;

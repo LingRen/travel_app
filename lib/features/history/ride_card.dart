@@ -44,6 +44,10 @@ class WorkoutCard extends ConsumerWidget {
       unit,
     );
     final bool usesPace = ride.activityType.usesPace;
+    final String? place = (ride.placeShort ?? ride.placeName)?.trim();
+    final String departure = place == null || place.isEmpty
+        ? '${formatTimeHm(ride.startedAtMs)} 出发'
+        : '${formatTimeHm(ride.startedAtMs)} 出发 · $place';
 
     return InkWell(
       onTap: onTap,
@@ -94,7 +98,9 @@ class WorkoutCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${formatTimeHm(ride.startedAtMs)} 出发',
+                        departure,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: kFontMeta,
                           color: palette.muted,

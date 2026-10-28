@@ -21,6 +21,10 @@ const Workout _finished = Workout(
   status: WorkoutStatus.finished,
   title: '周末环湖',
   hrDeviceName: 'FIT 3',
+  placeName: '成都市 · 龙泉驿区 · 桃花故里',
+  placeShort: '龙泉驿区',
+  weatherText: '晴',
+  weatherTempC: 18,
   summary: WorkoutSummary(
     distanceM: 25000,
     durationS: 3600,
@@ -138,6 +142,10 @@ void main() {
       expect(ride.id, 1);
       expect(ride.title, '周末环湖');
       expect(ride.hrDeviceName, 'FIT 3');
+      expect(ride.placeName, '成都市 · 龙泉驿区 · 桃花故里');
+      expect(ride.placeShort, '龙泉驿区');
+      expect(ride.weatherText, '晴');
+      expect(ride.weatherTempC, 18);
       expect(ride.summary!.distanceM, 25000);
       expect(ride.summary!.calories, 900);
 
@@ -229,6 +237,46 @@ void main() {
       expect(ride.title, '周末环湖');
     });
 
+    test('v2 归档仍可恢复：缺地点 / 天气列按 null 处理', () {
+      final Archive archive = Archive()
+        ..add(
+          ArchiveFile.string(
+            'manifest.json',
+            jsonEncode(
+              const BackupManifest(
+                schemaVersion: 2,
+                exportedAtMs: 0,
+                rideCount: 1,
+                pointCount: 0,
+              ).toJson(),
+            ),
+          ),
+        )
+        ..add(
+          ArchiveFile.string(
+            'workouts.json',
+            jsonEncode(<Map<String, Object?>>[
+              <String, Object?>{
+                'id': 1,
+                'started_at': 1000,
+                'status': 'finished',
+                'title': '升级前的记录',
+                'activity_type': 'cycling',
+              },
+            ]),
+          ),
+        )
+        ..add(ArchiveFile.string('track_points.jsonl', ''));
+      final Uint8List bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+
+      final Workout ride = parseBackupArchive(bytes).rides.single;
+      expect(ride.title, '升级前的记录');
+      expect(ride.placeName, isNull);
+      expect(ride.placeShort, isNull);
+      expect(ride.weatherText, isNull);
+      expect(ride.weatherTempC, isNull);
+    });
+
     test('拒绝时异常里带上实际版本与期望版本', () {
       final Uint8List bytes = buildBackupArchive(
         rides: const <Workout>[],
@@ -299,6 +347,8 @@ void main() {
       expect(all.length, 1);
       expect(all.single.title, '周末环湖');
       expect(all.single.id, 1);
+      expect(all.single.placeShort, '龙泉驿区');
+      expect(all.single.weatherTempC, 18);
     });
 
     test('replaceExisting 为假时保留已有数据', () async {

@@ -6,7 +6,9 @@ import 'package:sqflite/sqflite.dart';
 /// `power_device_name`。
 /// v3 泛化多运动：`rides` 表改名 `workouts`，新增 `activity_type` 列（默认 cycling，
 /// 老记录自动回填为骑行）。
-const int kSchemaVersion = 3;
+/// v4 记录地点与天气：`workouts.place_name` / `place_short` / `weather_text` /
+/// `weather_temp_c`。旧记录没有捕获过这些信息，保持 null。
+const int kSchemaVersion = 4;
 
 /// 打开（必要时创建）本地数据库。
 ///
@@ -37,6 +39,8 @@ Future<void> _onConfigure(Database db) async {
 /// 的库。加列是原子的、不需要重写任何一行数据，老记录的新列自然是 null——正好
 /// 表示「那次没有功率计」。
 /// v2 → v3：泛化多运动，`rides` 改名 `workouts` 并补 `activity_type` 列。
+/// v3 → v4：补地点与天气列。同样是 `ADD COLUMN`，旧记录的新列为 null，
+/// 正好表示「那次没有捕获地点 / 天气」。
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
   if (oldVersion < 2) {
     await db.execute('ALTER TABLE track_points ADD COLUMN power_w INTEGER');
@@ -50,6 +54,12 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(
       "ALTER TABLE workouts ADD COLUMN activity_type TEXT NOT NULL DEFAULT 'cycling'",
     );
+  }
+  if (oldVersion < 4) {
+    await db.execute('ALTER TABLE workouts ADD COLUMN place_name TEXT');
+    await db.execute('ALTER TABLE workouts ADD COLUMN place_short TEXT');
+    await db.execute('ALTER TABLE workouts ADD COLUMN weather_text TEXT');
+    await db.execute('ALTER TABLE workouts ADD COLUMN weather_temp_c INTEGER');
   }
 }
 
@@ -78,6 +88,10 @@ Future<void> _onCreate(Database db, int version) async {
       hr_device_name       TEXT,
       cadence_device_name  TEXT,
       power_device_name    TEXT,
+      place_name           TEXT,
+      place_short          TEXT,
+      weather_text         TEXT,
+      weather_temp_c       INTEGER,
       point_count          INTEGER
     )
   ''');

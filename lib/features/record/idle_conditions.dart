@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../data/geocode/place_service.dart';
+import '../../data/weather/weather_service.dart';
 import '../../domain/models/location_fix.dart';
 
 /// 记录待机页显示的位置名称与气温。
@@ -68,31 +70,35 @@ class IdleConditionsController extends Notifier<IdleConditions> {
   }
 
   Future<void> _loadPlace(int generation, double lat, double lon) async {
-    String? place;
+    PlaceInfo? info;
     try {
-      place = await ref
-          .read(placeServiceProvider)
-          .placeName(lat: lat, lon: lon);
+      info = await ref.read(placeServiceProvider).place(lat: lat, lon: lon);
     } catch (_) {
       return;
     }
-    if (!ref.mounted || generation != _generation || place == null) return;
-    state = IdleConditions(place: place, temperatureC: state.temperatureC);
+    if (!ref.mounted || generation != _generation || info == null) return;
+    state = IdleConditions(
+      place: info.cityDistrict,
+      temperatureC: state.temperatureC,
+    );
   }
 
   Future<void> _loadTemperature(int generation, double lat, double lon) async {
-    int? temperatureC;
+    WeatherNow? weather;
     try {
-      temperatureC = await ref
+      weather = await ref
           .read(weatherServiceProvider)
-          .currentTemperatureC(lat: lat, lon: lon);
+          .currentWeather(lat: lat, lon: lon);
     } catch (_) {
       return;
     }
-    if (!ref.mounted || generation != _generation || temperatureC == null) {
+    if (!ref.mounted || generation != _generation || weather == null) {
       return;
     }
-    state = IdleConditions(place: state.place, temperatureC: temperatureC);
+    state = IdleConditions(
+      place: state.place,
+      temperatureC: weather.temperatureC,
+    );
   }
 
   void _reset() {

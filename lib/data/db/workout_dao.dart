@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../domain/models/activity_type.dart';
 import '../../domain/models/workout.dart';
+import '../../domain/models/workout_conditions.dart';
 import '../../domain/models/workout_status.dart';
 import '../../domain/models/workout_summary.dart';
 
@@ -127,6 +128,27 @@ class WorkoutDao {
     await _db.update(
       'workouts',
       <String, Object?>{'title': title},
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
+  }
+
+  /// 写入开始时捕获的地点 / 天气。
+  ///
+  /// 只更新有值的列：地点和天气是两个独立请求，任何一边失败都不该把另一边
+  /// 已经写好的值擦成 null。全部为空时直接返回。
+  Future<void> updateConditions(int id, WorkoutConditions conditions) async {
+    final Map<String, Object?> values = <String, Object?>{
+      if (conditions.placeName != null) 'place_name': conditions.placeName,
+      if (conditions.placeShort != null) 'place_short': conditions.placeShort,
+      if (conditions.weatherText != null) 'weather_text': conditions.weatherText,
+      if (conditions.weatherTempC != null)
+        'weather_temp_c': conditions.weatherTempC,
+    };
+    if (values.isEmpty) return;
+    await _db.update(
+      'workouts',
+      values,
       where: 'id = ?',
       whereArgs: <Object?>[id],
     );

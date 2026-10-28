@@ -11,16 +11,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 const LocationFix _fix = LocationFix(tMs: 1000, lat: 30.5728, lon: 104.0668);
 
+const PlaceInfo _chengdu = PlaceInfo(
+  city: '成都市',
+  district: '武侯区',
+  township: '桂溪街道',
+  province: '四川省',
+);
+
 class _FakePlaceService implements PlaceService {
-  String? result;
+  PlaceInfo? result;
   Object? error;
-  Completer<String?>? completer;
+  Completer<PlaceInfo?>? completer;
   int calls = 0;
   double? lastLat;
   double? lastLon;
 
   @override
-  Future<String?> placeName({required double lat, required double lon}) async {
+  Future<PlaceInfo?> place({required double lat, required double lon}) async {
     calls++;
     lastLat = lat;
     lastLon = lon;
@@ -31,13 +38,13 @@ class _FakePlaceService implements PlaceService {
 }
 
 class _FakeWeatherService implements WeatherService {
-  int? result;
+  WeatherNow? result;
   Object? error;
-  Completer<int?>? completer;
+  Completer<WeatherNow?>? completer;
   int calls = 0;
 
   @override
-  Future<int?> currentTemperatureC({
+  Future<WeatherNow?> currentWeather({
     required double lat,
     required double lon,
   }) async {
@@ -72,8 +79,8 @@ void main() {
   IdleConditions conditions() => container.read(idleConditionsProvider);
 
   test('待机且有定位时并行查地名与天气', () async {
-    places.result = '成都市 · 武侯区';
-    weather.result = 20;
+    places.result = _chengdu;
+    weather.result = const WeatherNow(temperatureC: 20, weatherCode: 0);
 
     controller().update(idle: true, fix: _fix);
     await Future<void>.delayed(Duration.zero);
@@ -89,12 +96,12 @@ void main() {
 
   test('地名缺失回退「当前位置」，气温缺失时只显示地名', () async {
     places.result = null;
-    weather.result = 20;
+    weather.result = const WeatherNow(temperatureC: 20, weatherCode: 0);
     controller().update(idle: true, fix: _fix);
     await Future<void>.delayed(Duration.zero);
     expect(conditions().label, '当前位置 · 20°C');
 
-    places = _FakePlaceService()..result = '成都市 · 武侯区';
+    places = _FakePlaceService()..result = _chengdu;
     weather = _FakeWeatherService()..result = null;
     container.dispose();
     container = ProviderContainer(
@@ -119,8 +126,8 @@ void main() {
   });
 
   test('同一网格不重复请求，换一个街区才重新查', () async {
-    places.result = '成都市 · 武侯区';
-    weather.result = 20;
+    places.result = _chengdu;
+    weather.result = const WeatherNow(temperatureC: 20, weatherCode: 0);
 
     controller().update(idle: true, fix: _fix);
     await Future<void>.delayed(Duration.zero);
@@ -144,14 +151,16 @@ void main() {
   });
 
   test('开始记录后清空，并在途响应不会写回', () async {
-    places.completer = Completer<String?>();
-    weather.completer = Completer<int?>();
+    places.completer = Completer<PlaceInfo?>();
+    weather.completer = Completer<WeatherNow?>();
 
     controller().update(idle: true, fix: _fix);
     controller().update(idle: false, fix: _fix);
 
-    places.completer!.complete('成都市 · 武侯区');
-    weather.completer!.complete(20);
+    places.completer!.complete(_chengdu);
+    weather.completer!.complete(
+      const WeatherNow(temperatureC: 20, weatherCode: 0),
+    );
     await Future<void>.delayed(Duration.zero);
 
     expect(conditions().isEmpty, isTrue);

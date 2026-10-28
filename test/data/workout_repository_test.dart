@@ -7,6 +7,7 @@ import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_conditions.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -49,6 +50,49 @@ void main() {
     );
     final Workout? back = await repo.getWorkout(w.id!);
     expect(back?.activityType, ActivityType.running);
+  });
+
+  test('updateConditions 把地点与天气写进记录并触发刷新信号', () async {
+    int changes = 0;
+    final WorkoutRepository repoWithCallback = WorkoutRepository(
+      workouts: WorkoutDao(db),
+      points: TrackPointDao(db),
+      settings: SettingsRepository(SettingsDao(db)),
+      onWorkoutDataChanged: () => changes++,
+    );
+    final Workout ride = await repoWithCallback.startWorkout(startedAtMs: 1000);
+
+    await repoWithCallback.updateConditions(
+      ride.id!,
+      const WorkoutConditions(
+        placeName: '成都市 · 龙泉驿区 · 桃花故里',
+        placeShort: '龙泉驿区',
+        weatherText: '晴',
+        weatherTempC: 18,
+      ),
+    );
+
+    final Workout? back = await repoWithCallback.getWorkout(ride.id!);
+    expect(back?.placeName, '成都市 · 龙泉驿区 · 桃花故里');
+    expect(back?.weatherTempC, 18);
+    expect(changes, 1);
+  });
+
+  test('updateConditions 全空时不写库、也不触发刷新', () async {
+    int changes = 0;
+    final WorkoutRepository repoWithCallback = WorkoutRepository(
+      workouts: WorkoutDao(db),
+      points: TrackPointDao(db),
+      settings: SettingsRepository(SettingsDao(db)),
+      onWorkoutDataChanged: () => changes++,
+    );
+    final Workout ride = await repoWithCallback.startWorkout(startedAtMs: 1000);
+
+    await repoWithCallback.updateConditions(ride.id!, WorkoutConditions.none);
+
+    final Workout? back = await repoWithCallback.getWorkout(ride.id!);
+    expect(back?.conditions.isEmpty, isTrue);
+    expect(changes, 0);
   });
 
   test('appendPoints 与 getPoints 往返一致', () async {

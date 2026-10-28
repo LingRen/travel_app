@@ -2,18 +2,18 @@
 
 ## Why
 
-记录待机页现在只显示日期时间与定位精度，用户出发前看不到自己在哪、天气如何。设计稿曾画过位置与天气，但上一轮纸本改版把它明确列为非目标，所以一直没有数据链路。现在补上这一小块出发信息：只在待机页看一眼，不进入记录、历史或详情，也不改变「数据只存本机」的定位。
+记录待机页现在会在出发前显示位置与气温，但这份信息只活在内存里：开始记录后立刻消失，历史列表只有「HH:mm 出发」，单次详情也只有标题与时间。用户回看一次骑行时，往往记不起那天在哪里、天气如何。设计稿也把地点与天气画进了历史条目和详情标题区。
 
 ## What Changes
 
-- 记录待机页在拿到定位后显示「城市 · 区县 · 气温」，例如「成都市 · 武侯区 · 18°C」；开始记录后立即收起。
-- 地名走高德开放平台「Web 服务」逆地理编码，请求前把 WGS-84 转成 GCJ-02；气温走免 Key 的 Open-Meteo，使用原始 WGS-84。
-- 两个请求独立、超时分别为 5s / 6s，结果在内存中按约 1 km 网格缓存 10 分钟；不做分钟级轮询。
-- 网络失败、超时、无 Key 时静默降级：地名回退「当前位置」，温度整段省略，不显示假数据或错误弹窗。
-- 高德 Key 不进入版本库：放在被忽略的 `config/amap_key.txt`，由 `tool/run_local.sh` 以 `--dart-define=AMAP_WEB_KEY` 注入；直接 `fvm flutter run` 时地名回退，气温仍可用。
-- Android 主 manifest 补 `INTERNET` 权限，保证 release 包能加载地图瓦片并查询地名 / 天气；iOS 走 HTTPS，不改 ATS。
-- 设置页关于区把「数据仅存本机」改为「记录仅存本机」，并补一行「位置名称与天气查询会联网，坐标不落库」。
-- 坐标只用于当次请求，不写数据库、不写日志、不进 GPX；历史与详情仍不展示地点或天气。
+- 开始记录时把当时的地点与天气随记录保存到本机；恢复旧会话时若记录还没有这些字段，也补一次捕获。
+- 地点优先使用待机页已有的粗略定位，拿不到时用第一个真实定位点；天气与地点并行查询，都不阻塞开始记录。
+- 详情页在标题下显示「城市 · 区县 · 街道/乡镇」与「晴 18°C」；历史条目在出发时间后显示区县，例如「06:42 出发 · 龙泉驿区」。
+- 数据库 `workouts` 表新增 `place_name` / `place_short` / `weather_text` / `weather_temp_c`，schema 升到 v4；备份 schema 升到 v3，旧备份缺列按 null 读取。
+- 任一项查询失败、没有 Key、没有定位或响应缺字段时静默降级：地点或天气各自缺失时省略对应部分，两项都没有时整行不渲染，不伪造占位。
+- 旧记录没有捕获过地点 / 天气，保持空白；不回填地点，因为无法可靠还原当时的位置与天气。
+- 设置页文案改为「地点与天气随记录保存在本机；查询会联网，不额外保存坐标。」
+- 坐标仍只用于当次请求，不写数据库、不写日志、不进 GPX；落库的只有地名与天气文字。
 
 ## Capabilities
 
@@ -23,13 +23,14 @@
 
 ### Modified Capabilities
 
-- `recording`: 待机页新增位置名称与气温，并明确只在待机时出现、记录中收起、失败时降级。
-- `settings`: 关于区改为「记录仅存本机」，并声明位置 / 天气查询会联网且坐标不落库。
+- `recording`: 待机页继续显示位置与气温；开始 / 恢复记录时异步捕获并落库，失败时静默降级。
+- `activity-review`: 历史条目在出发时间后显示区县；详情标题下显示地点与天气，缺失时整行省略。
+- `settings`: 关于区说明地点与天气随记录保存在本机，查询会联网但不额外保存坐标。
 
 ## Impact
 
-- 数据层：新增 `lib/data/geocode/place_service.dart`、`lib/data/weather/weather_service.dart`、`lib/config/app_config.dart`。
-- 状态与界面：新增 `lib/features/record/idle_conditions.dart`；修改 `lib/app/providers.dart`、`lib/features/record/record_page.dart`、`lib/features/record/handlebar_view.dart`。
-- 配置与平台：新增 `config/amap_key.example.txt`、`tool/run_local.sh`，`.gitignore` 忽略真实 Key；修改 `android/app/src/main/AndroidManifest.xml`。
-- 文案与文档：修改 `lib/features/settings/settings_page.dart`、`README.md`。
-- 测试：新增 `test/data/geocode/place_service_test.dart`、`test/data/weather/weather_service_test.dart`、`test/features/record/idle_conditions_test.dart`；扩展 `test/features/record/record_views_test.dart`、`test/app/text_scale_smoke_test.dart`、`test/features/settings/settings_page_test.dart`。
+- 数据层：`lib/domain/models/workout.dart`、新增 `lib/domain/models/workout_conditions.dart`、`lib/data/db/database.dart`（v4 迁移）、`lib/data/db/workout_dao.dart`、`lib/data/workout_repository.dart`、`lib/data/export/backup.dart`（v3）。
+- 服务层：`lib/data/geocode/place_service.dart` 返回 `PlaceInfo`；`lib/data/weather/weather_service.dart` 返回 `WeatherNow` 并映射 WMO 天气码。
+- 状态与界面：`lib/features/record/record_controller.dart`、`lib/features/record/idle_conditions.dart`、`lib/features/history/ride_card.dart`、`lib/features/detail/detail_page.dart`、`lib/features/settings/settings_page.dart`。
+- 文案与文档：`README.md`、本变更的 proposal / design / specs / tasks。
+- 测试：扩展地点 / 天气服务、记录控制器、DAO、Repository、备份、数据库迁移、历史与详情 widget 测试。

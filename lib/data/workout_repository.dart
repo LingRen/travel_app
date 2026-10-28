@@ -2,6 +2,7 @@ import '../domain/analysis/summary.dart';
 import '../domain/models/activity_type.dart';
 import '../domain/models/track_point.dart';
 import '../domain/models/workout.dart';
+import '../domain/models/workout_conditions.dart';
 import '../domain/models/workout_status.dart';
 import '../domain/models/workout_summary.dart';
 import 'db/track_point_dao.dart';
@@ -65,6 +66,19 @@ class WorkoutRepository {
 
   Future<void> setStatus(int rideId, WorkoutStatus status) =>
       _workouts.updateStatus(rideId, status);
+
+  /// 写入开始记录时异步捕获的地点 / 天气。
+  ///
+  /// 记录可能已经结束（用户开始后几秒就按了结束），所以这里也触发数据变更
+  /// 信号，让历史页与详情页在条件晚到时重新查库。捕获只发生一次，代价很小。
+  Future<void> updateConditions(
+    int rideId,
+    WorkoutConditions conditions,
+  ) async {
+    if (conditions.isEmpty) return;
+    await _workouts.updateConditions(rideId, conditions);
+    onWorkoutDataChanged?.call();
+  }
 
   /// 正常结束：用会话给出的时长（不含暂停）计算汇总。
   Future<WorkoutSummary> finishRide(

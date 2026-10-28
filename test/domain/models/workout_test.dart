@@ -54,6 +54,36 @@ void main() {
     expect(back.hrDeviceName, 'HUAWEI WATCH FIT 3');
   });
 
+  test('toDbMap/fromDbMap 往返携带地点与天气', () {
+    const Workout workout = Workout(
+      startedAtMs: 1000,
+      status: WorkoutStatus.finished,
+      placeName: '成都市 · 龙泉驿区 · 桃花故里',
+      placeShort: '龙泉驿区',
+      weatherText: '晴',
+      weatherTempC: 18,
+    );
+
+    final Workout back = Workout.fromDbMap(workout.toDbMap());
+
+    expect(back.placeName, '成都市 · 龙泉驿区 · 桃花故里');
+    expect(back.placeShort, '龙泉驿区');
+    expect(back.weatherText, '晴');
+    expect(back.weatherTempC, 18);
+    expect(back.conditions.weatherLabel, '晴 18°C');
+  });
+
+  test('旧记录缺地点 / 天气字段时按 null 读取', () {
+    final Workout back = Workout.fromDbMap(const <String, Object?>{
+      'started_at': 1,
+      'status': 'finished',
+    });
+
+    expect(back.conditions.isEmpty, isTrue);
+    expect(back.conditions.placeLabel, isNull);
+    expect(back.conditions.weatherLabel, isNull);
+  });
+
   test('未知状态字符串直接抛错', () {
     expect(() => WorkoutStatus.fromDb('running'), throwsArgumentError);
   });

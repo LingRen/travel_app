@@ -2,6 +2,7 @@ import 'package:cycling_app/data/db/database.dart';
 import 'package:cycling_app/data/db/workout_dao.dart';
 import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_conditions.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -251,6 +252,61 @@ void main() {
     expect(s.maxHr, 176);
     expect(s.calories, 900);
     expect(s.pointCount, 3400);
+  });
+
+  test('updateConditions 写入地点与天气并可读回', () async {
+    final int id = await dao.insert(
+      const Workout(startedAtMs: 1000, status: WorkoutStatus.recording),
+    );
+
+    await dao.updateConditions(
+      id,
+      const WorkoutConditions(
+        placeName: '成都市 · 龙泉驿区 · 桃花故里',
+        placeShort: '龙泉驿区',
+        weatherText: '晴',
+        weatherTempC: 18,
+      ),
+    );
+
+    final Workout ride = (await dao.findById(id))!;
+    expect(ride.placeName, '成都市 · 龙泉驿区 · 桃花故里');
+    expect(ride.placeShort, '龙泉驿区');
+    expect(ride.weatherText, '晴');
+    expect(ride.weatherTempC, 18);
+    expect(ride.conditions.weatherLabel, '晴 18°C');
+  });
+
+  test('updateConditions 不擦掉已经写入的另一半数据', () async {
+    final int id = await dao.insert(
+      const Workout(startedAtMs: 1000, status: WorkoutStatus.recording),
+    );
+
+    await dao.updateConditions(
+      id,
+      const WorkoutConditions(placeName: '成都市 · 武侯区', placeShort: '武侯区'),
+    );
+    // 天气查询晚到或失败：第二次只带温度，地点必须还在。
+    await dao.updateConditions(
+      id,
+      const WorkoutConditions(weatherText: '多云', weatherTempC: 21),
+    );
+
+    final Workout ride = (await dao.findById(id))!;
+    expect(ride.placeShort, '武侯区');
+    expect(ride.weatherText, '多云');
+    expect(ride.weatherTempC, 21);
+  });
+
+  test('updateConditions 全空时不写库', () async {
+    final int id = await dao.insert(
+      const Workout(startedAtMs: 1000, status: WorkoutStatus.recording),
+    );
+
+    await dao.updateConditions(id, WorkoutConditions.none);
+
+    final Workout ride = (await dao.findById(id))!;
+    expect(ride.conditions.isEmpty, isTrue);
   });
 
   test('deleteAll 清空 workouts 表', () async {

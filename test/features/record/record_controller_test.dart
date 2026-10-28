@@ -3,14 +3,17 @@ import 'dart:async';
 import 'package:cycling_app/app/providers.dart';
 import 'package:cycling_app/data/ble/ble_platform.dart';
 import 'package:cycling_app/data/ble/sensor_monitor.dart';
+import 'package:cycling_app/data/geocode/place_service.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
+import 'package:cycling_app/data/weather/weather_service.dart';
 import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_conditions.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/analysis/route_segments.dart';
@@ -125,6 +128,18 @@ class _FakeWorkoutRepository implements WorkoutRepository {
   @override
   Future<void> updateTitle(int rideId, String? title) async {}
 
+  /// 地点 / 天气落库调用。开始记录后由控制器异步触发。
+  final List<({int rideId, WorkoutConditions conditions})> conditionWrites =
+      <({int rideId, WorkoutConditions conditions})>[];
+
+  @override
+  Future<void> updateConditions(
+    int rideId,
+    WorkoutConditions conditions,
+  ) async {
+    conditionWrites.add((rideId: rideId, conditions: conditions));
+  }
+
   @override
   Future<void> deleteRide(int rideId) async {}
 
@@ -171,6 +186,41 @@ class _FakeLocationService implements LocationService {
   Future<bool> shouldSuggestAlwaysPermission() async => suggestAlwaysPermission;
 
   void emit(LocationFix fix) => _fixes.add(fix);
+}
+
+/// 内存版地名服务：记录控制器测试不碰高德接口。
+class _FakePlaceService implements PlaceService {
+  PlaceInfo? result;
+  Object? error;
+  int calls = 0;
+  double? lastLat;
+  double? lastLon;
+
+  @override
+  Future<PlaceInfo?> place({required double lat, required double lon}) async {
+    calls++;
+    lastLat = lat;
+    lastLon = lon;
+    if (error != null) throw error!;
+    return result;
+  }
+}
+
+/// 内存版天气服务：记录控制器测试不碰 Open-Meteo。
+class _FakeWeatherService implements WeatherService {
+  WeatherNow? result;
+  Object? error;
+  int calls = 0;
+
+  @override
+  Future<WeatherNow?> currentWeather({
+    required double lat,
+    required double lon,
+  }) async {
+    calls++;
+    if (error != null) throw error!;
+    return result;
+  }
 }
 
 /// 可注入的假特征值，`onValueReceived` 由用例手动推帧。
@@ -320,12 +370,16 @@ List<int> _cpsFrame(int watts) => <int>[
 void main() {
   late _FakeWorkoutRepository repo;
   late _FakeLocationService location;
+  late _FakePlaceService places;
+  late _FakeWeatherService weather;
   late _FakeRideCuePlayer cuePlayer;
   late int clockMs;
 
   setUp(() {
     repo = _FakeWorkoutRepository();
     location = _FakeLocationService();
+    places = _FakePlaceService();
+    weather = _FakeWeatherService();
     cuePlayer = _FakeRideCuePlayer();
     clockMs = 1000;
   });
@@ -347,6 +401,8 @@ void main() {
       overrides: <Override>[
         workoutRepositoryProvider.overrideWithValue(repo),
         locationServiceProvider.overrideWithValue(location),
+        placeServiceProvider.overrideWithValue(places),
+        weatherServiceProvider.overrideWithValue(weather),
         nowProvider.overrideWithValue(() => clockMs),
         sensorPairingProvider.overrideWithValue(sensorPairing),
         rideCuePlayerProvider.overrideWithValue(cuePlayer),
@@ -459,6 +515,78 @@ void main() {
     expect(state.phase, RecordingPhase.recording);
     expect(state.previewFix, isNull);
     expect(location.quickPreviewCalls, 1);
+    container.dispose();
+  });
+
+  testWidgets('开始时用粗略定位捕获地点与天气并落库', (WidgetTester tester) async {
+    places.result = const PlaceInfo(
+      city: '成都市',
+      district: '龙泉驿区',
+      township: '桃花故里',
+      province: '四川省',
+    );
+    weather.result = const WeatherNow(temperatureC: 18, weatherCode: 0);
+    location.previewFix = const LocationFix(tMs: 900, lat: 31.2, lon: 121.4);
+
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await tester.pump();
+
+    expect(repo.conditionWrites, hasLength(1));
+    final ({int rideId, WorkoutConditions conditions}) write =
+        repo.conditionWrites.single;
+    expect(write.rideId, 1);
+    expect(write.conditions.placeName, '成都市 · 龙泉驿区 · 桃花故里');
+    expect(write.conditions.placeShort, '龙泉驿区');
+    expect(write.conditions.weatherText, '晴');
+    expect(write.conditions.weatherTempC, 18);
+    expect(write.conditions.weatherLabel, '晴 18°C');
+    container.dispose();
+  });
+
+  testWidgets('没有粗略定位时用第一个真实定位点捕获条件', (WidgetTester tester) async {
+    places.result = const PlaceInfo(
+      city: '成都市',
+      district: '武侯区',
+      township: '桂溪街道',
+      province: '四川省',
+    );
+    weather.result = const WeatherNow(temperatureC: 20, weatherCode: 1);
+
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await tester.pump();
+    expect(repo.conditionWrites, isEmpty);
+
+    await rideOneSecond(tester, lat: 31.0);
+    await tester.pump();
+
+    expect(repo.conditionWrites, hasLength(1));
+    expect(repo.conditionWrites.single.conditions.placeShort, '武侯区');
+    expect(repo.conditionWrites.single.conditions.weatherText, '晴间多云');
+    expect(places.lastLat, 31.0);
+    container.dispose();
+  });
+
+  testWidgets('地点与天气都查不到时不写库，也不伪造占位', (WidgetTester tester) async {
+    places.error = StateError('boom');
+    weather.error = StateError('boom');
+    location.previewFix = const LocationFix(tMs: 900, lat: 31.2, lon: 121.4);
+
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await tester.pump();
+
+    expect(repo.conditionWrites, isEmpty);
     container.dispose();
   });
 

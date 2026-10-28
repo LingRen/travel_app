@@ -13,7 +13,9 @@ import '../db/workout_dao.dart';
 ///
 /// v1 → v2：`rides` 改名 `workouts`，新增 `activity_type` 列。v1 归档缺这一列，
 /// 读取时由 `Workout.fromDbMap` 对 null 回退为骑行，老备份无需迁移即可恢复。
-const int kBackupSchemaVersion = 2;
+/// v2 → v3：新增 `place_name` / `place_short` / `weather_text` / `weather_temp_c`。
+/// v2 归档缺这四列，读取时按 null 处理，表示那次没有捕获地点 / 天气。
+const int kBackupSchemaVersion = 3;
 
 const String _manifestName = 'manifest.json';
 const String _ridesName = 'workouts.json';

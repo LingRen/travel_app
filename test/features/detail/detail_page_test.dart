@@ -32,6 +32,10 @@ Workout rideWith({
   WorkoutSummary? summary,
   String? powerDeviceName,
   ActivityType? activityType,
+  String? placeName,
+  String? placeShort,
+  String? weatherText,
+  int? weatherTempC,
 }) => Workout(
   id: 1,
   startedAtMs: DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
@@ -40,6 +44,10 @@ Workout rideWith({
   title: '晨骑',
   activityType: activityType ?? ActivityType.cycling,
   powerDeviceName: powerDeviceName,
+  placeName: placeName,
+  placeShort: placeShort,
+  weatherText: weatherText,
+  weatherTempC: weatherTempC,
   summary:
       summary ??
       const WorkoutSummary(
@@ -172,6 +180,49 @@ void main() {
     expect(find.text('晨骑'), findsOneWidget);
     expect(find.text('09.21'), findsOneWidget);
     expect(find.text('周一 · 08:00'), findsOneWidget);
+  });
+
+  testWidgets('标题下显示记录捕获的地点与天气', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: rideWith(
+          placeName: '成都市 · 龙泉驿区 · 桃花故里',
+          placeShort: '龙泉驿区',
+          weatherText: '晴',
+          weatherTempC: 18,
+        ),
+        points: pointsWithHr(),
+      ),
+    );
+
+    expect(find.byKey(const Key('detail-conditions-place')), findsOneWidget);
+    expect(find.text('成都市 · 龙泉驿区 · 桃花故里'), findsOneWidget);
+    expect(find.byKey(const Key('detail-conditions-weather')), findsOneWidget);
+    expect(find.text('晴 18°C'), findsOneWidget);
+  });
+
+  testWidgets('没有地点与天气的旧记录不渲染条件行', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithHr()),
+    );
+
+    expect(find.byKey(const Key('detail-conditions-place')), findsNothing);
+    expect(find.byKey(const Key('detail-conditions-weather')), findsNothing);
+  });
+
+  testWidgets('只有天气时仍显示天气，不编造地点', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(
+        ride: rideWith(weatherText: '小雨', weatherTempC: 12),
+        points: pointsWithHr(),
+      ),
+    );
+
+    expect(find.byKey(const Key('detail-conditions-place')), findsNothing);
+    expect(find.text('小雨 12°C'), findsOneWidget);
   });
 
   testWidgets('跑步记录：页眉写「跑步详情」，汇总用配速', (WidgetTester tester) async {

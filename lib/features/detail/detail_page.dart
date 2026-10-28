@@ -14,6 +14,7 @@ import '../../domain/analysis/heart_rate.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
+import '../../domain/models/workout_conditions.dart';
 import '../../domain/models/workout_summary.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
@@ -109,6 +110,35 @@ class _DetailTopBar extends StatelessWidget {
   }
 }
 
+/// 详情页标题下的地点。没有地名时返回空，让右侧天气单独靠右。
+class _ConditionsPlace extends StatelessWidget {
+  const _ConditionsPlace({required this.conditions});
+
+  final WorkoutConditions conditions;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? place = conditions.placeLabel;
+    if (place == null) return const SizedBox.shrink();
+    final AppPalette palette = context.palette;
+    return Row(
+      children: <Widget>[
+        Icon(Icons.place_outlined, size: 16, color: palette.accentInk),
+        const SizedBox(width: kSpaceXs),
+        Expanded(
+          child: Text(
+            place,
+            key: const Key('detail-conditions-place'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: kFontMeta, color: palette.muted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({required this.detail, required this.unit});
 
@@ -178,7 +208,6 @@ class _DetailBody extends ConsumerWidget {
       0,
       (int sum, RouteGap gap) => sum + gap.durationS,
     );
-
     final double mapHeight = math.min(
       _kMapHeight,
       MediaQuery.sizeOf(context).height * _kMapHeightShrink,
@@ -255,7 +284,34 @@ class _DetailBody extends ConsumerWidget {
             ],
           ),
         ),
-        // 只在地图真的断过时解释；不展示天气、地点或路线名。
+        // 地点与天气只在记录捕获到对应字段时显示；旧记录没有这些数据，
+        // 整行不渲染，不拿标题或时间冒充地点。
+        if (!ride.conditions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _ConditionsPlace(conditions: ride.conditions),
+                ),
+                if (ride.conditions.weatherLabel != null) ...<Widget>[
+                  const SizedBox(width: kSpaceM),
+                  Text(
+                    ride.conditions.weatherLabel!,
+                    key: const Key('detail-conditions-weather'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.muted,
+                      fontFeatures: kTabularFigures,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        // 只在地图真的断过时解释；地点与天气已在上方单独展示，这里不重复。
         if (gaps.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),

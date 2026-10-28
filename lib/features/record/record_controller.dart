@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../data/ble/ble_platform.dart';
 import '../../data/ble/sensor_monitor.dart';
+import '../../data/geocode/place_service.dart';
 import '../../data/location/location_service.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
+import '../../data/weather/weather_service.dart';
 import '../../data/workout_repository.dart';
 import '../../domain/analysis/constants.dart';
 import '../../domain/analysis/elevation.dart';
@@ -17,6 +19,7 @@ import '../../domain/models/activity_type.dart';
 import '../../domain/models/location_fix.dart';
 import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
+import '../../domain/models/workout_conditions.dart';
 import '../../domain/models/workout_status.dart';
 import '../../domain/recording/recording_session.dart';
 import '../../domain/recording/ride_cue.dart';
@@ -177,6 +180,12 @@ class RecordController extends Notifier<RecordState> {
   /// 见 [RecordState.previewFix]。
   LocationFix? _previewFix;
 
+  /// 正在等待第一个可用定位来捕获地点 / 天气的运动 id。
+  ///
+  /// 开始时优先用粗略定位；粗略定位拿不到就等第一个真实定位点。捕获成功后
+  /// 立即置空，避免后续每个定位点都重复查询。
+  int? _conditionsPendingRideId;
+
   int _writeFailures = 0;
   String? _error;
   Future<void>? _pendingWrite;
@@ -259,7 +268,9 @@ class RecordController extends Notifier<RecordState> {
     _suggestAlwaysPermission = await _location.shouldSuggestAlwaysPermission();
 
     // 不 await：粗略定位只是「先把地图点亮」，慢一点也不能拖住记录开始。
-    unawaited(_loadPreviewFix());
+    // 同一个 Future 也交给地点 / 天气捕获，避免重复请求一次粗略定位。
+    final Future<LocationFix?> previewFuture = _loadPreviewFix();
+    unawaited(previewFuture);
 
     // 见设计文档 6.1：连接传感器属于 preparing 阶段，放在建记录之前，
     // 这样 workouts 的三个 *_device_name 才有值。
@@ -290,6 +301,10 @@ class RecordController extends Notifier<RecordState> {
       activityType: type,
       weightKg: weightKg,
     );
+    // 地点 / 天气不阻塞开始：先占住这条记录，粗略定位或第一个真实定位点
+    // 到达后异步查询并落库。
+    _conditionsPendingRideId = ride.id;
+    unawaited(_captureConditions(ride.id!, previewFuture));
     _startStreams();
     _publish();
   }
@@ -337,6 +352,12 @@ class RecordController extends Notifier<RecordState> {
     );
     // 恢复的会话也按当前授权级别给提示，和新开的记录保持一致。
     _suggestAlwaysPermission = await _location.shouldSuggestAlwaysPermission();
+    // 旧记录可能没有地点 / 天气（升级前开始的记录）。恢复时补一次：优先用
+    // 当前粗略定位，拿不到就等第一个真实定位点。已经有值的记录不重复查询。
+    if (ride.placeName == null && ride.weatherTempC == null) {
+      _conditionsPendingRideId = rideId;
+      unawaited(_captureConditions(rideId, _loadPreviewFix()));
+    }
     _startStreams();
     _publish();
   }
@@ -412,6 +433,7 @@ class RecordController extends Notifier<RecordState> {
     _writeFailures = 0;
     _lastFixMs = 0;
     _previewFix = null;
+    _conditionsPendingRideId = null;
     _lastBackgroundFlushMs = 0;
     _lastCue = null;
     _cueSeq = 0;
@@ -533,12 +555,100 @@ class RecordController extends Notifier<RecordState> {
 
   /// 请求一次粗略定位并推到界面，只为在 GPS 锁星前点亮地图。
   ///
-  /// 真实定位点一到就作废：有真点之后粗略位置只会是干扰。
-  Future<void> _loadPreviewFix() async {
-    final LocationFix? fix = await _location.quickPreviewFix();
-    if (fix == null || _lastFixMs != 0 || _finished) return;
+  /// 真实定位点一到就作废：有真点之后粗略位置只会是干扰。返回值同时供
+  /// 地点 / 天气捕获使用；失败时返回 null，不向界面抛错。
+  Future<LocationFix?> _loadPreviewFix() async {
+    LocationFix? fix;
+    try {
+      fix = await _location.quickPreviewFix();
+    } catch (_) {
+      return null;
+    }
+    if (fix == null || _lastFixMs != 0 || _finished) return fix;
     _previewFix = fix;
     _publish();
+    return fix;
+  }
+
+  /// 用粗略定位捕获地点 / 天气；粗略定位不可用时把机会留给第一个真实点。
+  Future<void> _captureConditions(
+    int rideId,
+    Future<LocationFix?> previewFuture,
+  ) async {
+    LocationFix? preview;
+    try {
+      preview = await previewFuture;
+    } catch (_) {
+      preview = null;
+    }
+    // 第一个真实定位点可能已经先到并完成了捕获。
+    if (!ref.mounted || _conditionsPendingRideId != rideId) return;
+    if (preview == null || !preview.hasPosition) return;
+    _conditionsPendingRideId = null;
+    await _writeConditions(rideId, preview.lat!, preview.lon!);
+  }
+
+  /// 查询地点与天气并写入记录。
+  ///
+  /// 两个请求并行、各自降级：地点失败不影响天气，反之亦然。两者都失败时
+  /// 不写库，记录保持「没有捕获到条件」的状态，界面整行省略。
+  Future<void> _writeConditions(int rideId, double lat, double lon) async {
+    if (!ref.mounted) return;
+    final PlaceService placeService = ref.read(placeServiceProvider);
+    final WeatherService weatherService = ref.read(weatherServiceProvider);
+    final WorkoutRepository repo = ref.read(workoutRepositoryProvider);
+
+    final Future<PlaceInfo?> placeFuture = _safePlace(
+      placeService,
+      lat,
+      lon,
+    );
+    final Future<WeatherNow?> weatherFuture = _safeWeather(
+      weatherService,
+      lat,
+      lon,
+    );
+    final PlaceInfo? place = await placeFuture;
+    final WeatherNow? weather = await weatherFuture;
+    if (place == null && weather == null) return;
+
+    try {
+      await repo.updateConditions(
+        rideId,
+        WorkoutConditions(
+          placeName: place?.full,
+          placeShort: place?.short,
+          weatherText: weather?.description,
+          weatherTempC: weather?.temperatureC,
+        ),
+      );
+    } catch (_) {
+      // 地点 / 天气只是附加信息，写库失败不影响记录本身。
+    }
+  }
+
+  Future<PlaceInfo?> _safePlace(
+    PlaceService service,
+    double lat,
+    double lon,
+  ) async {
+    try {
+      return await service.place(lat: lat, lon: lon);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<WeatherNow?> _safeWeather(
+    WeatherService service,
+    double lat,
+    double lon,
+  ) async {
+    try {
+      return await service.currentWeather(lat: lat, lon: lon);
+    } catch (_) {
+      return null;
+    }
   }
 
   void _startStreams() {
@@ -552,6 +662,12 @@ class RecordController extends Notifier<RecordState> {
     _previewFix = null;
     _lastFixMs = fix.tMs;
     session.ingestFix(fix);
+    // 没有粗略定位时，用第一个真实定位点补地点 / 天气。
+    final int? conditionsRideId = _conditionsPendingRideId;
+    if (conditionsRideId == session.rideId && fix.hasPosition) {
+      _conditionsPendingRideId = null;
+      unawaited(_writeConditions(conditionsRideId!, fix.lat!, fix.lon!));
+    }
     // 定位点一到就把读数推上界面，而不是等下一个 1Hz 节拍。
     //
     // 原来这里只落盘不 publish，速度因此最多要晚 1 秒才显示——再加上定位本身
@@ -766,6 +882,7 @@ class RecordController extends Notifier<RecordState> {
   void _teardown() {
     _ticker?.cancel();
     _fixSub?.cancel();
+    _conditionsPendingRideId = null;
     for (final SensorMonitor monitor in _monitors.values) {
       monitor.dispose();
     }

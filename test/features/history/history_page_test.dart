@@ -42,6 +42,10 @@ Workout ride(
   int? startedAtMs,
   WorkoutSummary? summary,
   ActivityType activityType = ActivityType.cycling,
+  String? placeName,
+  String? placeShort,
+  String? weatherText,
+  int? weatherTempC,
 }) => Workout(
   id: id,
   startedAtMs: startedAtMs ?? DateTime(2026, 9, 21, 8).millisecondsSinceEpoch,
@@ -50,6 +54,10 @@ Workout ride(
   title: title,
   activityType: activityType,
   summary: summary ?? _summary,
+  placeName: placeName,
+  placeShort: placeShort,
+  weatherText: weatherText,
+  weatherTempC: weatherTempC,
 );
 
 List<TrackPoint> points() => <TrackPoint>[
@@ -179,6 +187,23 @@ void main() {
     expect(find.text('功率'), findsOneWidget);
     expect(find.text('—'), findsOneWidget);
     expect(find.textContaining('0 W'), findsNothing);
+  });
+
+  testWidgets('卡片出发时间后拼上记录捕获的短地名', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[ride(1, placeShort: '龙泉驿区')],
+      ridePoints: points(),
+    );
+
+    expect(find.text('08:00 出发 · 龙泉驿区'), findsOneWidget);
+  });
+
+  testWidgets('没有地点数据的旧记录只显示出发时间', (WidgetTester tester) async {
+    await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
+
+    expect(find.text('08:00 出发'), findsOneWidget);
+    expect(find.textContaining('出发 ·'), findsNothing);
   });
 
   testWidgets('类型筛选：选跑步只留跑步卡片，选全部恢复', (WidgetTester tester) async {

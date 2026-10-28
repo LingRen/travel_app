@@ -44,11 +44,11 @@ void main() {
         key: '   ',
       );
 
-      expect(await service.placeName(lat: 30, lon: 120), isNull);
+      expect(await service.place(lat: 30, lon: 120), isNull);
       expect(calls, 0);
     });
 
-    test('请求前把 WGS-84 转成 GCJ-02，并解析「城市 · 区县」', () async {
+    test('请求前把 WGS-84 转成 GCJ-02，并解析地址分量', () async {
       Uri? requested;
       final AmapPlaceService service = AmapPlaceService(
         client: MockClient((http.Request request) async {
@@ -59,12 +59,14 @@ void main() {
       );
 
       // 天安门：测试里用与 gcj02_test 相同的已知偏移值。
-      final String? name = await service.placeName(
+      final PlaceInfo? place = await service.place(
         lat: 39.90750,
         lon: 116.39123,
       );
 
-      expect(name, '成都市 · 武侯区');
+      expect(place!.cityDistrict, '成都市 · 武侯区');
+      expect(place.full, '成都市 · 武侯区 · 桂溪街道');
+      expect(place.short, '武侯区');
       expect(requested!.host, 'restapi.amap.com');
       expect(requested!.path, '/v3/geocode/regeo');
       expect(requested!.queryParameters['key'], 'test-key');
@@ -87,34 +89,44 @@ void main() {
         key: 'test-key',
       );
 
-      expect(await service.placeName(lat: 30, lon: 120), '龙泉驿区');
+      final PlaceInfo? place = await service.place(lat: 30, lon: 120);
+      expect(place!.short, '龙泉驿区');
+      expect(place.full, '龙泉驿区 · 桂溪街道');
     });
 
     test('没有城市与区县时退回省份，再退回街道', () async {
-      Future<String?> query(Object? city, Object? district, Object? province) =>
-          AmapPlaceService(
-            client: MockClient(
-              (_) async => _jsonResponse(
-                _regeocode(
-                  city: city,
-                  district: district,
-                  province: province,
-                  township: '桂溪街道',
-                ),
-              ),
+      Future<PlaceInfo?> query(
+        Object? city,
+        Object? district,
+        Object? province,
+      ) => AmapPlaceService(
+        client: MockClient(
+          (_) async => _jsonResponse(
+            _regeocode(
+              city: city,
+              district: district,
+              province: province,
+              township: '桂溪街道',
             ),
-            key: 'test-key',
-          ).placeName(lat: 30, lon: 120);
+          ),
+        ),
+        key: 'test-key',
+      ).place(lat: 30, lon: 120);
 
-      expect(await query(null, null, '四川省'), '四川省');
-      expect(await query(null, null, null), '桂溪街道');
+      final PlaceInfo? provinceOnly = await query(null, null, '四川省');
+      expect(provinceOnly!.short, '四川省');
+      expect(provinceOnly.cityDistrict, '四川省');
+
+      final PlaceInfo? townshipOnly = await query(null, null, null);
+      expect(townshipOnly!.short, '桂溪街道');
+      expect(townshipOnly.cityDistrict, '桂溪街道');
     });
 
     test('status 不是 1、非 200、畸形 JSON 时返回 null', () async {
-      Future<String?> query(MockClient client) => AmapPlaceService(
+      Future<PlaceInfo?> query(MockClient client) => AmapPlaceService(
         client: client,
         key: 'test-key',
-      ).placeName(lat: 30, lon: 120);
+      ).place(lat: 30, lon: 120);
 
       expect(
         await query(
@@ -140,10 +152,10 @@ void main() {
     });
 
     test('网络异常返回 null', () async {
-      final String? value = await AmapPlaceService(
+      final PlaceInfo? value = await AmapPlaceService(
         client: MockClient((_) async => throw const SocketExceptionLike()),
         key: 'test-key',
-      ).placeName(lat: 30, lon: 120);
+      ).place(lat: 30, lon: 120);
 
       expect(value, isNull);
     });
@@ -158,7 +170,7 @@ void main() {
         timeout: const Duration(milliseconds: 10),
       );
 
-      expect(await service.placeName(lat: 30, lon: 120), isNull);
+      expect(await service.place(lat: 30, lon: 120), isNull);
     });
 
     test('同一网格 10 分钟内复用缓存，过期后重新请求', () async {
@@ -173,16 +185,22 @@ void main() {
         nowMs: () => nowMs,
       );
 
-      expect(await service.placeName(lat: 30.5728, lon: 104.0668), '成都市 · 武侯区');
-      expect(await service.placeName(lat: 30.5731, lon: 104.0671), '成都市 · 武侯区');
+      expect(
+        (await service.place(lat: 30.5728, lon: 104.0668))!.cityDistrict,
+        '成都市 · 武侯区',
+      );
+      expect(
+        (await service.place(lat: 30.5731, lon: 104.0671))!.cityDistrict,
+        '成都市 · 武侯区',
+      );
       expect(calls, 1);
 
       nowMs += 9 * 60 * 1000;
-      await service.placeName(lat: 30.5728, lon: 104.0668);
+      await service.place(lat: 30.5728, lon: 104.0668);
       expect(calls, 1);
 
       nowMs += 2 * 60 * 1000;
-      await service.placeName(lat: 30.5728, lon: 104.0668);
+      await service.place(lat: 30.5728, lon: 104.0668);
       expect(calls, 2);
     });
   });

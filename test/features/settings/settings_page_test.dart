@@ -272,7 +272,7 @@ void main() {
     expect(find.text('高德 · 宣纸'), findsOneWidget);
     expect(find.text('行迹 XINGJI · 1.0.0'), findsOneWidget);
     expect(find.text('记录仅存本机'), findsOneWidget);
-    expect(find.text('位置名称与天气查询会联网，坐标不落库。'), findsOneWidget);
+    expect(find.text('地点与天气随记录保存在本机；查询会联网，不额外保存坐标。'), findsOneWidget);
   });
 
   testWidgets('修改最大心率后立即保存', (WidgetTester tester) async {
@@ -536,7 +536,7 @@ void main() {
 
     expect(find.text('行迹 XINGJI · 1.0.0'), findsOneWidget);
     expect(find.text('记录仅存本机'), findsOneWidget);
-    expect(find.text('位置名称与天气查询会联网，坐标不落库。'), findsOneWidget);
+    expect(find.text('地点与天气随记录保存在本机；查询会联网，不额外保存坐标。'), findsOneWidget);
     for (final String word in <String>['账号', '云同步', '社交', '登录']) {
       expect(find.textContaining(word), findsNothing, reason: word);
     }
