@@ -307,10 +307,14 @@ class RecordingSession {
   }
 
   /// 原始速度：优先用 GPS 上报值，缺失或不合理时用位移除以时间推算。
+  ///
+  /// `0` 与负数一样按「平台没给速度」处理：安卓的 `getSpeed()` 在速度解不出来
+  /// 时返回 0（不是 -1），iOS 模拟器也这么报。照单全收会让 [kSpeedDeadbandEnterMps]
+  /// 把整段骑行压成 0——位置明明在动，速度与里程却一直停在 0。
   double _resolveSpeedMps(LocationFix fix, double segmentM) {
     final double? reported = fix.speedMps;
     if (reported != null &&
-        reported >= 0 &&
+        reported > 0 &&
         reported <= kMaxPlausibleSpeedMps) {
       return reported;
     }

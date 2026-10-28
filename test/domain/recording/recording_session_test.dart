@@ -104,6 +104,17 @@ void main() {
       expect(negative.snapshot.currentSpeedMps, closeTo(11.13, 0.2));
     });
 
+    test('上报速度为 0 时按位移推算，里程照常累计', () {
+      final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
+      // 安卓 getSpeed() 解不出速度时返回 0，iOS 模拟器也这么报；照单全收会被
+      // 死区压成 0，位置明明每 2 秒北移 20 米，读数却一直是 0。
+      for (int i = 0; i < 10; i++) {
+        s.ingestFix(fixAt(i * 2000, lat: 31.0 + i * 0.00018, speedMps: 0));
+      }
+      expect(s.snapshot.currentSpeedMps, closeTo(10.0, 0.2));
+      expect(s.snapshot.distanceM, closeTo(180.0, 2.0));
+    });
+
     test('GPS 长时间无更新后速度归零', () {
       final RecordingSession s = RecordingSession(rideId: 1, startedAtMs: 0);
       s.ingestFix(fixAt(0, speedMps: 6.0));
