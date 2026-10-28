@@ -16,8 +16,8 @@ import '../../domain/models/track_point.dart';
 ///
 /// 与详情页的 [RouteMap] 是两回事，所以没有复用它：
 ///   - 详情页的地图是一次性画完的，用 `initialCameraFit` 定死取景就够；
-///   - 这里轨迹在骑行中一直长，必须自己拿 [MapController] 决定「什么时候重新
-///     取景」。每秒重新缩放一次，看起来就是整张图在抖。
+///   - 这里轨迹在骑行中一直长，必须自己拿 [MapController] 跟着当前位置走，
+///     否则骑出去一会儿箭头就出了画面（见 [_LiveRouteMapState._syncCamera]）。
 ///
 /// 复用它的**纯部分**：`buildRouteSegments` 的分段着色与断点规则、`TileLayer` /
 /// `PolylineLayer` 的画法、坐标转换口径（跟随瓦片源决定是否转 GCJ-02）。
@@ -80,8 +80,19 @@ class LiveRouteMap extends StatefulWidget {
   State<LiveRouteMap> createState() => _LiveRouteMapState();
 }
 
-class _LiveRouteMapState extends State<LiveRouteMap> {
+class _LiveRouteMapState extends State<LiveRouteMap>
+    with SingleTickerProviderStateMixin {
   final MapController _controller = MapController();
+
+  /// 跟随平移的补间。[MapController.move] 是瞬移，安全区一破就「唰」地把整张图
+  /// 拽回去很刺眼；320ms 滑过去，看起来就是地图在往前走。
+  late final AnimationController _pan = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  )..addListener(_applyPan);
+
+  LatLng? _panFrom;
+  LatLng? _panTarget;
 
   /// 折线缓存。只在轨迹点换了对象、或主题色变了时重算。
   List<Polyline<Object>> _polylines = const <Polyline<Object>>[];
@@ -112,18 +123,19 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
 
   double get _headingTurns => _unwrappedDeg / 360;
 
-  /// 首次取景交给 `initialCameraFit`：它在拿到尺寸之后才生效，自己调
+  /// 首帧取景交给 `initialCameraFit`：它在拿到尺寸之后才生效，自己调
   /// `fitCamera` 有可能赶在布局之前，算出来的缩放级别是错的。
   CameraFit? _initialFit;
 
-  /// 上一次取景用的范围。之后只在最新点跑出这个范围时才重新取景。
-  LatLngBounds? _fitted;
-
   bool _ready = false;
 
-  static const EdgeInsets _kFitPadding = EdgeInsets.all(24);
+  /// 跟随安全区：可见范围四周各让出这么多比例后剩下的中间一块。
+  ///
+  /// 上下都压着读数浮层，只有中间这条带子是真正「看得见路」的；箭头停在
+  /// 边缘等于没跟随，所以它一旦出这块安全区就把相机拉回中心。
+  static const double _kFollowSafeInset = 0.25;
 
-  /// 取景的缩放上限。只有两三个点时，自动取景会一路缩到 19 级去拉一堆瓦片，
+  /// 首次取景的缩放上限。只有两三个点时，自动取景会一路缩到 19 级去拉一堆瓦片，
   /// 而 25 米外的两个点根本不需要那个层级。
   static const double _kMaxZoom = 16;
 
@@ -134,13 +146,10 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     _updatePreview(widget.previewFix);
     _updateStart(widget.startPoint);
     _updateHeading(widget.headingDeg);
-    if (_vertices.length >= 2) {
-      _fitted = LatLngBounds.fromPoints(_vertices);
-      _initialFit = _fitFor(_fitted!);
-    } else if (_markerPoint != null) {
-      // 只有一个点时没有包围盒可算，直接把它放到取景中心。
-      _initialFit = _fitForPoint(_markerPoint!);
-    }
+    // 首帧就以当前位置为中心：绘制的是「我跟到哪儿了」，不是整段轨迹的全貌。
+    // 没有真实点时退到粗略定位。
+    final LatLng? center = _currentVertex ?? _markerPoint;
+    if (center != null) _initialFit = _fitForPoint(center);
   }
 
   @override
@@ -174,17 +183,11 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
 
   @override
   void dispose() {
+    _pan.dispose();
     _controller.dispose();
     super.dispose();
   }
 
-  CameraFit _fitFor(LatLngBounds bounds) => CameraFit.bounds(
-    bounds: bounds,
-    padding: _kFitPadding,
-    maxZoom: _kMaxZoom,
-  );
-
-  /// 只有一个点时的取景：直接以它为中心，缩放压到街区级。
   CameraFit _fitForPoint(LatLng point) =>
       CameraFit.coordinates(coordinates: <LatLng>[point], maxZoom: _kMaxZoom);
 
@@ -285,22 +288,60 @@ class _LiveRouteMapState extends State<LiveRouteMap> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncCamera());
   }
 
-  /// 只在最新点已经跑出上次取景的范围时才重新取景。
+  /// 让相机跟着当前位置走。
   ///
-  /// 换成「每秒都重新 fit」的话，相机每一帧都在轻微缩放，整张图看着在抖；
-  /// 而骑行中轨迹本来就是往外长的，等到新点出框再放一次，肉眼是「一步步长大」。
+  /// 这里曾经拿「轨迹包围盒」判断要不要重新取景，但那个盒子按定义永远包含
+  /// 最新点，条件恒成立——首帧之后相机再没动过，骑出去几分钟箭头就出了画面。
+  /// 现在改用相机自己的可见范围：当前位置跑出正中那块安全区，就把它滑回中心。
+  /// 只平移、不改缩放，避免每秒重新取景带来的整体抖动。
   void _syncCamera() {
-    if (!mounted || _vertices.isEmpty) return;
+    if (!mounted || !_ready || _vertices.isEmpty) return;
+    final LatLng current = _vertices.last;
     if (_vertices.length == 1) {
-      _fitted = null;
-      _controller.fitCamera(_fitForPoint(_vertices.single));
+      _controller.fitCamera(_fitForPoint(current));
       return;
     }
-    final LatLngBounds bounds = LatLngBounds.fromPoints(_vertices);
-    final LatLngBounds? fitted = _fitted;
-    if (fitted != null && fitted.contains(_vertices.last)) return;
-    _fitted = bounds;
-    _controller.fitCamera(_fitFor(bounds));
+    final MapCamera camera = _controller.camera;
+    if (_safeBounds(camera.visibleBounds).contains(current)) return;
+    _panTo(current);
+  }
+
+  /// 从相机当前中心滑到 [target]。动画期间又来新点时，从当前位置重新起步，
+  /// 不会先跳回上一次的终点。
+  void _panTo(LatLng target) {
+    _panFrom = _controller.camera.center;
+    _panTarget = target;
+    _pan.forward(from: 0);
+  }
+
+  void _applyPan() {
+    final LatLng? from = _panFrom;
+    final LatLng? to = _panTarget;
+    if (from == null || to == null) return;
+    final double t = Curves.easeOut.transform(_pan.value);
+    _controller.move(
+      LatLng(
+        from.latitude + (to.latitude - from.latitude) * t,
+        from.longitude + (to.longitude - from.longitude) * t,
+      ),
+      _controller.camera.zoom,
+    );
+  }
+
+  /// 可见范围中间那块安全区：四周各让出 [_kFollowSafeInset]。
+  static LatLngBounds _safeBounds(LatLngBounds visible) {
+    final double latSpan = visible.north - visible.south;
+    final double lonSpan = visible.east - visible.west;
+    return LatLngBounds(
+      LatLng(
+        visible.south + latSpan * _kFollowSafeInset,
+        visible.west + lonSpan * _kFollowSafeInset,
+      ),
+      LatLng(
+        visible.north - latSpan * _kFollowSafeInset,
+        visible.east - lonSpan * _kFollowSafeInset,
+      ),
+    );
   }
 
   @override

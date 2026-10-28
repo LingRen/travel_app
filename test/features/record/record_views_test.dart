@@ -8,6 +8,7 @@ import 'package:cycling_app/data/sensor_pairing.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/data/workout_repository.dart';
 import 'package:cycling_app/domain/analysis/constants.dart';
+import 'package:cycling_app/domain/analysis/gcj02.dart';
 import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/location_fix.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
@@ -778,6 +779,48 @@ void main() {
             .accentInk,
         reason: '轨迹用文字安全色，浅色纸底图上仍可读',
       );
+    });
+
+    testWidgets('骑行中相机会跟着当前位置走，不会把箭头留在画面外', (
+      WidgetTester tester,
+    ) async {
+      List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+      ];
+      RecordState state(List<TrackPoint> points) => RecordState(
+        rideId: 1,
+        phase: RecordingPhase.recording,
+        elapsedMs: 2000,
+        liveTrack: points,
+      );
+      MapCamera camera() =>
+          MapCamera.of(tester.element(find.byKey(const Key('map-scale-bar'))));
+      // 瓦片源是 GCJ-02，轨迹与相机中心都换算过，期望值要同一口径。
+      ({double lat, double lon}) onMap(double lat, double lon) =>
+          wgs84ToGcj02(lat, lon);
+
+      await tester.pumpWidget(wrap(handlebar(state(track))));
+      await tester.pump();
+
+      final ({double lat, double lon}) first = onMap(30.001, 120.001);
+      // 首帧就以当前位置为中心。
+      expect(camera().center.latitude, closeTo(first.lat, 0.0005));
+      expect(camera().center.longitude, closeTo(first.lon, 0.0005));
+
+      // 骑出去一公里：轨迹多了个新点，相机必须跟过去，而不是停在原地。
+      track = <TrackPoint>[
+        ...track,
+        const TrackPoint(rideId: 1, tMs: 3000, lat: 30.011, lon: 120.011),
+      ];
+      await tester.pumpWidget(wrap(handlebar(state(track))));
+      // 一帧让 didUpdateWidget 把同步排到帧后，再推完 320ms 的跟随补间。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final ({double lat, double lon}) last = onMap(30.011, 120.011);
+      expect(camera().center.latitude, closeTo(last.lat, 0.0005));
+      expect(camera().center.longitude, closeTo(last.lon, 0.0005));
     });
 
     testWidgets('GPS 断点把实时轨迹切成两段', (WidgetTester tester) async {
