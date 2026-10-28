@@ -189,6 +189,15 @@ void main() {
     expect(find.textContaining('0 W'), findsNothing);
   });
 
+  testWidgets('日期在固定列宽里保持单行，不折成两行', (WidgetTester tester) async {
+    await pumpHistory(tester, rides: <Workout>[ride(1)], ridePoints: points());
+
+    // 测试字体的数字比真实字体宽；没有 FittedBox 时「09.21」会被 52dp 的
+    // 日期列折成多行。单行高度应远小于两行。
+    final Rect dateRect = tester.getRect(find.text('09.21'));
+    expect(dateRect.height, lessThan(30));
+  });
+
   testWidgets('卡片出发时间后拼上记录捕获的短地名', (WidgetTester tester) async {
     await pumpHistory(
       tester,

@@ -65,11 +65,19 @@ class WorkoutCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        formatMonthDayDot(ride.startedAtMs),
-                        style: kSerifHeadingTextStyle.copyWith(
-                          fontSize: 22,
-                          height: 1.1,
+                      // 固定列宽比日期本身略窄时，Text 会把「10.28」折成
+                      // 「10.2 / 8」。日期必须单行：只缩小一点，不换行。
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          formatMonthDayDot(ride.startedAtMs),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: kSerifHeadingTextStyle.copyWith(
+                            fontSize: 22,
+                            height: 1.1,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 2),
