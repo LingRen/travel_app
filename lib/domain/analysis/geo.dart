@@ -23,20 +23,40 @@ double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
   return 2 * kEarthRadiusM * math.asin(math.min(1.0, math.sqrt(a)));
 }
 
-/// 相邻两点是否构成一个**值得画出来**的断点：时间跨度超过 [kGpsGapMs]，且两点
-/// 的位移超过 [kGapBreakMinDistanceM]。
+/// 一次定位空档的类别。
+enum SignalGapKind {
+  /// 短缺口（不超过 [kGapBridgeMaxMs]）：用虚线跨过，不当作轨迹中断。
+  bridged,
+
+  /// 长缺口：接不上了，断口两侧画标记并写进中断摘要。
+  broken,
+}
+
+/// 相邻两点之间的定位空档类别。null 表示不是空档（时间没断，或根本没挪动）。
 ///
 /// 只看时间不够：停止不动时系统常常不再送定位，十几秒的间隔只是「没动」，不是
 /// 「丢信号」。这种缺口连起来也画不出横穿建筑或隧道的假直线，断开反而让轨迹和
 /// 曲线看着断断续续（真机实测见 [kGapBreakMinDistanceM]）。
 ///
-/// 缺坐标时无从判断位移，按「可能有位移」处理，保守断开。
-bool isMeaningfulGap(TrackPoint a, TrackPoint b) {
-  if (b.tMs - a.tMs <= kGpsGapMs) return false;
-  if (!a.hasPosition || !b.hasPosition) return true;
-  return haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) >=
-      kGapBreakMinDistanceM;
+/// 缺坐标时无从判断位移，按「可能有位移」处理，保守算作空档。
+SignalGapKind? signalGapKind(TrackPoint a, TrackPoint b) {
+  final int dtMs = b.tMs - a.tMs;
+  if (dtMs <= kGpsGapMs) return null;
+  if (a.hasPosition &&
+      b.hasPosition &&
+      haversineMeters(a.lat!, a.lon!, b.lat!, b.lon!) <
+          kGapBreakMinDistanceM) {
+    return null;
+  }
+  return dtMs > kGapBridgeMaxMs ? SignalGapKind.broken : SignalGapKind.bridged;
 }
+
+/// 相邻两点是否构成一个**值得画出来**的断点：时间跨度超过 [kGpsGapMs]，且两点
+/// 的位移超过 [kGapBreakMinDistanceM]。两种缺口都算（见 [signalGapKind]）。
+///
+/// 缺坐标时无从判断位移，按「可能有位移」处理，保守断开。
+bool isMeaningfulGap(TrackPoint a, TrackPoint b) =>
+    signalGapKind(a, b) != null;
 
 /// 相邻两点是否构成一个可信的轨迹段。
 ///

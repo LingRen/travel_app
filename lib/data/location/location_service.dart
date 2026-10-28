@@ -112,7 +112,9 @@ LocationSettings buildLocationSettings({required bool isAndroid}) {
     );
   }
   return AppleSettings(
-    accuracy: LocationAccuracy.best,
+    // bestForNavigation 让 CoreLocation 允许陀螺仪/加速度计参与解算，在楼群与
+    // 高架下比 best 更容易在短暂遮挡后立刻接回定位。
+    accuracy: LocationAccuracy.bestForNavigation,
     activityType: ActivityType.fitness,
     distanceFilter: 0,
     // 骑行中自动暂停定位会让轨迹断掉，必须关掉。

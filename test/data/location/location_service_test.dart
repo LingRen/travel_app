@@ -401,7 +401,7 @@ void main() {
 
       final LocationSettings? settings = platform.capturedSettings;
       expect(settings, isNotNull);
-      expect(settings!.accuracy, LocationAccuracy.best);
+      expect(settings!.accuracy, LocationAccuracy.bestForNavigation);
       expect(settings.distanceFilter, 0);
     });
   });
@@ -471,7 +471,9 @@ void main() {
       final LocationSettings settings = buildLocationSettings(isAndroid: false);
 
       expect(settings, isA<AppleSettings>());
-      expect(settings.accuracy, LocationAccuracy.best);
+      // bestForNavigation 会允许陀螺仪/加速度计参与解算：楼群与高架下短暂遮挡
+      // 后能更快接回定位，减少十几秒的空档。
+      expect(settings.accuracy, LocationAccuracy.bestForNavigation);
       expect(settings.distanceFilter, 0);
 
       final AppleSettings apple = settings as AppleSettings;

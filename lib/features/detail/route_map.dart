@@ -15,6 +15,7 @@ class RouteMap extends StatelessWidget {
     required this.tileUrlTemplate,
     this.subdomains = const <String>[],
     this.gapEnds = const <LatLng>[],
+    this.bridgedGaps = const <RouteGap>[],
     this.height = 260,
     super.key,
   });
@@ -31,6 +32,12 @@ class RouteMap extends StatelessWidget {
   /// 缺口两侧各画一个小圆点：线断在那里，但用户要知道那是信号丢了，不是记录
   /// 出了问题。不画连接线——断口之间的直线是假数据。
   final List<LatLng> gapEnds;
+
+  /// 短缺口（10~30 秒没有定位）。用虚线跨过两端点，不画端点标记。
+  ///
+  /// 虚线表示「这里没有实测点」：既不让轨迹看着断掉，也不把估算路径画成实线。
+  /// 超过 30 秒的缺口仍走 [gapEnds]，两侧留空。
+  final List<RouteGap> bridgedGaps;
 
   final double height;
 
@@ -104,6 +111,20 @@ class RouteMap extends StatelessWidget {
                   // 描边让轨迹在黄白路面与深色底图上都立得住，见 [kRouteCasing]。
                   borderStrokeWidth: kRouteCasingWidth,
                   borderColor: kRouteCasing,
+                ),
+              // 短缺口：虚线跨过。画在实线之后，缺口两侧的线头会盖住虚线的端点，
+              // 看起来是一条连续的虚线过渡，而不是两截断线。
+              for (final RouteGap gap in bridgedGaps)
+                Polyline<Object>(
+                  points: <LatLng>[
+                    LatLng(gap.before.lat, gap.before.lon),
+                    LatLng(gap.after.lat, gap.after.lon),
+                  ],
+                  strokeWidth: kRouteStrokeWidth,
+                  color: context.palette.warning,
+                  pattern: StrokePattern.dashed(
+                    segments: const <double>[6, 5],
+                  ),
                 ),
             ],
           ),

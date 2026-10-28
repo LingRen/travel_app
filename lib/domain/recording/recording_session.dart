@@ -112,7 +112,7 @@ class RecordingSession {
     for (final TrackPoint p in recentTrack) {
       _appendToLiveTrack(
         p,
-        gpsLostBefore: prev != null && p.tMs - prev.tMs > kGpsGapMs,
+        gpsLostBefore: prev != null && p.tMs - prev.tMs > kGapBridgeMaxMs,
       );
       if (p.hasPosition) {
         firstPositioned ??= p;
@@ -232,7 +232,8 @@ class RecordingSession {
   /// 真实 GPS 丢失造成的断点：下标 i 表示 `_liveTrack[i]` 与 `[i-1]` 之间必须
   /// 断开。**不能拿时间间隔反推**——抽稀后相邻两点本来就可能隔十几秒（慢速骑行、
   /// 红绿灯、折半压缩），那样会把连续轨迹切成一截截（真机实测的「断断续续」）。
-  /// 断点只在确实有超过 [kGpsGapMs] 没有新定位时才记一笔。
+  /// 断点只在确实有超过 [kGapBridgeMaxMs] 没有新定位时才记一笔：更短的缺口
+  /// （公交、楼群下十几秒没有定位）直接连起来，缩略图上不画醒目的大缺口。
   Set<int> _liveBreaks = const <int>{};
 
   /// 断点已经发生、但对应的点还没被抽稀规则收进 `_liveTrack`：等下一个被收下的
@@ -269,8 +270,10 @@ class RecordingSession {
 
     final LocationFix? prev = _lastFix;
     // 上一次定位到这里已经超过断点阈值：这次是真丢了信号，而不是抽稀造成的
-    // 时间跨度。缩略图要靠它断开，不能等画的时候再按时间猜。
-    final bool gpsLostBefore = prev != null && fix.tMs - prev.tMs > kGpsGapMs;
+    // 时间跨度。缩略图要靠它断开，不能等画的时候再按时间猜。短缺口（不超过
+    // [kGapBridgeMaxMs]）不在此列：详情页用虚线跨过，缩略图直接连起来。
+    final bool gpsLostBefore =
+        prev != null && fix.tMs - prev.tMs > kGapBridgeMaxMs;
     double segmentM = 0;
     if (prev != null && prev.hasPosition) {
       segmentM = segmentDistanceMeters(_toPoint(prev), _toPoint(fix));

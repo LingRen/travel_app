@@ -208,6 +208,12 @@ class _DetailBody extends ConsumerWidget {
       0,
       (int sum, RouteGap gap) => sum + gap.durationS,
     );
+    // 短缺口不当作信号中断，只在摘要里说明「那段没采到」。
+    final List<RouteGap> bridgedGaps = findBridgedGaps(
+      points,
+      toGcj02: toGcj02,
+    );
+
     final double mapHeight = math.min(
       _kMapHeight,
       MediaQuery.sizeOf(context).height * _kMapHeightShrink,
@@ -238,6 +244,7 @@ class _DetailBody extends ConsumerWidget {
                   LatLng(gap.after.lat, gap.after.lon),
                 ],
               ],
+              bridgedGaps: bridgedGaps,
               height: mapHeight,
             ),
           ),
@@ -325,6 +332,28 @@ class _DetailBody extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: kFontMeta,
                       color: palette.warning,
+                      fontFeatures: kTabularFigures,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // 短缺口：线没断，但它也不是实测数据，必须说清楚，免得用户把虚线
+        // 当成真实轨迹。
+        if (bridgedGaps.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceS, kSpaceL, 0),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.more_horiz, size: 16, color: palette.muted),
+                const SizedBox(width: kSpaceS),
+                Expanded(
+                  child: Text(
+                    '短缺口 ${bridgedGaps.length} 段 · 虚线处未采到定位',
+                    style: TextStyle(
+                      fontSize: kFontMeta,
+                      color: palette.muted,
                       fontFeatures: kTabularFigures,
                     ),
                   ),

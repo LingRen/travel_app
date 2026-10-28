@@ -117,9 +117,9 @@ RouteVertex _vertex(TrackPoint p, bool toGcj02) {
 
 /// 一次 GPS 信号中断：断口两侧的最后一个 / 第一个定位点，以及中断时长。
 ///
-/// 口径与画线用的 [isMeaningfulGap] 完全一致——轨迹上断开的地方，这里就有一条。
-/// 详情页拿它在地图上标出断口、在顶部写一行「信号中断 N 段」。**不用于填补数据**：
-/// 缺口是真的没测到，插值出来的线是假的。
+/// 既用于真正的断口（[SignalGapKind.broken]），也用于用虚线跨过的短缺口
+/// （[SignalGapKind.bridged]），两者的端点与时长口径完全一致。
+/// **不用于填补数据**：缺口是真的没测到，插值出来的点一个都不会落盘。
 class RouteGap {
   const RouteGap({
     required this.startMs,
@@ -144,8 +144,27 @@ class RouteGap {
   int get durationS => ((endMs - startMs) / 1000).round();
 }
 
-/// 找出轨迹里所有值得标出来的信号中断。口径见 [findRouteGaps] 的类注释。
-List<RouteGap> findRouteGaps(List<TrackPoint> points, {bool toGcj02 = true}) {
+/// 找出轨迹里所有**接不上**的长缺口（超过 [kGapBridgeMaxMs]）。
+///
+/// 详情页拿它在地图上标断口、在顶部写一行「信号中断 N 段」。短缺口不在这里，
+/// 见 [findBridgedGaps]。
+List<RouteGap> findRouteGaps(List<TrackPoint> points, {bool toGcj02 = true}) =>
+    _findGaps(points, SignalGapKind.broken, toGcj02: toGcj02);
+
+/// 找出所有可以用虚线跨过的短缺口（[kGpsGapMs] 到 [kGapBridgeMaxMs]）。
+///
+/// 这些缺口里同样没有实测点，虚线只是让轨迹看起来不断，并在摘要里写清楚
+/// 「未采到数据」，**不当作信号中断计数**。
+List<RouteGap> findBridgedGaps(
+  List<TrackPoint> points, {
+  bool toGcj02 = true,
+}) => _findGaps(points, SignalGapKind.bridged, toGcj02: toGcj02);
+
+List<RouteGap> _findGaps(
+  List<TrackPoint> points,
+  SignalGapKind kind, {
+  required bool toGcj02,
+}) {
   final List<TrackPoint> located = <TrackPoint>[
     for (final TrackPoint p in points)
       if (p.hasPosition) p,
@@ -155,7 +174,7 @@ List<RouteGap> findRouteGaps(List<TrackPoint> points, {bool toGcj02 = true}) {
   for (int i = 1; i < located.length; i++) {
     final TrackPoint a = located[i - 1];
     final TrackPoint b = located[i];
-    if (!isMeaningfulGap(a, b)) continue;
+    if (signalGapKind(a, b) != kind) continue;
     gaps.add(
       RouteGap(
         startMs: a.tMs,

@@ -160,8 +160,14 @@ class _FakeLocationService implements LocationService {
   @override
   Future<bool> hasPermission() async => true;
 
+  /// `fixes()` 被订阅的次数：定位流看门狗重建订阅时会再调一次。
+  int fixListenCalls = 0;
+
   @override
-  Stream<LocationFix> fixes() => _fixes.stream;
+  Stream<LocationFix> fixes() {
+    fixListenCalls++;
+    return _fixes.stream;
+  }
 
   @override
   Future<bool> openAppSettings() async => true;
@@ -1116,8 +1122,11 @@ void main() {
 
   // 缩略图上的点是抽稀过的：慢速骑行时相邻两点隔 15 秒是常态，画线若按
   // `kGpsGapMs`（10 秒）判断，一条连续轨迹会被切成一截截——这就是真机上看到的
-  // 「断断续续」。断点必须由采集侧在确实丢信号时显式标出来。
-  testWidgets('慢速骑行的时间跨度不算断点，真丢信号才断', (WidgetTester tester) async {
+  // 「断断续续」。断点必须由采集侧在确实丢信号时显式标出来；公交、楼群下的
+  // 十几秒空档属于短缺口，缩略图直接连过去，只有接不上的长缺口才断开。
+  testWidgets('慢速骑行的时间跨度不算断点，短缺口连过去，长缺口才断', (
+    WidgetTester tester,
+  ) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller = container.read(
       recordControllerProvider.notifier,
@@ -1142,20 +1151,40 @@ void main() {
       reason: '抽稀造成的 15 秒间隔不能把轨迹切开',
     );
 
-    // 12 秒没有定位：再恢复时，下一个被缩略图收下的点必须是段首。
+    // 12 秒没有定位：属于短缺口，恢复后缩略图直接连过去，不画断口。
     clockMs += 12000;
     location.emit(
       LocationFix(tMs: clockMs, lat: 31.0005, lon: 121.0, speedMps: 5),
     );
     await tester.pump(const Duration(seconds: 1));
-    // 恢复后按 ~11 m/s 推进 12 秒：断点那个点之后还要再攒一个点，否则断出来的
-    // 尾段只有一个顶点、会被 `_flush` 丢掉，看不出「断成两段」。
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 3; i++) {
       await rideOneSecond(tester, lat: 31.0005 + i * 0.0001, speedMps: 5);
     }
 
+    final RecordState bridged = container.read(recordControllerProvider);
+    expect(bridged.liveTrackBreaks, isEmpty, reason: '12 秒的短缺口不该把轨迹切开');
+    expect(
+      buildRouteSegments(
+        bridged.liveTrack,
+        breakBefore: bridged.liveTrackBreaks,
+      ).length,
+      1,
+    );
+
+    // 35 秒没有定位：接不上了，恢复后的第一个点必须标成段首。
+    clockMs += 35000;
+    location.emit(
+      LocationFix(tMs: clockMs, lat: 31.001, lon: 121.0, speedMps: 5),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    // 恢复后按 ~11 m/s 推进 12 秒：断点那个点之后还要再攒一个点，否则断出来的
+    // 尾段只有一个顶点、会被 `_flush` 丢掉，看不出「断成两段」。
+    for (int i = 0; i < 12; i++) {
+      await rideOneSecond(tester, lat: 31.001 + i * 0.0001, speedMps: 5);
+    }
+
     final RecordState after = container.read(recordControllerProvider);
-    expect(after.liveTrackBreaks, isNotEmpty, reason: '真丢了 12 秒信号');
+    expect(after.liveTrackBreaks, isNotEmpty, reason: '真丢了 35 秒信号');
     expect(
       buildRouteSegments(
         after.liveTrack,
@@ -1163,6 +1192,40 @@ void main() {
       ).length,
       2,
     );
+    container.dispose();
+  });
+
+  // 平台侧的定位回调偶尔「假死」：服务与权限都正常，就是不再送新点。等到
+  // 用户发现轨迹停了，缺口已经几十秒、上百米。看门狗在 15 秒没有新点时重建
+  // 一次订阅，把这种假死拉回来。
+  testWidgets('定位流长时间没有新点时重建订阅，且不会反复重建', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await tester.pump();
+    expect(location.fixListenCalls, 1);
+
+    // 刚启动、一个点都没拿到时不重建：冷启动锁星本来就要几十秒。
+    clockMs += 20000;
+    await tester.pump(const Duration(seconds: 1));
+    expect(location.fixListenCalls, 1, reason: '拿到过点之后才谈得上假死');
+
+    await rideOneSecond(tester, lat: 31.0);
+    expect(location.fixListenCalls, 1);
+
+    // 又过了 15 秒还是没有新点：重建订阅。
+    clockMs += 16000;
+    await tester.pump(const Duration(seconds: 1));
+    expect(location.fixListenCalls, 2);
+
+    // 重建后立刻再等一小会儿，不能每个节拍都重订阅。
+    clockMs += 5000;
+    await tester.pump(const Duration(seconds: 1));
+    expect(location.fixListenCalls, 2);
     container.dispose();
   });
 

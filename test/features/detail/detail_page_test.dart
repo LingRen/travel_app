@@ -112,11 +112,25 @@ List<TrackPoint> pointsWithHr() => <TrackPoint>[
     ),
 ];
 
-/// 中段丢过 14 秒定位：详情页据此在地图上标断口、写一行中断摘要。
+/// 中段丢过 35 秒定位：详情页据此在地图上标断口、写一行中断摘要。
 List<TrackPoint> pointsWithGap() => <TrackPoint>[
   const TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4),
   const TrackPoint(rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, speedMps: 4),
-  // 14 秒空档 + 约 1.1 公里位移：信号真的丢了。
+  // 35 秒空档 + 约 1.1 公里位移：信号真的丢了。
+  const TrackPoint(rideId: 1, tMs: 37000, lat: 31.01, lon: 121.0, speedMps: 5),
+  const TrackPoint(
+    rideId: 1,
+    tMs: 38000,
+    lat: 31.0101,
+    lon: 121.0,
+    speedMps: 5,
+  ),
+];
+
+/// 中段丢过 14 秒定位：短缺口，用虚线跨过，不计入信号中断。
+List<TrackPoint> pointsWithShortGap() => <TrackPoint>[
+  const TrackPoint(rideId: 1, tMs: 1000, lat: 31.0, lon: 121.0, speedMps: 4),
+  const TrackPoint(rideId: 1, tMs: 2000, lat: 31.0001, lon: 121.0, speedMps: 4),
   const TrackPoint(rideId: 1, tMs: 16000, lat: 31.01, lon: 121.0, speedMps: 5),
   const TrackPoint(
     rideId: 1,
@@ -506,7 +520,7 @@ void main() {
     );
 
     expect(find.textContaining('信号中断 1 段'), findsOneWidget);
-    expect(find.textContaining('共 00:14'), findsOneWidget);
+    expect(find.textContaining('共 00:35'), findsOneWidget);
 
     // 断口两侧各一个端点，加上起终点各一个；用 key 断言，不绑数量。
     expect(find.byKey(const Key('detail-gap-end')), findsNWidgets(2));
@@ -514,6 +528,28 @@ void main() {
     expect(find.byKey(const Key('detail-finish-marker')), findsOneWidget);
     expect(find.text('起'), findsOneWidget);
     expect(find.text('终'), findsOneWidget);
+  });
+
+  // 公交、楼群下十几秒没有定位很常见：这段真没有实测点，但把线彻底断开，
+  // 用户会以为整段记录丢了。用虚线跨过并写明「未采到定位」，既不伪造实测
+  // 轨迹，也不让地图看着断成两截。
+  testWidgets('短缺口用虚线跨过，不算信号中断', (WidgetTester tester) async {
+    await pumpDetail(
+      tester,
+      detail: WorkoutDetail(ride: rideWith(), points: pointsWithShortGap()),
+    );
+
+    expect(find.textContaining('信号中断'), findsNothing);
+    expect(find.textContaining('短缺口 1 段'), findsOneWidget);
+    expect(find.byKey(const Key('detail-gap-end')), findsNothing);
+
+    final List<Polyline<Object>> lines = tester
+        .widget<PolylineLayer<Object>>(find.byType(PolylineLayer))
+        .polylines;
+    final Polyline<Object> bridged = lines.singleWhere(
+      (Polyline<Object> line) => line.pattern.segments != null,
+    );
+    expect(bridged.points.length, 2, reason: '虚线只跨缺口两端，不插值补点');
   });
 
   testWidgets('没有断口时不显示中断摘要，起终点标记仍在', (WidgetTester tester) async {

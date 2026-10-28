@@ -177,6 +177,15 @@ class RecordController extends Notifier<RecordState> {
   bool _finished = false;
   int _lastFixMs = 0;
 
+  /// 上一次因定位流卡死而重建订阅的时刻。
+  int _lastFixRestartMs = 0;
+
+  /// 定位流看门狗阈值：超过这么久没有新定位，就重建一次订阅。
+  ///
+  /// 平台侧的定位回调偶尔会「假死」——服务与权限都正常，回调却不再来。重建
+  /// 订阅能把这种状态拉回来；真的是卫星信号被挡住时，重建也无害。
+  static const int _kFixStallRestartMs = 15000;
+
   /// 见 [RecordState.previewFix]。
   LocationFix? _previewFix;
 
@@ -246,6 +255,7 @@ class RecordController extends Notifier<RecordState> {
     if (_session != null) return;
     _error = null;
     _lastFixMs = 0;
+    _lastFixRestartMs = 0;
     _wasGpsWeak = false;
 
     // 快照选中类型：start() 全程（等待权限/连传感器）都用这一刻的类型，
@@ -382,6 +392,7 @@ class RecordController extends Notifier<RecordState> {
     // 暂停期间没有定位是正常的：恢复后从头开始算「多久没拿到点」，
     // 否则一恢复就会先播一条「GPS 信号弱」，紧接着再播「定位已恢复」。
     _lastFixMs = _now();
+    _lastFixRestartMs = _now();
     _wasGpsWeak = false;
     unawaited(
       ref
@@ -432,6 +443,7 @@ class RecordController extends Notifier<RecordState> {
     _error = null;
     _writeFailures = 0;
     _lastFixMs = 0;
+    _lastFixRestartMs = 0;
     _previewFix = null;
     _conditionsPendingRideId = null;
     _lastBackgroundFlushMs = 0;
@@ -682,6 +694,7 @@ class RecordController extends Notifier<RecordState> {
     if (session == null || _finished) return;
     session.tick(_now());
 
+    _restartStalledFixStream(session);
     _drainCues(session);
     _collectGpsCues(session);
 
@@ -698,6 +711,24 @@ class RecordController extends Notifier<RecordState> {
       _lastBackgroundFlushMs = _now();
       unawaited(_flush(force: true));
     }
+  }
+
+  /// 定位流卡死时重建订阅。见 [_kFixStallRestartMs]。
+  ///
+  /// 只在「已经拿到过点、之后又长时间没有新点」时重建：冷启动锁星本来就可能
+  /// 要几十秒，那时重建会把进行中的搜星推倒重来。两次重建之间也留一个同样长的
+  /// 间隔，避免每个节拍都取消/重订阅。
+  void _restartStalledFixStream(RecordingSession session) {
+    if (session.phase != RecordingPhase.recording) return;
+    if (_lastFixMs == 0) return;
+    final int now = _now();
+    if (now - _lastFixMs < _kFixStallRestartMs) return;
+    if (now - _lastFixRestartMs < _kFixStallRestartMs) return;
+    _lastFixRestartMs = now;
+    // 广播流的 cancel 立即生效，不 await：FakeAsync 下它的续延不会被 flush
+    // （同 finish() 里的处理）。
+    unawaited(_fixSub?.cancel());
+    _fixSub = _location.fixes().listen(_onFix, onError: (Object _) {});
   }
 
   /// 取走这一拍判定出来的提示并播报。

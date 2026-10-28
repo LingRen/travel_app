@@ -276,19 +276,19 @@ void main() {
   // 口径必须与画线用的 isMeaningfulGap 完全一致，否则会出现「线断了但没有标记」
   // 或「标了断口但线连得上」这种自相矛盾。
   group('信号中断断口', () {
-    test('超过 10 秒且真的挪了地方才算中断', () {
+    test('超过 30 秒且真的挪了地方才算中断', () {
       final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
         pt(0),
         pt(1000, lat: 31.0001),
-        // 14 秒空档 + 约 1.1 公里位移：真丢了信号。
-        pt(15000, lat: 31.01),
-        pt(16000, lat: 31.0101),
+        // 35 秒空档 + 约 1.1 公里位移：真丢了信号。
+        pt(36000, lat: 31.01),
+        pt(37000, lat: 31.0101),
       ], toGcj02: false);
 
       expect(gaps.length, 1);
       expect(gaps.single.startMs, 1000);
-      expect(gaps.single.endMs, 15000);
-      expect(gaps.single.durationS, 14);
+      expect(gaps.single.endMs, 36000);
+      expect(gaps.single.durationS, 35);
       // 断口两端就是那两个定位点本身。
       expect(gaps.single.before.lat, closeTo(31.0001, 1e-9));
       expect(gaps.single.after.lat, closeTo(31.01, 1e-9));
@@ -308,22 +308,87 @@ void main() {
       final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
         pt(0),
         const TrackPoint(rideId: 1, tMs: 5000, hr: 140),
-        pt(14000, lat: 31.01),
+        pt(36000, lat: 31.01),
       ], toGcj02: false);
 
       expect(gaps.length, 1, reason: 'GPS 丢失期间的心率点不参与定位判定');
       expect(gaps.single.startMs, 0);
-      expect(gaps.single.endMs, 14000);
+      expect(gaps.single.endMs, 36000);
     });
 
     test('断口端点跟随瓦片源做坐标转换', () {
       final List<RouteGap> gaps = findRouteGaps(<TrackPoint>[
         pt(0),
-        pt(14000, lat: 31.01),
+        pt(36000, lat: 31.01),
       ]);
       final ({double lat, double lon}) expected = wgs84ToGcj02(31.01, 121.0);
       expect(gaps.single.after.lat, closeTo(expected.lat, 1e-9));
       expect(gaps.single.after.lon, closeTo(expected.lon, 1e-9));
+    });
+  });
+
+  // 短缺口（10~30 秒、确实挪了地方）：详情页不画断口，改用虚线跨过，
+  // 并在摘要里写明「未采到定位」。它不计入「信号中断 N 段」。
+  group('短缺口', () {
+    test('14 秒空档归为短缺口，不算中断', () {
+      final List<TrackPoint> points = <TrackPoint>[
+        pt(0),
+        pt(14000, lat: 31.01),
+      ];
+
+      expect(findRouteGaps(points, toGcj02: false), isEmpty);
+      final List<RouteGap> bridged = findBridgedGaps(
+        points,
+        toGcj02: false,
+      );
+      expect(bridged.length, 1);
+      expect(bridged.single.durationS, 14);
+      expect(bridged.single.before.lat, closeTo(31.0, 1e-9));
+      expect(bridged.single.after.lat, closeTo(31.01, 1e-9));
+    });
+
+    test('恰好 30 秒仍是短缺口，31 秒变成中断', () {
+      expect(
+        findBridgedGaps(<TrackPoint>[
+          pt(0),
+          pt(30000, lat: 31.01),
+        ], toGcj02: false).length,
+        1,
+      );
+      expect(
+        findBridgedGaps(<TrackPoint>[
+          pt(0),
+          pt(31000, lat: 31.01),
+        ], toGcj02: false),
+        isEmpty,
+      );
+      expect(
+        findRouteGaps(<TrackPoint>[
+          pt(0),
+          pt(31000, lat: 31.01),
+        ], toGcj02: false).length,
+        1,
+      );
+    });
+
+    test('停车没动的空档既不是中断，也不是短缺口', () {
+      final List<TrackPoint> points = <TrackPoint>[
+        pt(0),
+        pt(14000, lat: 31.00002),
+      ];
+
+      expect(findRouteGaps(points, toGcj02: false), isEmpty);
+      expect(findBridgedGaps(points, toGcj02: false), isEmpty);
+    });
+
+    test('短缺口两端也跟随瓦片源做坐标转换', () {
+      final List<RouteGap> bridged = findBridgedGaps(<TrackPoint>[
+        pt(0),
+        pt(14000, lat: 31.01),
+      ]);
+      final ({double lat, double lon}) expected = wgs84ToGcj02(31.01, 121.0);
+      expect(bridged.single.after.lat, closeTo(expected.lat, 1e-9));
+      expect(bridged.single.after.lon, closeTo(expected.lon, 1e-9));
     });
   });
 
