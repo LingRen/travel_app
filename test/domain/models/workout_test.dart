@@ -1,5 +1,6 @@
 import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/workout.dart';
+import 'package:cycling_app/domain/models/workout_conditions.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
 import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,6 +72,22 @@ void main() {
     expect(back.weatherText, '晴');
     expect(back.weatherTempC, 18);
     expect(back.conditions.weatherLabel, '晴 18°C');
+    expect(back.conditions.listPlaceLabel, '桃花故里');
+  });
+
+  test('历史列表地点优先完整地名的最后一段，缺失时退回区县', () {
+    const WorkoutConditions full = WorkoutConditions(
+      placeName: '成都市 · 龙泉驿区 · 桃花故里',
+      placeShort: '龙泉驿区',
+    );
+    expect(full.listPlaceLabel, '桃花故里');
+
+    const WorkoutConditions districtOnly = WorkoutConditions(
+      placeShort: '龙泉驿区',
+    );
+    expect(districtOnly.listPlaceLabel, '龙泉驿区');
+
+    expect(WorkoutConditions.none.listPlaceLabel, isNull);
   });
 
   test('旧记录缺地点 / 天气字段时按 null 读取', () {

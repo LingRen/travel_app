@@ -198,7 +198,19 @@ void main() {
     expect(dateRect.height, lessThan(30));
   });
 
-  testWidgets('卡片出发时间后拼上记录捕获的短地名', (WidgetTester tester) async {
+  testWidgets('卡片出发时间后拼上记录捕获的具体地点', (WidgetTester tester) async {
+    await pumpHistory(
+      tester,
+      rides: <Workout>[
+        ride(1, placeName: '成都市 · 龙泉驿区 · 桃花故里', placeShort: '龙泉驿区'),
+      ],
+      ridePoints: points(),
+    );
+
+    expect(find.text('08:00 出发 · 桃花故里'), findsOneWidget);
+  });
+
+  testWidgets('只有区县的旧记录仍显示区县', (WidgetTester tester) async {
     await pumpHistory(
       tester,
       rides: <Workout>[ride(1, placeShort: '龙泉驿区')],

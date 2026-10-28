@@ -37,6 +37,21 @@ class WorkoutConditions {
     return name;
   }
 
+  /// 历史列表用的具体地点：取完整地名的最后一段，例如
+  /// 「成都市 · 龙泉驿区 · 桃花故里」→「桃花故里」。
+  ///
+  /// 旧记录或没有完整地名时退回 [placeShort]（通常是区县）；两者都没有时
+  /// 返回 null。只从已落库的文字里取，不重新查询，也不推断当前位置。
+  String? get listPlaceLabel {
+    final String? full = placeName?.trim();
+    if (full != null && full.isNotEmpty) {
+      final String last = full.split(' · ').last.trim();
+      if (last.isNotEmpty) return last;
+    }
+    final String? short = placeShort?.trim();
+    return (short == null || short.isEmpty) ? null : short;
+  }
+
   /// 天气行右侧文字，例如「晴 18°C」。温度缺失时只显示描述，描述也缺失时
   /// 返回 null。
   String? get weatherLabel {

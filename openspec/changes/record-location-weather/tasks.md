@@ -30,7 +30,7 @@
 
 ## 6. 历史与详情
 
-- [x] 6.1 `lib/features/history/ride_card.dart` 在出发时间后拼 `placeShort`，没有地点时只显示出发时间。验证：`test/features/history/history_page_test.dart` 覆盖「08:00 出发 · 龙泉驿区」与旧记录「08:00 出发」。
+- [x] 6.1 `lib/features/history/ride_card.dart` 在出发时间后拼 `conditions.listPlaceLabel`：优先完整地名的最后一段（街道 / 乡镇 / 地标），旧记录退回 `placeShort`，没有地点时只显示出发时间。验证：`test/features/history/history_page_test.dart` 覆盖「08:00 出发 · 桃花故里」、只有区县的旧记录「08:00 出发 · 龙泉驿区」与无地点「08:00 出发」。
 - [x] 6.2 `lib/features/detail/detail_page.dart` 在标题下新增地点 / 天气行：地点用完整地名，天气用「描述 温度°C」，缺失部分省略，两项都无时整行不渲染。验证：`test/features/detail/detail_page_test.dart` 覆盖完整、只有天气、旧记录不渲染。
 
 ## 7. 备份、文案与文档
@@ -44,5 +44,5 @@
 
 - [x] 8.1 `fvm flutter analyze` 无告警。验证：命令输出 `No issues found!`。
 - [x] 8.2 `fvm flutter test` 全部通过。验证：输出 `All tests passed!`，包含新增服务、模型、迁移、备份、控制器、历史与详情用例。
-- [x] 8.3 在模拟器 / OPPO 上开始一条新记录，确认历史副题出现区县、详情出现地点与天气；确认旧记录保持空白。验证：OPPO R9s Plus 新记录历史显示「17:19 出发 · 武侯区」，详情显示「成都市 · 武侯区 · 浆洗街街道 / 阴 20°C」，旧记录仍只显示出发时间。
+- [x] 8.3 在模拟器 / OPPO 上开始一条新记录，确认历史副题出现具体地点、详情出现地点与天气；确认旧记录保持空白。验证：OPPO R9s Plus 新记录历史显示「17:19 出发 · 浆洗街街道」，详情显示「成都市 · 武侯区 · 浆洗街街道 / 阴 20°C」，旧记录仍只显示出发时间。
 - [x] 8.4 只暂存本特性相关文件并提交，保留工作区既有 13 个未提交修改；未获指示不 push。验证：提交只含本特性 33 个文件；`git status` 中用户原有 13 个修改仍未暂存；提交内容不含 `config/amap_key.txt` 或真实 Key。

@@ -44,7 +44,9 @@ class WorkoutCard extends ConsumerWidget {
       unit,
     );
     final bool usesPace = ride.activityType.usesPace;
-    final String? place = (ride.placeShort ?? ride.placeName)?.trim();
+    // 列表显示完整地名的最后一段（街道 / 乡镇 / 地标），比只显示区县更
+    // 具体；旧记录没有完整地名时退回短地名。
+    final String? place = ride.conditions.listPlaceLabel;
     final String departure = place == null || place.isEmpty
         ? '${formatTimeHm(ride.startedAtMs)} 出发'
         : '${formatTimeHm(ride.startedAtMs)} 出发 · $place';
