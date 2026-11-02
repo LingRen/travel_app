@@ -1,7 +1,7 @@
 # 行迹 UI 改造 · 阶段一实施设计
 
 - 日期：2026-10-27
-- 对应变更：`openspec/changes/xingji-ui-redesign/`
+- 对应变更：`superspec/changes/archive/2026-11-02-xingji-ui-redesign/`
 - 对应任务：tasks 1–3，外加记录页类型浮标与历史页筛选入口的最小接入
 - 状态：已获用户批准，按方案 A 执行
 
