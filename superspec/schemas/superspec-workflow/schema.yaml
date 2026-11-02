@@ -1,116 +1,199 @@
+# 同步自 superspec@0.1.6 schemas/superspec-workflow（上游为 v2 格式）
+#
+# openspec 1.15 只接受 v1 格式，因此保留上游的流程与指令原文，只做结构适配：
+#   上游 brainstorm（一次产出 proposal.md + design.md + specs/**/*.md）
+#   → proposal / design / specs 三个产物，instruction 按上游四个阶段拆分：
+#     EXPLORE + PROPOSE → proposal
+#     DESIGN            → design
+#     SPEC              → specs
+#   plan / tasks / apply / verify / archive 与上游逐字一致。
+# 上游升级时对照该版本 schema.yaml 手工比对，改动集中在 instruction 与依赖关系。
+
 name: superspec-workflow
 version: 1
 description: |
-  SuperSpec workflow adapted to the OpenSpec schema dialect.
-  Flow: brainstorm (proposal → design → specs) → plan → tasks → apply → verify → archive
+  SuperSpec unified spec-driven development workflow.
+
+  Flow: brainstorm → plan → execute → verify → archive
+
+  Brainstorm is a progressive flow: Explore → Propose → Design → Spec
 
 artifacts:
+  # ============================================
+  # Phase 1: Brainstorm (Explore → Propose → Design → Spec)
+  # ============================================
   - id: proposal
     generates: proposal.md
-    description: Establish WHY this change exists and which capabilities it touches
+    description: |
+      Progressive design flow from exploration to specifications.
+      Phases: Explore → Propose
     template: proposal.md
     instruction: |
-      Create the proposal document.
+      Use the brainstorm skill for a progressive flow:
 
-      Sections:
-      - **Why**: 1-2 sentences on the problem or opportunity.
-      - **What Changes**: bullet list of changes, mark breaking changes.
-      - **Capabilities**: new and modified capabilities, each mapping to
-        `specs/<capability-path>/spec.md`.
-      - **Impact**: affected code, APIs, dependencies, systems.
+      **Phase 1: EXPLORE**
+      - Free-form exploration
+      - Ask clarifying questions (one at a time)
+      - Investigate codebase
+      - Visualize with ASCII diagrams
+      - Challenge assumptions
 
-      Keep it 1-2 pages and focused on the "why"; implementation details
-      belong in design.md.
+      Transition: "Problem is clear enough, let's define the change scope"
+
+      **Phase 2: PROPOSE**
+      - Define Why (problem/opportunity)
+      - Define What Changes
+      - Define Capabilities (new/modified)
+      - Define Impact
+      - Generate proposal.md
+
+      Transition: "Change scope is defined, let's design the technical approach"
+
+      Output:
+      - superspec/changes/[id]/proposal.md
     requires: []
 
   - id: design
     generates: design.md
-    description: Technical design with decisions and trade-offs for the proposal
+    description: |
+      Technical design phase of the brainstorm flow.
     template: design.md
     instruction: |
-      Document the technical approach for this change.
+      Continue the brainstorm flow:
 
-      Sections:
-      - **Approach**: chosen design with the alternatives considered
-      - **Decisions**: each decision with rationale and rejected options
-      - **Data / Interfaces**: models, storage, API or widget contracts
-      - **Risks**: what could break, and how it is verified
+      **Phase 3: DESIGN**
+      - Present 2-3 approaches with trade-offs
+      - Compare and recommend
+      - Document technical decisions
+      - Generate design.md
 
-      Write the "how", not a restatement of the proposal.
+      Transition: "Technical approach is decided, let's define the specifications"
+
+      Output:
+      - superspec/changes/[id]/design.md
     requires:
       - proposal
 
   - id: specs
     generates: "specs/**/*.md"
-    description: Behavior specifications with requirements and scenarios
+    description: |
+      Behavior specifications phase of the brainstorm flow.
     template: spec.md
     instruction: |
-      Write delta specs for every capability named in the proposal.
+      Continue the brainstorm flow:
 
-      For each capability, produce `specs/<capability>/spec.md` with:
-      - `## ADDED Requirements` / `## MODIFIED Requirements` / `## REMOVED Requirements` delta headers
-      - Each requirement: `### Requirement: <name>` with a SHALL statement
-      - Each requirement carries at least one scenario:
-        `#### Scenario: <name>` with WHEN/THEN bullets
+      **Phase 4: SPEC**
+      - Define Requirements (system SHALL...)
+      - Define Scenarios (WHEN/THEN) - each becomes a test
+      - Generate specs/*.md
 
-      Every scenario is expected to become a test, so keep them observable and
-      independent. Do not invent requirements the proposal does not cover.
+      Output:
+      - superspec/changes/[id]/specs/[capability]/spec.md
     requires:
       - design
 
+  # ============================================
+  # Phase 2: Planning
+  # ============================================
   - id: plan
     generates: plan.md
-    description: TDD implementation plan derived from the specs
+    description: TDD implementation plan based on Specs
     template: plan.md
     instruction: |
-      Turn the specs into a TDD plan. Each Scenario becomes a test.
+      Create TDD implementation plan. Each Scenario becomes a test.
 
-      For every step list:
-      - Spec Reference: requirement and scenario
-      - Files: create / modify / test paths
-      - RED: failing test written from the scenario
-      - GREEN: minimal implementation
-      - Refactor and commit (commit message references the scenario)
+      Structure for each task:
+      - **Spec Reference**: Link to Requirement and Scenario
+      - **Files**: Create/Modify/Test paths
+      - **Step 1**: Write failing test (RED) - based on Scenario
+      - **Step 2**: Run to verify failure
+      - **Step 3**: Implement minimal code (GREEN)
+      - **Step 4**: Run to verify pass
+      - **Step 5**: Refactor (if needed)
+      - **Step 6**: Commit with Spec reference
+
+      Scenario → Test mapping:
+      ```
+      #### Scenario: Valid login       →  test('Valid login', () => {
+      - WHEN valid credentials              // WHEN
+      - THEN grants access                  expect(login(valid).granted).toBe(true);
+                                          });
+      ```
     requires:
       - specs
 
   - id: tasks
     generates: tasks.md
-    description: Verifiable task checklist derived from the plan
+    description: Implementation task checklist
     template: tasks.md
     instruction: |
-      Break plan.md into small, verifiable tasks.
+      Create task checklist from plan.md.
 
       Format:
-      - [ ] X.Y Write test for Scenario: <name>
+      - [ ] X.Y Write test for Scenario: [name]
         - Spec: Requirement X → Scenario Y
-      - [ ] X.Z Implement <feature>
+      - [ ] X.Z Implement [feature]
       - [ ] X.W Commit
 
-      Each task should take 2-5 minutes and reference its spec.
+      Each task: 2-5 minutes, verifiable, references Spec.
     requires:
       - plan
 
+# ============================================
+# Apply Phase: TDD Implementation
+# ============================================
 apply:
   requires: [tasks]
   tracks: tasks.md
   instruction: |
-    Execute tasks with TDD: write the failing test first, then the minimal
-    implementation, then refactor. Mark each task complete only after the
-    full test suite passes.
+    Execute plan using TDD and subagent-driven development.
 
+    **Per Task Flow:**
+    1. Dispatch Implementer subagent
+       - TDD: Write test (RED) → Implement (GREEN) → Refactor
+       - Self-review
+
+    2. Dispatch Spec Reviewer subagent
+       - Verify: Implementation matches Requirement + Scenarios
+       - Check: No missing features, no extra features
+
+    3. Dispatch Quality Reviewer (after spec passes)
+       - Check: Error handling, type safety, SOLID
+       - Classify: Critical / Important / Suggestion
+
+    4. Mark task complete
+
+    After all tasks: Final code review.
+
+# ============================================
+# Verify Phase
+# ============================================
 verify:
   requires: [apply]
   instruction: |
-    Verify implementation matches the specs:
-    1. Every requirement has an implementation
-    2. Every scenario has a test
-    3. All tests pass
-    4. Nothing outside the specs was added
+    Verify implementation matches specifications.
 
+    Checks:
+    1. Every Requirement has implementation
+    2. Every Scenario has test
+    3. All tests pass
+    4. No features outside Specs
+
+    Run: `superspec validate [change-id] --strict`
+
+# ============================================
+# Archive Phase
+# ============================================
 archive:
   requires: [verify]
   instruction: |
-    Archive the change once verification passes:
-    1. Apply delta specs into the main specs
-    2. Move the change to the archive directory with a date prefix
+    Archive change and apply deltas to main specs.
+
+    Steps:
+    1. Verify all tests pass
+    2. Apply Deltas to superspec/specs/
+    3. Move to superspec/changes/archive/YYYY-MM-DD-[id]/
+    4. Finish branch (merge/PR/keep/discard)
+    5. Clean up worktree
+
+    Run: `superspec archive [change-id] --yes`
