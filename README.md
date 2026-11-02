@@ -149,6 +149,10 @@ fvm flutter build apk --release --build-name=1.0.0 --build-number=10000
 `changes/archive/` 是已归档变更记录，`design/`、`plans/`、`verification/` 放设计稿、
 实施计划与真机验证记录；`docs/adr/` 单独存放架构决策记录。
 
+规格流程有两个 CLI 都指向同一套文件：`superspec` 直接用 `superspec/`；
+`openspec` 通过根目录软链接 `openspec -> superspec` 进来，schema 用项目内的
+`superspec/schemas/superspec-workflow`（proposal → design → specs → plan → tasks）。
+
 - [能力规格](superspec/specs)
 - [纸本改版设计与任务](superspec/changes/archive/2026-11-02-xingji-ui-redesign)
 - [地点与天气设计与任务](superspec/changes/archive/2026-11-02-record-location-weather)

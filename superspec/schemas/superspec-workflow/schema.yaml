@@ -1,0 +1,116 @@
+name: superspec-workflow
+version: 1
+description: |
+  SuperSpec workflow adapted to the OpenSpec schema dialect.
+  Flow: brainstorm (proposal → design → specs) → plan → tasks → apply → verify → archive
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Establish WHY this change exists and which capabilities it touches
+    template: proposal.md
+    instruction: |
+      Create the proposal document.
+
+      Sections:
+      - **Why**: 1-2 sentences on the problem or opportunity.
+      - **What Changes**: bullet list of changes, mark breaking changes.
+      - **Capabilities**: new and modified capabilities, each mapping to
+        `specs/<capability-path>/spec.md`.
+      - **Impact**: affected code, APIs, dependencies, systems.
+
+      Keep it 1-2 pages and focused on the "why"; implementation details
+      belong in design.md.
+    requires: []
+
+  - id: design
+    generates: design.md
+    description: Technical design with decisions and trade-offs for the proposal
+    template: design.md
+    instruction: |
+      Document the technical approach for this change.
+
+      Sections:
+      - **Approach**: chosen design with the alternatives considered
+      - **Decisions**: each decision with rationale and rejected options
+      - **Data / Interfaces**: models, storage, API or widget contracts
+      - **Risks**: what could break, and how it is verified
+
+      Write the "how", not a restatement of the proposal.
+    requires:
+      - proposal
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Behavior specifications with requirements and scenarios
+    template: spec.md
+    instruction: |
+      Write delta specs for every capability named in the proposal.
+
+      For each capability, produce `specs/<capability>/spec.md` with:
+      - `## ADDED Requirements` / `## MODIFIED Requirements` / `## REMOVED Requirements` delta headers
+      - Each requirement: `### Requirement: <name>` with a SHALL statement
+      - Each requirement carries at least one scenario:
+        `#### Scenario: <name>` with WHEN/THEN bullets
+
+      Every scenario is expected to become a test, so keep them observable and
+      independent. Do not invent requirements the proposal does not cover.
+    requires:
+      - design
+
+  - id: plan
+    generates: plan.md
+    description: TDD implementation plan derived from the specs
+    template: plan.md
+    instruction: |
+      Turn the specs into a TDD plan. Each Scenario becomes a test.
+
+      For every step list:
+      - Spec Reference: requirement and scenario
+      - Files: create / modify / test paths
+      - RED: failing test written from the scenario
+      - GREEN: minimal implementation
+      - Refactor and commit (commit message references the scenario)
+    requires:
+      - specs
+
+  - id: tasks
+    generates: tasks.md
+    description: Verifiable task checklist derived from the plan
+    template: tasks.md
+    instruction: |
+      Break plan.md into small, verifiable tasks.
+
+      Format:
+      - [ ] X.Y Write test for Scenario: <name>
+        - Spec: Requirement X → Scenario Y
+      - [ ] X.Z Implement <feature>
+      - [ ] X.W Commit
+
+      Each task should take 2-5 minutes and reference its spec.
+    requires:
+      - plan
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    Execute tasks with TDD: write the failing test first, then the minimal
+    implementation, then refactor. Mark each task complete only after the
+    full test suite passes.
+
+verify:
+  requires: [apply]
+  instruction: |
+    Verify implementation matches the specs:
+    1. Every requirement has an implementation
+    2. Every scenario has a test
+    3. All tests pass
+    4. Nothing outside the specs was added
+
+archive:
+  requires: [verify]
+  instruction: |
+    Archive the change once verification passes:
+    1. Apply delta specs into the main specs
+    2. Move the change to the archive directory with a date prefix
