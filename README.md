@@ -143,12 +143,16 @@ fvm flutter build apk --release --build-name=1.0.0 --build-number=10000
 
 瓦片在客户端做降饱和与纸色薄罩；轨迹坐标跟随瓦片源：高德 / 腾讯这类 GCJ-02 源才把显示坐标转过去，OSM 这类 WGS-84 源保持原样，否则轨迹会整体偏移几百米。落盘与 GPX 导出始终是 WGS-84。
 
-## 设计文档
+## 文档
 
-- [纸本改版设计](openspec/changes/xingji-ui-redesign/design.md)
-- [纸本改版任务清单](openspec/changes/xingji-ui-redesign/tasks.md)
-- [地点与天气设计](openspec/changes/record-location-weather/design.md)
-- [地点与天气任务清单](openspec/changes/record-location-weather/tasks.md)
-- [旧版核心设计文档](docs/superpowers/specs/2026-09-21-cycling-app-design.md)
-- [实施计划 · 核心](docs/superpowers/plans/2026-09-21-cycling-app-core.md)
-- [实施计划 · 详情/历史/统计/设置/地图/导出](docs/superpowers/plans/2026-09-21-cycling-app-plan-b.md)
+所有文档集中在 `superspec/`：`specs/` 是可校验的能力规格，`changes/` 是在途变更，
+`changes/archive/` 是已归档变更记录，`design/`、`plans/`、`verification/` 放设计稿、
+实施计划与真机验证记录；`docs/adr/` 单独存放架构决策记录。
+
+- [能力规格](superspec/specs)
+- [纸本改版设计与任务](superspec/changes/archive/2026-11-02-xingji-ui-redesign)
+- [地点与天气设计与任务](superspec/changes/archive/2026-11-02-record-location-weather)
+- [整体设计文档](superspec/design/2026-09-21-cycling-app-design.md)
+- [实施计划 · 核心](superspec/plans/2026-09-21-cycling-app-core.md)
+- [实施计划 · 详情/历史/统计/设置/地图/导出](superspec/plans/2026-09-21-cycling-app-plan-b.md)
+- [真机验证记录 · 强调色](superspec/verification/2026-10-15-accent-theme-device-verification.md)

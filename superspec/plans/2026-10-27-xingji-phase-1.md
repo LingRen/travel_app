@@ -22,7 +22,7 @@
 - `lib/features/record/handlebar_view.dart`：用类型浮标替换 `SegmentedButton`。
 - `lib/features/history/history_page.dart`：页眉与筛选入口最小接入。
 - `lib/features/stats/stats_page.dart`：页眉与筛选入口最小接入。
-- `README.md`、`docs/superpowers/specs/2026-09-21-cycling-app-design.md`：品牌、主题与类型描述同步。
+- `README.md`、`superspec/design/2026-09-21-cycling-app-design.md`：品牌、主题与类型描述同步。
 
 **新增**
 
@@ -976,7 +976,7 @@ git commit -m "feat: 历史与统计共用纸本筛选面板"
 
 **文件：**
 - 修改：`README.md`
-- 修改：`docs/superpowers/specs/2026-09-21-cycling-app-design.md`
+- 修改：`superspec/design/2026-09-21-cycling-app-design.md`
 
 - [ ] **步骤 1：更新 README**
 
@@ -991,7 +991,7 @@ git commit -m "feat: 历史与统计共用纸本筛选面板"
 运行：
 
 ```bash
-rg -n "深色|沥青|薄荷|天青|紫罗兰|四种类型|步频|步数" README.md docs/superpowers/specs/2026-09-21-cycling-app-design.md
+rg -n "深色|沥青|薄荷|天青|紫罗兰|四种类型|步频|步数" README.md superspec/design/2026-09-21-cycling-app-design.md
 ```
 
 预期：只允许出现解释历史迁移的句子，不得有面向用户的旧描述。
@@ -999,7 +999,7 @@ rg -n "深色|沥青|薄荷|天青|紫罗兰|四种类型|步频|步数" README.
 - [ ] **步骤 4：Commit**
 
 ```bash
-git add README.md docs/superpowers/specs/2026-09-21-cycling-app-design.md
+git add README.md superspec/design/2026-09-21-cycling-app-design.md
 git commit -m "docs: 同步行迹品牌、纸本主题与五种运动类型"
 ```
 

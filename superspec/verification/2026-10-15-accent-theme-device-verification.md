@@ -61,7 +61,7 @@
 
 ## 核对结果（2026-10-15 收尾）
 
-6 项全部执行完毕，逐项结论与截图路径见 [tasks](file:///Users/ling/code/travel_app/docs/superpowers/specs/2026-10-15-accent-theme-device-verification-tasks.md)。摘要：
+6 项全部执行完毕，逐项结论与截图路径见 [tasks](file:///Users/ling/code/travel_app/superspec/verification/2026-10-15-accent-theme-device-verification-tasks.md)。摘要：
 
 | 项 | 结论 |
 | --- | --- |

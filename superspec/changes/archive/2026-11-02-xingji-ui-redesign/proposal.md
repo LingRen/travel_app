@@ -44,4 +44,4 @@
 - 平台：Android / iOS 应用显示名改为「行迹」；状态栏改为深色图标。
 - 测试：`test/app/*`、`test/features/**` 中依赖深色主题、AppBar、SegmentedButton 文案与旧类型集合的断言。
 - 依赖：不新增运行时依赖；不打包中文字体，使用平台衬线 / 无衬线 / 等宽回退链（设计稿字体为参考，见 design.md）。
-- 文档：`README.md` 与 `docs/superpowers/specs/2026-09-21-cycling-app-design.md` 中关于深色主题、三种强调色与四种运动类型的描述需要同步。
+- 文档：`README.md` 与 `superspec/design/2026-09-21-cycling-app-design.md` 中关于深色主题、三种强调色与四种运动类型的描述需要同步。

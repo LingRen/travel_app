@@ -1,6 +1,6 @@
 # 多主题色真机核对 Tasks（2026-10-15）
 
-配套 spec：[2026-10-15-accent-theme-device-verification.md](file:///Users/ling/code/travel_app/docs/superpowers/specs/2026-10-15-accent-theme-device-verification.md)
+配套 spec：[2026-10-15-accent-theme-device-verification.md](file:///Users/ling/code/travel_app/superspec/verification/2026-10-15-accent-theme-device-verification.md)
 
 设备：OPPO R9s Plus（`-s cb2e5863`），1080×1920，density 480。
 截图统一落 `/tmp`。

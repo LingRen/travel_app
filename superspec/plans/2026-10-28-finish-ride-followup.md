@@ -19,7 +19,7 @@
   - `lib/main.dart` + `lib/app/app.dart` + `lib/app/providers.dart`：数据库在 `runApp` 之后才打开，首帧由 Flutter 画封面。
   - `lib/features/record/live_route_map.dart`：相机按「可见范围的安全区」跟随当前位置，320ms 平移补间。
   - `lib/domain/recording/recording_session.dart`：`speedMps` 为 `0` 时按「平台没给速度」处理，回退到位移推算。
-- `docs/superpowers/specs/2026-09-21-cycling-app-design.md` 的 9.4 节已经改好（相机跟随 + 2026-10-28 修正注记），但 8.1 与 14.4 还缺本轮两处口径。
+- `superspec/design/2026-09-21-cycling-app-design.md` 的 9.4 节已经改好（相机跟随 + 2026-10-28 修正注记），但 8.1 与 14.4 还缺本轮两处口径。
 - iOS 模拟器（`A53C6056-78B1-4084-BD50-EFD8661DCE23`）上已经跑过一次模拟骑行：相机中心随位置东移约 700 米。iOS 26 模拟器的 `simctl privacy grant` 不落 TCC，复跑会因定位被拒卡住，**不要再去折腾 iOS**。
 - OPPO 实机上 `flutter run` 仍在后台挂着（应用已安装、已启动到记录页）；该机 `adb shell cmd location` 返回 `No shell command implementation.`，**无法用系统命令喂假轨迹**。
 - 本机 `flutter test` 结尾会打印 `TRAE Sandbox Error: hit restricted`（`.vscode/` 与 Dart DTD 目录不在沙箱白名单），这是环境噪音，退出码 1 不代表测试失败，只看 `All tests passed!` 那行。
@@ -37,7 +37,7 @@
 | `test/features/record/record_views_test.dart` | 相机跟随回归测试 | 已改，仅提交 |
 | `test/domain/recording/recording_session_test.dart` | 速度为 0 的里程回归测试 | 已改，仅提交 |
 | `integration_test/simulated_ride_test.dart` | 模拟骑行验证工具（自动点开始、打印相机中心） | 新增，入库 |
-| `docs/superpowers/specs/2026-09-21-cycling-app-design.md` | 设计口径 | 本轮补 8.1 与 14.4 |
+| `superspec/design/2026-09-21-cycling-app-design.md` | 设计口径 | 本轮补 8.1 与 14.4 |
 | `.gitignore` | 仓库卫生 | 本轮追加三行 |
 | `ios/Runner.xcodeproj/project.pbxproj`、`ios/Runner.xcworkspace/contents.xcworkspacedata`、`ios/Podfile.lock` | CocoaPods 接入产物（`pod install` 生成） | 单独一个 chore 提交 |
 
@@ -113,8 +113,8 @@ Expected: 没有输出（空）。
 ## Task 2: 把两处行为口径写进设计文档
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-09-21-cycling-app-design.md:225-226`（8.1，速度来源）
-- Modify: `docs/superpowers/specs/2026-09-21-cycling-app-design.md:671-676`（14.4，相机跟随的残余风险）
+- Modify: `superspec/design/2026-09-21-cycling-app-design.md:225-226`（8.1，速度来源）
+- Modify: `superspec/design/2026-09-21-cycling-app-design.md:671-676`（14.4，相机跟随的残余风险）
 
 - [ ] **Step 1: 在 8.1 的第 2 条「最高速」后面补一段速度来源口径**
 
@@ -147,8 +147,8 @@ Expected: 没有输出（空）。
 
 Run:
 ```bash
-grep -n "速度来源：上报为" docs/superpowers/specs/2026-09-21-cycling-app-design.md
-grep -n "相机跟随也在" docs/superpowers/specs/2026-09-21-cycling-app-design.md
+grep -n "速度来源：上报为" superspec/design/2026-09-21-cycling-app-design.md
+grep -n "相机跟随也在" superspec/design/2026-09-21-cycling-app-design.md
 ```
 Expected: 两条各命中一行，行号分别在 8.1 与 14.4 的范围内（约 226 与 674）。
 
@@ -257,7 +257,7 @@ EOF
 - [ ] **Step 4: 文档**
 
 ```bash
-git add docs/superpowers/specs/2026-09-21-cycling-app-design.md
+git add superspec/design/2026-09-21-cycling-app-design.md
 git commit -m "$(cat <<'EOF'
 docs: 同步相机跟随与速度来源口径
 EOF

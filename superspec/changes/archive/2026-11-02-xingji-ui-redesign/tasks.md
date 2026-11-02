@@ -22,7 +22,7 @@
 - [x] 3.3 新增 `ActivityTypeChip` 与 `ActivityTypeSheet`，接入 `showPaperSheet`；当前项显示朱砂实心印章、对勾与「当前」，选择后调用 `recordController.selectActivityType`。验证：`test/features/activity/activity_type_sheet_test.dart` 覆盖打开、当前项标识与切换回调。
 - [x] 3.4 在设置仓储保存 `lastActivityType`，冷启动待机页恢复；无值或损坏时回退骑行。验证：`test/data/settings_repository_test.dart` 覆盖持久化与回退，`test/features/record/record_views_test.dart` 断言待机页浮标与「开始登山」文案。
 - [x] 3.5 新增 `SportFilterTrigger` 与 `SportFilterSheet`，历史与统计各用独立 filter provider，选项为全部运动 + 五种类型；筛选只改查看范围。验证：`test/features/activity/sport_filter_sheet_test.dart` 断言两页筛选互不影响，切换前后记录数量与汇总值不变。
-- [x] 3.6 更新 `docs/superpowers/specs/2026-09-21-cycling-app-design.md` 的运动类型、筛选与类型说明段落，改为五种类型与共用筛选面板。验证：文档内不再出现「四种类型」或「步频 / 步数」承诺。
+- [x] 3.6 更新 `superspec/design/2026-09-21-cycling-app-design.md` 的运动类型、筛选与类型说明段落，改为五种类型与共用筛选面板。验证：文档内不再出现「四种类型」或「步频 / 步数」承诺。
 
 ## 4. 记录页
 
