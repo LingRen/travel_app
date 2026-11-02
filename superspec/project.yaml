@@ -1,0 +1,37 @@
+# SuperSpec Project Configuration
+version: 1
+
+# Project settings
+project:
+  name: xingji
+
+# Workflow settings
+workflow:
+  require_design: true
+  require_validation: true
+  strict_mode: false
+
+# Git settings
+git:
+  worktree_dir: .worktrees
+  branch_prefix: feature/
+
+# Test settings
+test:
+  command: fvm flutter test
+  coverage: false
+
+# External AI Review settings
+# Enable to have external AI (Codex/Gemini) review your code after implementation
+review:
+  enabled: false                     # Master switch for external AI review
+
+  # Frontend task review (UI, components, styling)
+  frontend:
+    provider: gemini                 # gemini | codex | none
+    model: gemini-3-pro-preview
+
+  # Backend task review (API, logic, data)
+  backend:
+    provider: codex                  # codex | gemini | none
+    model: gpt-5.2-codex
