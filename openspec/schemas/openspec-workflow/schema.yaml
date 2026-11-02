@@ -9,10 +9,10 @@
 #   plan / tasks / apply / verify / archive 与上游逐字一致。
 # 上游升级时对照该版本 schema.yaml 手工比对，改动集中在 instruction 与依赖关系。
 
-name: superspec-workflow
+name: openspec-workflow
 version: 1
 description: |
-  SuperSpec unified spec-driven development workflow.
+  unified spec-driven development workflow.
 
   Flow: brainstorm → plan → execute → verify → archive
 
@@ -50,7 +50,7 @@ artifacts:
       Transition: "Change scope is defined, let's design the technical approach"
 
       Output:
-      - superspec/changes/[id]/proposal.md
+      - openspec/changes/[id]/proposal.md
     requires: []
 
   - id: design
@@ -70,7 +70,7 @@ artifacts:
       Transition: "Technical approach is decided, let's define the specifications"
 
       Output:
-      - superspec/changes/[id]/design.md
+      - openspec/changes/[id]/design.md
     requires:
       - proposal
 
@@ -88,7 +88,7 @@ artifacts:
       - Generate specs/*.md
 
       Output:
-      - superspec/changes/[id]/specs/[capability]/spec.md
+      - openspec/changes/[id]/specs/[capability]/spec.md
     requires:
       - design
 
@@ -179,7 +179,7 @@ verify:
     3. All tests pass
     4. No features outside Specs
 
-    Run: `superspec validate [change-id] --strict`
+    Run: `openspec validate [change-id] --strict`
 
 # ============================================
 # Archive Phase
@@ -191,9 +191,9 @@ archive:
 
     Steps:
     1. Verify all tests pass
-    2. Apply Deltas to superspec/specs/
-    3. Move to superspec/changes/archive/YYYY-MM-DD-[id]/
+    2. Apply Deltas to openspec/specs/
+    3. Move to openspec/changes/archive/YYYY-MM-DD-[id]/
     4. Finish branch (merge/PR/keep/discard)
     5. Clean up worktree
 
-    Run: `superspec archive [change-id] --yes`
+    Run: `openspec archive [change-id] --yes`

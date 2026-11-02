@@ -8,7 +8,7 @@
 
 **Tech Stack:** Flutter 3.47.4（fvm）/ Dart 3.13.3、flutter_riverpod、geolocator、flutter_blue_plus、sqflite（测试用 sqflite_common_ffi）、permission_handler、wakelock_plus。
 
-**规格来源：** `superspec/design/2026-09-21-cycling-app-design.md`（唯一权威）。本计划覆盖该规格第 4–8、10.1、11、13 节中属于「记录链路」的部分。历史页、详情页、统计页、设置页、地图、GPX/备份导出由 Plan B 覆盖。
+**规格来源：** `openspec/design/2026-09-21-cycling-app-design.md`（唯一权威）。本计划覆盖该规格第 4–8、10.1、11、13 节中属于「记录链路」的部分。历史页、详情页、统计页、设置页、地图、GPX/备份导出由 Plan B 覆盖。
 
 **关于目录名：** 工程目录保持 `/Users/ling/code/travel_app` 不变，Flutter 包名使用 `cycling_app`。
 
@@ -442,7 +442,7 @@ Expected: 出现 `结论：发现标准 HRS（0x180D / 0x2A37）`，且心率原
 - 华为运动健康是否提示 Fit 3 断连；
 - 断开后关闭手环的「心率广播」，华为运动健康能否自动重连。
 
-把两条实测结论（原样文字）追加到设计文档 `superspec/design/2026-09-21-cycling-app-design.md` 第 14 节末尾：
+把两条实测结论（原样文字）追加到设计文档 `openspec/design/2026-09-21-cycling-app-design.md` 第 14 节末尾：
 
 ```markdown
 **实测结论（日期，华为 Fit 3）**
@@ -6536,7 +6536,7 @@ Expected:
 
 - [ ] **Step 11: 提交验证结论**
 
-把第 7、8 步的实测结论追加到 `superspec/design/2026-09-21-cycling-app-design.md` 第 14 节，然后：
+把第 7、8 步的实测结论追加到 `openspec/design/2026-09-21-cycling-app-design.md` 第 14 节，然后：
 
 ```bash
 git add -A

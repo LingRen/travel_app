@@ -8,7 +8,7 @@
 
 **Tech Stack:** Flutter + Riverpod 3 + sqflite + flutter_test。测试命令：`flutter analyze`、`flutter test`。
 
-**Spec:** `superspec/design/2026-10-23-multi-activity-workout-design.md`
+**Spec:** `openspec/design/2026-10-23-multi-activity-workout-design.md`
 
 ---
 

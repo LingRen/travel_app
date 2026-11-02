@@ -14,11 +14,11 @@ Why is this the right time to address it?
 ## Capabilities
 
 ### New Capabilities
-<!-- List new specs to create - each becomes superspec/changes/[id]/specs/[name]/spec.md -->
+<!-- List new specs to create - each becomes openspec/changes/[id]/specs/[name]/spec.md -->
 - [capability-1]: [brief description]
 
 ### Modified Capabilities
-<!-- List existing specs that will change - check superspec/specs/ first -->
+<!-- List existing specs that will change - check openspec/specs/ first -->
 - [existing-capability]: [what changes]
 
 ## Impact

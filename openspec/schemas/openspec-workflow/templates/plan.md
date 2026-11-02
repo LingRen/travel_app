@@ -1,6 +1,6 @@
 # [Feature] Implementation Plan
 
-> **For Claude:** REQUIRED SKILL: Use superspec:execute to implement this plan.
+> **For the agent:** REQUIRED SKILL: use `/opsx-apply` to implement this plan.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -9,8 +9,8 @@
 **Tech Stack:** [Key technologies/libraries]
 
 **Related Documents:**
-- Design: `superspec/changes/[id]/design.md`
-- Specs: `superspec/changes/[id]/specs/[capability]/spec.md`
+- Design: `openspec/changes/[id]/design.md`
+- Specs: `openspec/changes/[id]/specs/[capability]/spec.md`
 
 ---
 
@@ -64,7 +64,7 @@ export async function action(input: Input): Promise<Output> {
 git add tests/path/test.ts src/path/file.ts
 git commit -m "feat([capability]): implement [scenario]
 
-Refs: superspec/changes/[id]/specs/[capability]/spec.md
+Refs: openspec/changes/[id]/specs/[capability]/spec.md
 Requirement: [Name]
 Scenario: [Name]"
 ```

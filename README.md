@@ -145,18 +145,23 @@ fvm flutter build apk --release --build-name=1.0.0 --build-number=10000
 
 ## 文档
 
-所有文档集中在 `superspec/`：`specs/` 是可校验的能力规格，`changes/` 是在途变更，
+所有文档集中在 `openspec/`：`specs/` 是可校验的能力规格，`changes/` 是在途变更，
 `changes/archive/` 是已归档变更记录，`design/`、`plans/`、`verification/` 放设计稿、
 实施计划与真机验证记录；`docs/adr/` 单独存放架构决策记录。
 
-规格流程有两个 CLI 都指向同一套文件：`superspec` 直接用 `superspec/`；
-`openspec` 通过根目录软链接 `openspec -> superspec` 进来，schema 用项目内的
-`superspec/schemas/superspec-workflow`（proposal → design → specs → plan → tasks）。
+规格流程由 openspec CLI 驱动，schema 用项目内的 `openspec/schemas/openspec-workflow`
+（proposal → design → specs → plan → tasks），配置在 `openspec/config.yaml`：
 
-- [能力规格](superspec/specs)
-- [纸本改版设计与任务](superspec/changes/archive/2026-11-02-xingji-ui-redesign)
-- [地点与天气设计与任务](superspec/changes/archive/2026-11-02-record-location-weather)
-- [整体设计文档](superspec/design/2026-09-21-cycling-app-design.md)
-- [实施计划 · 核心](superspec/plans/2026-09-21-cycling-app-core.md)
-- [实施计划 · 详情/历史/统计/设置/地图/导出](superspec/plans/2026-09-21-cycling-app-plan-b.md)
-- [真机验证记录 · 强调色](superspec/verification/2026-10-15-accent-theme-device-verification.md)
+```bash
+openspec list --specs        # 规格总览
+openspec validate --specs    # 规格校验
+openspec view                # 交互式面板
+```
+
+- [能力规格](openspec/specs)
+- [纸本改版设计与任务](openspec/changes/archive/2026-11-02-xingji-ui-redesign)
+- [地点与天气设计与任务](openspec/changes/archive/2026-11-02-record-location-weather)
+- [整体设计文档](openspec/design/2026-09-21-cycling-app-design.md)
+- [实施计划 · 核心](openspec/plans/2026-09-21-cycling-app-core.md)
+- [实施计划 · 详情/历史/统计/设置/地图/导出](openspec/plans/2026-09-21-cycling-app-plan-b.md)
+- [真机验证记录 · 强调色](openspec/verification/2026-10-15-accent-theme-device-verification.md)

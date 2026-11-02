@@ -1,0 +1,11 @@
+schema: openspec-workflow
+
+context: |
+  Language: zh-CN.
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Project: xingji（Flutter 骑行 / 多运动记录应用，含地图、传感器、GPX 导出）。
+  Tests: fvm flutter test
+  Analyzer: fvm flutter analyze
+  Docs live under openspec/（specs、changes、design、plans、verification）。

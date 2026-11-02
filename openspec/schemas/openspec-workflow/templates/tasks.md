@@ -62,7 +62,7 @@
 > After completing all Phase 3 tasks:
 > 1. Update this file
 > 2. Git commit
-> 3. Proceed to `/superspec:verify` then `/superspec:finish-branch`
+> 3. Proceed to `/opsx-verify` then `/opsx-archive`
 
 ---
 
@@ -84,7 +84,7 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ 🔴 AT START OF EACH PHASE:                                      │
-│    1. Read phase-protocol skill                                 │
+│    1. Read openspec apply skill                                  │
 │    2. Read this tasks.md                                        │
 │    3. CREATE TODO IMMEDIATELY (before reading other docs)       │
 │    4. Gate: Verify TODO completeness                            │
