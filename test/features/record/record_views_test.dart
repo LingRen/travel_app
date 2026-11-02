@@ -1218,7 +1218,7 @@ void main() {
       );
     });
 
-    testWidgets('地图按朝向 heading-up 旋转，跨 0 度时沿最短弧累加', (
+    testWidgets('地图保持北向上，箭头跨 0 度时沿最短弧累加 turns，不倒转一圈', (
       WidgetTester tester,
     ) async {
       final List<TrackPoint> track = <TrackPoint>[
@@ -1233,32 +1233,57 @@ void main() {
         liveTrack: track,
         headingDeg: heading,
       );
-      // 地图旋转与朝向反向：朝东（90°）时地图转 -90°，东就落到屏幕正上方。
-      double rotation() =>
-          MapCamera.of(tester.element(find.byKey(const Key('map-north'))))
-              .rotation;
+      double turns() => tester
+          .widget<AnimatedRotation>(find.byKey(const Key('map-heading-arrow')))
+          .turns;
 
       await tester.pumpWidget(wrap(handlebar(withHeading(356))));
       await tester.pump();
-      expect(rotation(), closeTo(-356, 1e-9));
-      // 朝向交给整张地图表达：当前位置标记反向抵消地图旋转，箭头永远朝上。
+      expect(turns(), closeTo(356 / 360, 1e-9));
+      // 地图不跟着朝向转，方向只由箭头表达。
       expect(
-        tester
-            .widget<MarkerLayer>(find.byType(MarkerLayer))
-            .markers
-            .single
-            .rotate,
-        isTrue,
+        MapCamera.of(tester.element(find.byKey(const Key('map-north'))))
+            .rotation,
+        0,
       );
 
       await tester.pumpWidget(wrap(handlebar(withHeading(1))));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(rotation(), closeTo(-361, 1e-9), reason: '356° → 1° 只该转 5°');
+      await tester.pump();
+      expect(turns(), closeTo(361 / 360, 1e-9), reason: '356° → 1° 只该转 5°');
+    });
 
-      // 几度以内的变化当 GPS 噪声忽略：地图不能被逐秒的朝向抖动拖着晃。
-      await tester.pumpWidget(wrap(handlebar(withHeading(3))));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(rotation(), closeTo(-361, 1e-9));
+    testWidgets('当前位置始终落在屏幕正中', (WidgetTester tester) async {
+      final List<TrackPoint> track = <TrackPoint>[
+        const TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+        const TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+        const TrackPoint(rideId: 1, tMs: 3000, lat: 30.002, lon: 120.002),
+      ];
+      await tester.pumpWidget(
+        wrap(
+          handlebar(
+            RecordState(
+              rideId: 1,
+              phase: RecordingPhase.recording,
+              elapsedMs: 4000,
+              liveTrack: track,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      // 相机跟随走 320ms 补间，等它滑到位。
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final Marker current = tester
+          .widget<MarkerLayer>(find.byType(MarkerLayer))
+          .markers
+          .last;
+      final MapCamera camera = MapCamera.of(
+        tester.element(find.byKey(const Key('map-scale-bar'))),
+      );
+      // 当前位置标记（含 WGS→GCJ 的换源转换）必须正好压在相机中心上。
+      expect(camera.center.latitude, closeTo(current.point.latitude, 1e-9));
+      expect(camera.center.longitude, closeTo(current.point.longitude, 1e-9));
     });
 
     testWidgets('起点落位后画起点环，没落位时不画', (WidgetTester tester) async {

@@ -81,11 +81,11 @@ class LiveRouteMap extends StatefulWidget {
 }
 
 class _LiveRouteMapState extends State<LiveRouteMap>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final MapController _controller = MapController();
 
-  /// 跟随平移的补间。[MapController.move] 是瞬移，安全区一破就「唰」地把整张图
-  /// 拽回去很刺眼；320ms 滑过去，看起来就是地图在往前走。
+  /// 跟随平移的补间。[MapController.move] 是瞬移，新点一来「唰」地把中心拽过去
+  /// 很刺眼；320ms 滑过去，看起来就是地图在往前走。
   late final AnimationController _pan = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
@@ -118,39 +118,16 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   double _unwrappedDeg = 0;
 
   /// 上一拍的朝向，用来算最短弧差。与 [_unwrappedDeg] 分开保存：后者是连续
-  /// 展开的角度，可以直接取反交给地图旋转。
+  /// 展开的角度，可以直接除以 360 交给 [AnimatedRotation]。
   double? _lastHeadingDeg;
 
-  /// 地图旋转的补间（heading-up）。[MapController.rotate] 是瞬变，朝向每秒
-  /// 都在改，硬切会让整张图一下一下地扭；420ms 滑过去才像车机导航。
-  late final AnimationController _spin = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 420),
-  )..addListener(_applySpin);
-
-  double _spinFromDeg = 0;
-  double _spinTargetDeg = 0;
-
-  /// 小于这个角度的朝向变化当作 GPS 噪声忽略。
-  ///
-  /// 速度一提上来，朝向每秒都会抖几度，地图跟着抖会晃得看不清路；真拐弯时
-  /// 差值远大于它，不会被挡掉。按累计差判断，小抖动攒过门槛后一次转过去。
-  static const double _kRotationDeadbandDeg = 3;
-
-  /// 是否已建立朝向。有了朝向才有 heading-up；没有就保持北向上。
-  bool get _headingUp => _lastHeadingDeg != null;
+  double get _headingTurns => _unwrappedDeg / 360;
 
   /// 首帧取景交给 `initialCameraFit`：它在拿到尺寸之后才生效，自己调
   /// `fitCamera` 有可能赶在布局之前，算出来的缩放级别是错的。
   CameraFit? _initialFit;
 
   bool _ready = false;
-
-  /// 跟随安全区：可见范围四周各让出这么多比例后剩下的中间一块。
-  ///
-  /// 上下都压着读数浮层，只有中间这条带子是真正「看得见路」的；箭头停在
-  /// 边缘等于没跟随，所以它一旦出这块安全区就把相机拉回中心。
-  static const double _kFollowSafeInset = 0.25;
 
   /// 首次取景的缩放上限。只有两三个点时，自动取景会一路缩到 19 级去拉一堆瓦片，
   /// 而 25 米外的两个点根本不需要那个层级。
@@ -200,7 +177,6 @@ class _LiveRouteMapState extends State<LiveRouteMap>
 
   @override
   void dispose() {
-    _spin.dispose();
     _pan.dispose();
     _controller.dispose();
     super.dispose();
@@ -238,37 +214,19 @@ class _LiveRouteMapState extends State<LiveRouteMap>
     _startVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
   }
 
-  /// 把新的朝向接到连续角度上，并驱动地图旋转。
+  /// 把新的朝向接到连续角度上，交给 [AnimatedRotation] 补间。
   ///
-  /// 不能直接用 `heading` 当旋转量：359° → 1° 会得到 -358°，地图倒转一整圈。
-  /// 累计最短弧差后，同样的变化只有 +2°，地图沿最短一侧转过去。
+  /// 不能直接用 `heading / 360` 当 `turns`：359° → 1° 会得到 -358°，箭头倒转
+  /// 一整圈。累计最短弧差后，同样的变化只有 +2°，箭头沿最短一侧转过去。
   ///
-  /// 同时兼作低通：差值小于 [_kRotationDeadbandDeg] 时先不转，等抖动攒过门槛
-  /// 再一次消化，避免高速骑行时整张图跟着 GPS 噪声高频晃动。
+  /// 地图本身不旋转（北向上），方向只由箭头表达。
   void _updateHeading(double? headingDeg) {
     if (headingDeg == null) return;
     final double? prev = _lastHeadingDeg;
-    if (prev == null) {
-      _unwrappedDeg = headingDeg;
-    } else {
-      final double delta = shortestArcDelta(prev, headingDeg);
-      if (delta.abs() < _kRotationDeadbandDeg) return;
-      _unwrappedDeg += delta;
-    }
+    _unwrappedDeg = prev == null
+        ? headingDeg
+        : _unwrappedDeg + shortestArcDelta(prev, headingDeg);
     _lastHeadingDeg = headingDeg;
-    _spinTargetDeg = -_unwrappedDeg;
-    if (_ready) {
-      _spinFromDeg = _controller.camera.rotation;
-      _spin.forward(from: 0);
-    }
-  }
-
-  /// 把地图旋转推到补间当前值。旋转角度是「展开」的连续值，不做 0~360 归一，
-  /// 相邻两帧之间永远走最短的一侧。
-  void _applySpin() {
-    if (!_ready) return;
-    final double t = Curves.easeOutCubic.transform(_spin.value);
-    _controller.rotate(_spinFromDeg + (_spinTargetDeg - _spinFromDeg) * t);
   }
 
   void _rebuild(List<TrackPoint> points) {
@@ -326,16 +284,12 @@ class _LiveRouteMapState extends State<LiveRouteMap>
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncCamera());
   }
 
-  /// 让相机跟着当前位置走。
+  /// 让相机跟着当前位置走：每一个新点都把当前位置放到屏幕正中。
   ///
   /// 这里曾经拿「轨迹包围盒」判断要不要重新取景，但那个盒子按定义永远包含
   /// 最新点，条件恒成立——首帧之后相机再没动过，骑出去几分钟箭头就出了画面。
-  /// 现在改用相机自己的可见范围：当前位置跑出正中那块安全区，就把它滑回中心。
-  /// 只平移、不改缩放，避免每秒重新取景带来的整体抖动。
-  ///
-  /// heading-up 时改成每一拍都对准当前位置：地图已经跟着朝向转，若还按安全区
-  /// 触发，高速下攒到 25% 视口才动一次，就成了一顿一顿的大跳；每 25 米滑一小
-  /// 段，看起来才是连续的。
+  /// 也试过「出安全区才回中」，高速下攒一段才跳一次，看起来一冲一冲的。
+  /// 现在每一拍都对准当前位置，只平移、不改缩放，320ms 滑过去就是连续前进。
   void _syncCamera() {
     if (!mounted || !_ready || _vertices.isEmpty) return;
     final LatLng current = _vertices.last;
@@ -343,18 +297,14 @@ class _LiveRouteMapState extends State<LiveRouteMap>
       _controller.fitCamera(_fitForPoint(current));
       return;
     }
-    if (_headingUp) {
-      _panTo(current);
-      return;
-    }
-    final MapCamera camera = _controller.camera;
-    if (_safeBounds(camera.visibleBounds).contains(current)) return;
     _panTo(current);
   }
 
   /// 从相机当前中心滑到 [target]。动画期间又来新点时，从当前位置重新起步，
   /// 不会先跳回上一次的终点。
   void _panTo(LatLng target) {
+    // 已经在正中就别再起一遍动画：连续几拍同一位置会反复重启动画。
+    if (_controller.camera.center == target) return;
     _panFrom = _controller.camera.center;
     _panTarget = target;
     _pan.forward(from: 0);
@@ -371,22 +321,6 @@ class _LiveRouteMapState extends State<LiveRouteMap>
         from.longitude + (to.longitude - from.longitude) * t,
       ),
       _controller.camera.zoom,
-    );
-  }
-
-  /// 可见范围中间那块安全区：四周各让出 [_kFollowSafeInset]。
-  static LatLngBounds _safeBounds(LatLngBounds visible) {
-    final double latSpan = visible.north - visible.south;
-    final double lonSpan = visible.east - visible.west;
-    return LatLngBounds(
-      LatLng(
-        visible.south + latSpan * _kFollowSafeInset,
-        visible.west + lonSpan * _kFollowSafeInset,
-      ),
-      LatLng(
-        visible.north - latSpan * _kFollowSafeInset,
-        visible.east - lonSpan * _kFollowSafeInset,
-      ),
     );
   }
 
@@ -423,12 +357,6 @@ class _LiveRouteMapState extends State<LiveRouteMap>
         ),
         onMapReady: () {
           _ready = true;
-          // 首帧直接把朝向对齐（不做补间）：此时地图刚建好，慢慢转过去只会
-          // 让人以为相机在动。
-          if (_headingUp) {
-            _spinFromDeg = _spinTargetDeg;
-            _controller.rotate(_spinTargetDeg);
-          }
           _scheduleSyncCamera();
         },
       ),
@@ -478,20 +406,16 @@ class _LiveRouteMapState extends State<LiveRouteMap>
                   height: widget.headingDeg == null
                       ? _PositionDot.size
                       : _HeadingArrow.box,
-                  // 地图已经随朝向旋转，箭头反向抵消，永远指向屏幕正上方：
-                  // 方向交给整张图表达，箭头只剩「我在这儿」这一个含义。
-                  rotate: true,
                   // 还没建立朝向时只画圆点，不能凭空指一个方向。
                   child: widget.headingDeg == null
                       ? const _PositionDot()
-                      : const _HeadingArrow(),
+                      : _HeadingArrow(turns: _headingTurns),
                 )
               else if (_previewVertex != null)
                 Marker(
                   point: _previewVertex!,
                   width: _PositionDot.size,
                   height: _PositionDot.size,
-                  rotate: true,
                   child: const _PositionDot(),
                 ),
             ],
@@ -519,33 +443,29 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   }
 }
 
-/// 指北标识。地图 heading-up 后会整体旋转，徽章跟着转同样的角度，「北」就
-/// 始终朝向屏幕上的正北——和真实罗盘卡一样，字是跟着盘面走的。
+/// 指北标识。地图不旋转，所以永远指北。
 class _NorthIndicator extends StatelessWidget {
   const _NorthIndicator();
 
   @override
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
-    return Transform.rotate(
-      angle: MapCamera.of(context).rotationRad,
-      child: Container(
-        key: const Key('map-north'),
-        width: 30,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: palette.paper.withValues(alpha: 0.88),
-          border: Border.all(color: palette.hairline),
-        ),
-        child: Text(
-          '北',
-          style: kLabelTextStyle.copyWith(
-            fontSize: 11,
-            letterSpacing: 0,
-            color: palette.ink,
-          ),
+    return Container(
+      key: const Key('map-north'),
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.paper.withValues(alpha: 0.88),
+        border: Border.all(color: palette.hairline),
+      ),
+      child: Text(
+        '北',
+        style: kLabelTextStyle.copyWith(
+          fontSize: 11,
+          letterSpacing: 0,
+          color: palette.ink,
         ),
       ),
     );
@@ -665,9 +585,9 @@ class _StartRing extends StatelessWidget {
 /// 用墨色而不是主题色：脚下的轨迹就是主题色，同色会融成一片。描边用纸色，
 /// 让箭头在深色底图与彩色瓦片上都立得住（与轨迹的 [kRouteCasing] 同一角色）。
 ///
-/// 形变交给地图：标记带 `rotate: true` 抵消地图旋转，这里只管把箭头画成正上方。
+/// 形变由箭头自己承担（[AnimatedRotation]），地图保持北向上。
 class _HeadingArrow extends StatelessWidget {
-  const _HeadingArrow();
+  const _HeadingArrow({required this.turns});
 
   /// 视觉尺寸（三角形本身）。
   static const double size = 22;
@@ -675,13 +595,21 @@ class _HeadingArrow extends StatelessWidget {
   /// 标记盒子：比三角形大一圈，旋转时不裁角。
   static const double box = 28;
 
+  /// 连续展开的圈数。见 `_LiveRouteMapState._updateHeading`。
+  final double turns;
+
   @override
-  Widget build(BuildContext context) => CustomPaint(
+  Widget build(BuildContext context) => AnimatedRotation(
     key: const Key('map-heading-arrow'),
-    size: const Size(box, box),
-    painter: _HeadingArrowPainter(
-      fill: context.palette.ink,
-      casing: context.palette.paper,
+    turns: turns,
+    duration: const Duration(milliseconds: 200),
+    curve: Curves.easeOut,
+    child: CustomPaint(
+      size: const Size(box, box),
+      painter: _HeadingArrowPainter(
+        fill: context.palette.ink,
+        casing: context.palette.paper,
+      ),
     ),
   );
 }
