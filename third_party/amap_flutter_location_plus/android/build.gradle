@@ -1,0 +1,47 @@
+// 本项目内置（vendored）的高德定位插件，来源于 pub.dev 上的
+// amap_flutter_location_plus 3.1.2。官方 amap_flutter_location 3.0.0 的
+// SDK 约束停在 `<3.0.0`，Dart 3 下无法解析，因此改用同一 API 的 3.x 分支。
+//
+// 相对上游做的最小改动（上游发布于 2021 年，无法适配 Gradle 9 / AGP 9）：
+//   1. `jcenter()` 已不可用，换成 `mavenCentral()`；
+//   2. compileSdk 31 -> 37、minSdk 16 -> 21，与宿主工程一致；
+//   3. 去掉只用于解析 AGP 3.5.1 的 buildscript classpath。
+//
+// 定位 SDK 本身用 compileOnly 引入：宿主已经通过 amap_map 的
+// `3dmap-location-search` 带上 loc 6.4.9，再打包一份会类冲突。
+group 'com.amap.flutter.amap_flutter_location'
+version '1.0'
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.amap.flutter.location'
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 21
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    compileOnly 'com.amap.api:location:5.6.0'
+}
