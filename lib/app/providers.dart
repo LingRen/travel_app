@@ -14,6 +14,7 @@ import '../data/db/workout_dao.dart';
 import '../data/export/backup_io.dart';
 import '../data/export/backup_store.dart';
 import '../data/geocode/place_service.dart';
+import '../data/location/location_provider.dart';
 import '../data/location/location_service.dart';
 import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
@@ -66,8 +67,31 @@ final FutureProvider<AppSettings> appSettingsProvider =
       (Ref ref) => ref.watch(settingsRepositoryProvider).load(),
     );
 
+/// 当前定位源选择。
+///
+/// debug 构建先看设置里的调试值，再看 `LOCATION_PROVIDER`；release 构建忽略
+/// 调试值（[SettingsRepository] 内部已按 `kDebugMode` 挡住），只认构建参数。
+/// 读库是异步的，未解析完成前调用方按系统定位兜底，与升级前行为一致。
+final FutureProvider<LocationProviderSelection>
+locationProviderSelectionProvider = FutureProvider<LocationProviderSelection>(
+  (Ref ref) async => resolveLocationProvider(
+    isDebug: kDebugMode,
+    buildOverride: kLocationProviderOverride,
+    debugStoredValue: kDebugMode
+        ? await ref.watch(settingsRepositoryProvider).locationProviderDebug()
+        : null,
+    amapKey: amapMapKeyFor(defaultTargetPlatform),
+  ),
+);
+
 final Provider<LocationService> locationServiceProvider =
-    Provider<LocationService>((Ref ref) => const LocationService());
+    Provider<LocationService>((Ref ref) {
+      // 先订阅选择结果：切换定位源后 invalidate 选择 provider，本 provider 随之
+      // 重建，下一次开始 / 恢复记录就能取到新源。高德平台实现随 Task 4 接入，
+      // 接入前仍构造系统定位，保证选择后不会崩、行为与升级前一致。
+      ref.watch(locationProviderSelectionProvider);
+      return const LocationService();
+    });
 
 /// 当前底图后端。启动时按 Key 与覆盖值计算一次，测试可 override 为 legacy。
 final Provider<MapBackend> mapBackendProvider = Provider<MapBackend>(

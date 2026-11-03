@@ -1,5 +1,7 @@
 import 'dart:ui' show Color;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 import '../domain/analysis/constants.dart';
 import '../domain/models/activity_type.dart';
 import 'db/settings_dao.dart';
@@ -189,4 +191,23 @@ class SettingsRepository {
   /// 记录用户已同意地图隐私说明。之后启动直接使用原生底图。
   Future<void> grantAmapPrivacyConsent() =>
       _dao.setString('amap_privacy_agreed', 'true');
+
+  /// debug 构建里选择的定位源（`system` / `amap`）。
+  ///
+  /// release 构建一律返回 null：该键只用于试点调试，避免用户误开尚未验收的
+  /// 高德定位路径（见变更设计文档「Provider 选择」）。
+  Future<String?> locationProviderDebug() async {
+    if (!kDebugMode) return null;
+    return _dao.getString('location_provider_debug');
+  }
+
+  /// 保存 debug 构建的定位源选择；传 null 表示恢复默认（清掉该键）。
+  Future<void> saveLocationProviderDebug(String? value) async {
+    if (!kDebugMode) return;
+    if (value == null) {
+      await _dao.remove('location_provider_debug');
+      return;
+    }
+    await _dao.setString('location_provider_debug', value);
+  }
 }

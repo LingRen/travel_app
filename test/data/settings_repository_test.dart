@@ -109,6 +109,20 @@ void main() {
     });
   });
 
+  group('调试定位源', () {
+    test('首次读取没有调试值', () async {
+      expect(await repo.locationProviderDebug(), isNull);
+    });
+
+    test('保存后可读回，传 null 可清除', () async {
+      await repo.saveLocationProviderDebug('amap');
+      expect(await repo.locationProviderDebug(), 'amap');
+
+      await repo.saveLocationProviderDebug(null);
+      expect(await repo.locationProviderDebug(), isNull);
+    });
+  });
+
   group('上次选中的运动类型', () {
     test('首次读取是骑行', () async {
       expect((await repo.load()).lastActivityType, ActivityType.cycling);

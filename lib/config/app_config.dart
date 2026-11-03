@@ -30,6 +30,14 @@ String amapMapKeyFor(TargetPlatform platform) =>
 const String kAmapMapStyleAsset = 'assets/amap/style.data';
 const String kAmapMapStyleExtraAsset = 'assets/amap/style_extra.data';
 
+/// 定位源覆盖值：`amap`、`system` 或留空按系统定位。
+///
+/// 通过 `--dart-define=LOCATION_PROVIDER=amap` 注入，用于灰度试点高德定位；
+/// 缺高德 Key 时自动回落到系统定位（见 `resolveLocationProvider`）。
+const String kLocationProviderOverride = String.fromEnvironment(
+  'LOCATION_PROVIDER',
+);
+
 /// 底图后端覆盖值：`amap`、`legacy` 或留空按 Key 自动选择。
 ///
 /// 排障时可用 `--dart-define=MAP_BACKEND=legacy` 强制回到栅格底图。

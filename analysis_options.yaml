@@ -14,6 +14,9 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    # 内置的第三方插件副本保持上游原样，不参与本项目 lint；需要改动时只做
+    # 构建兼容（见 third_party/amap_flutter_location_plus）。
+    - third_party/**
 
 linter:
   # The lint rules applied to this project can be customized in the

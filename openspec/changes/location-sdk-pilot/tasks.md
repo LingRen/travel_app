@@ -2,9 +2,9 @@
 
 ## Status
 - Total Tasks: 33
-- Completed: 6
+- Completed: 13
 - In Progress: 1
-- Pending: 26
+- Pending: 19
 
 ---
 
@@ -24,7 +24,8 @@
 - [x] 1.5 在 `lib/domain/analysis/gcj02.dart` 增加迭代 `gcj02ToWgs84`，不改现有正变换
 - [x] 1.6 运行 GCJ 测试与 `fvm flutter analyze`
   - 结果：GCJ 测试 24 条全过；`flutter analyze` 无问题；全量 `flutter test` 870 条全过
-- [ ] 1.7 提交：`feat(location-acquisition): add gcj02 to wgs84 inverse conversion`
+- [x] 1.7 提交：`feat(location-acquisition): add gcj02 to wgs84 inverse conversion`
+  - 提交：`de952e6`（GCJ 逆变换）、`865cd61`（内置插件）、`14b3d82`（阶段文档）
 
 ### Exit Gate
 > 更新状态与完成表；提交；若 1.2 不通过，暂停后续编码并回报。
@@ -37,13 +38,17 @@
 > 读 `plan.md` Task 3 与 `specs/location-acquisition/spec.md` 的选择、回滚要求。
 
 ### Tasks
-- [ ] 2.1 写 `test/data/location/location_provider_test.dart`：默认、release 忽略调试键、缺 Key、回滚
+- [x] 2.1 写 `test/data/location/location_provider_test.dart`：默认、release 忽略调试键、缺 Key、回滚
   - Spec: `### Requirement: 定位源默认使用系统定位并可切换` → 三个 Scenario
-- [ ] 2.2 新增 `lib/data/location/location_provider.dart`：debug 存储 → env → system
-- [ ] 2.3 在 `lib/config/app_config.dart` 增加 `kLocationProviderOverride`
-- [ ] 2.4 在 `SettingsRepository` 增加仅 debug 读写的 `location_provider_debug`
-- [ ] 2.5 修改 `locationServiceProvider` 按选择结果构造 `LocationService`
-- [ ] 2.6 运行 provider 测试与 `fvm flutter analyze`
+- [x] 2.2 新增 `lib/data/location/location_provider.dart`：debug 存储 → env → system
+- [x] 2.3 在 `lib/config/app_config.dart` 增加 `kLocationProviderOverride`
+- [x] 2.4 在 `SettingsRepository` 增加仅 debug 读写的 `location_provider_debug`
+  - 同步补 `settings_repository_test.dart` 的读写用例，以及设置页测试假实现的空实现
+- [x] 2.5 修改 `locationServiceProvider` 按选择结果构造 `LocationService`
+  - 选择结果已接入 provider；高德平台构造随 Task 4 接入，接入前仍用系统定位
+- [x] 2.6 运行 provider 测试与 `fvm flutter analyze`
+  - 结果：新增 4 组（选择器 / 设置仓储）用例全过；全量 `flutter test` 884 条全过；`flutter analyze` 无问题
+  - 附带：`analysis_options.yaml` 排除 `third_party/**`，内置插件副本不参与本项目 lint
 - [ ] 2.7 提交：`feat(location-acquisition): select location provider with debug override`
 
 ### Exit Gate
@@ -106,10 +111,10 @@
 
 | Phase | Tasks | Completed | Status |
 |-------|-------|-----------|--------|
-| Phase 1 | 7 | 6 | IN_PROGRESS |
-| Phase 2 | 7 | 0 | PENDING |
+| Phase 1 | 7 | 7 | COMPLETE |
+| Phase 2 | 7 | 6 | IN_PROGRESS |
 | Phase 3 | 11 | 0 | PENDING |
 | Phase 4 | 8 | 0 | PENDING |
-| **Total** | **33** | **6** | **18%** |
+| **Total** | **33** | **13** | **39%** |
 
 **Status values:** `PENDING` → `IN_PROGRESS` → `COMPLETE`

@@ -62,6 +62,16 @@ class _FakeSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> grantAmapPrivacyConsent() async {}
+
+  String? locationProviderDebugValue;
+
+  @override
+  Future<String?> locationProviderDebug() async => locationProviderDebugValue;
+
+  @override
+  Future<void> saveLocationProviderDebug(String? value) async {
+    locationProviderDebugValue = value;
+  }
 }
 
 class _FakeSensorPairing implements SensorPairingRepository {
