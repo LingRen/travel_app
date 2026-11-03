@@ -15,7 +15,7 @@
 - **历史**：按最近有记录的月份分组，首屏只显示该月，底部「更早的记录」在内存展开；日志条目显示日期、星期、标题、出发时间与具体地点、距离、四格读数与迷你曲线。
 - **单次详情**：地图轨迹、标题下的地点与天气、两行三列汇总、按类型命名的速度 / 配速曲线、心率曲线与五区间分布；踏频 / 功率区块只在骑行且有数据时出现。旧记录没有地点 / 天气时整行省略，不用示例文案填充；不展示路线名。
 - **长期统计**：周 / 月 / 年切换，三项主读数为总距离 / 总时长 / 总爬升，柱形距离趋势，01–04 编号的个人最佳；筛选只改变统计范围，不修改数据。
-- **地图**：`flutter_map` + 高德栅格瓦片，瓦片降饱和并覆纸色薄罩；轨迹用主题文字色与墨色描边，带指北与比例尺。GPS 中断超过 10 秒断开轨迹；记录中地图不响应拖动与缩放。
+- **地图**：配置了高德地图 Key 时用高德原生 SDK 出底图，未配置时自动回落到内置 `flutter_map` 栅格底图；轨迹、起终点、断口与指北比例尺都由 Flutter 覆盖层绘制。有 Key 但没有纸色样式二进制时使用 SDK 默认样式。高德 SDK 首次使用前会弹隐私同意说明，拒绝后继续用内置底图，记录不受影响。GPS 中断超过 10 秒断开轨迹；记录中地图不响应拖动与缩放，详情页可拖动缩放。
 - **数据导出**：单次导出 GPX 1.1（心率 / 踏频写入 Garmin `TrackPointExtension`）；全量备份为 ZIP，恢复前校验 schema 版本并显示上次备份时间。
 
 ## 技术栈
@@ -29,7 +29,7 @@
 | 本地存储 | `sqflite`（测试用 `sqflite_common_ffi` 内存库） |
 | 状态管理 | `flutter_riverpod` |
 | 图表 | `fl_chart`（柱形趋势） |
-| 地图 | `flutter_map` + `latlong2` |
+| 地图 | `amap_map`（高德原生底图）+ `flutter_map` / `latlong2`（无 Key 回落） |
 | 语音播报 | `flutter_tts`（中文，`zh-CN`） |
 | 屏幕常亮 / 权限 | `wakelock_plus` / `permission_handler` |
 | 导出与备份 | `share_plus`、`path_provider`、`file_picker`、`archive`、`xml` |
@@ -46,6 +46,8 @@ lib/
   features/
     activity/   类型视觉、类型浮标/面板、历史与统计共用筛选
     record/     记录页、会话控制、实时地图与提示横幅
+    map/        地图后端选择、投影、公共覆盖层、高德底图封装
+    privacy/    高德地图首次使用前的隐私同意弹窗
     history/    月份分组与日志条目
     detail/     详情页（地图轨迹 + 汇总 + 曲线）
     stats/      长期统计、柱形趋势、个人最佳
@@ -94,6 +96,29 @@ fvm flutter run --dart-define=AMAP_WEB_KEY=你的Key
 
 没有配置 Key、网络失败或请求超时时，地名回退成「当前位置」或省略，温度与天气整段省略，不会阻塞开始记录。坐标只用于当次查询，不写入数据库或日志；查到的地点名称与天气随记录保存在本机，供历史与详情显示。
 
+### 地图 Key（可选）
+
+不配地图 Key 也能完整运行：记录页与详情页自动使用内置栅格底图，轨迹、断口与标记照常显示。想要高德原生底图时，把平台 Key 放在被 `.gitignore` 忽略的本地文件里，由 `tool/run_local.sh` 注入：
+
+```bash
+cp config/amap_map_key_android.example.txt config/amap_map_key_android.txt
+cp config/amap_map_key_ios.example.txt config/amap_map_key_ios.txt
+# 分别在两个文件里填入高德开放平台的地图 Key
+tool/run_local.sh
+```
+
+也可以直接传：
+
+```bash
+fvm flutter run --dart-define=AMAP_MAP_KEY_ANDROID=你的Android地图Key
+```
+
+Key 需要先在 [高德开放平台](https://lbs.amap.com/) 创建「Android 平台 / iOS 平台」应用并绑定：Android 填包名 `com.ling.cycling_app` 与签名 SHA1（debug 与 release 的 SHA1 不同，需分别绑定），iOS 填 Bundle ID `com.ling.cyclingApp`。Key 不匹配时底图会显示「地图暂时不可用」，记录与轨迹累计不受影响。
+
+- 首次使用高德 SDK 前会弹出隐私同意说明（底图请求会联网，记录数据仍只存本机）；同意后写入本地设置，拒绝或未同意时继续用内置底图。
+- 排障时可用 `--dart-define=MAP_BACKEND=legacy` 强制回到内置栅格底图。
+- 纸色底图由高德自定义样式二进制提供：把控制台导出的 `style.data` / `style_extra.data` 放到 `assets/amap/` 并在 `pubspec.yaml` 声明；没有这两个文件时使用 SDK 默认样式，不会崩溃。
+
 ### Android 说明
 
 `android/app/build.gradle.kts` 里 `compileSdk = 37`，因为 `permission_handler_android` 13.x 要求依赖方 `compileSdk >= 37`，而 `flutter.compileSdkVersion` 目前是 36。
@@ -111,7 +136,7 @@ fvm flutter test
 
 测试集中在纯逻辑与组件边界上：`domain/analysis`（爬升滤波、最高速平滑、心率区间边界、Haversine 距离、GCJ-02、趋势聚合）、`domain/recording`（状态机、批量落盘）、`data/db`（内存库跑 DAO）、`features/*`（Widget 测试，注入假定位流、传感器流、设置与备份 IO）。
 
-真实 BLE 硬件、真实 GPS、瓦片渲染与户外强光可读性不做自动化，需真机手动验证。
+真实 BLE 硬件、真实 GPS、原生地图底图渲染与户外强光可读性不做自动化，需真机手动验证；记录页与详情页的组件测试用 legacy 后端与注入的假底图，不创建高德 platform view。
 
 ## 构建与发版
 
@@ -137,11 +162,13 @@ fvm flutter build apk --release --build-name=1.0.0 --build-number=10000
 
 发正式签名包需要先在 GitHub 仓库配置 4 个 Secrets：`KEYSTORE_BASE64`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`。
 
-## 地图瓦片源
+## 地图与 Key
 
-默认走高德栅格瓦片（GCJ-02 坐标，无需申请 Key）。这是非官方接口，属于灰色地带，接口变更会失效——因此瓦片源地址是设置里的可配置项，失效时可切到 OSM 或自建源，无需改代码重新发版。
+底图有两条路径：有高德地图 Key 时使用高德原生 SDK，没有 Key（或用户拒绝隐私说明、强制 `MAP_BACKEND=legacy`）时使用内置的高德栅格瓦片。两条路径的轨迹、起终点、断口端点、指北与比例尺都由 Flutter 覆盖层绘制，所以无 Key 时功能完整可用，不会出现空白地图。
 
-瓦片在客户端做降饱和与纸色薄罩；轨迹坐标跟随瓦片源：高德 / 腾讯这类 GCJ-02 源才把显示坐标转过去，OSM 这类 WGS-84 源保持原样，否则轨迹会整体偏移几百米。落盘与 GPX 导出始终是 WGS-84。
+原生底图的纸色外观来自高德自定义地图样式二进制，不在客户端套整层颜色矩阵；主题色变化只影响轨迹与界面，不重建底图。样式文件缺失时使用 SDK 默认样式。
+
+坐标口径：高德底图用 GCJ-02，绘制前把 WGS-84 轨迹转到显示坐标；转换只发生在显示层，落盘、统计、备份与 GPX 导出始终是 WGS-84。切换底图后端不会让轨迹整体偏移。
 
 ## 文档
 
