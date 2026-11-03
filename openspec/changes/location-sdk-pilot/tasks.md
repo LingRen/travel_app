@@ -2,9 +2,9 @@
 
 ## Status
 - Total Tasks: 33
-- Completed: 24
-- In Progress: 1
-- Pending: 8
+- Completed: 29
+- In Progress: 0
+- Pending: 4
 
 ---
 
@@ -85,7 +85,8 @@
   - 新增「结束取消旧流、重置后再开始重新订阅」；切换重建由 `providers_test` 覆盖；看门狗重建用例原已存在
 - [x] 3.10 运行相关测试与 `fvm flutter analyze`
   - 结果：`flutter analyze` 无问题；全量 `flutter test` 899 条全过
-- [ ] 3.11 提交：`feat(location-acquisition): add amap platform and accuracy gate` 与 debug 开关提交
+- [x] 3.11 提交：`feat(location-acquisition): add amap platform and accuracy gate` 与 debug 开关提交
+  - 提交：`4491f94`（50 m 精度门槛）、`404f163`（高德平台 + debug 开关）
 
 ### Exit Gate
 > 更新状态；确认系统定位路径行为只受 50 m 门槛影响；提交。
@@ -98,16 +99,21 @@
 > 读 `plan.md` Task 6-8 与试点成功标准表。
 
 ### Tasks
-- [ ] 4.1 按 spike 结论接 Android 前台服务 / 高德后台模式与 iOS capability
+- [x] 4.1 按 spike 结论接 Android 前台服务 / 高德后台模式与 iOS capability
   - Spec: `### Requirement: 试点源保持后台持续记录与看门狗` → `#### Scenario: 锁屏记录`
-- [ ] 4.2 确认暂停期间不重建、不判信号弱
+  - Android：新增 `RecordingForegroundService` + `MainActivity` 平台通道，高德连续定位期间启停；系统定位继续由 geolocator 前台服务负责
+  - **iOS 按约定不做**（未接 capability，`allowsBackgroundLocationUpdates` 保持 false）
+- [x] 4.2 确认暂停期间不重建、不判信号弱
   - Spec: `### Requirement: 定位源切换不改变记录状态语义` → `#### Scenario: 暂停期间无定位`
-- [ ] 4.3 `fvm flutter analyze` 与 `fvm flutter test` 全通过
+  - 发现并修复：`_isGpsWeak()` 原先只在 `_collectGpsCues` 里按阶段门控，`RecordState.gpsWeak` 在暂停 30 秒后仍变 true；现统一在 `_isGpsWeak()` 内按 `RecordingPhase.recording` 判定
+- [x] 4.3 `fvm flutter analyze` 与 `fvm flutter test` 全通过
+  - 结果：`flutter analyze` 无问题；全量 901 条测试通过；`flutter build apk --debug --target-platform android-arm64` 成功
 - [ ] 4.4 同设备同路线系统 / 高德各 3 次配对骑行，记录空档、断点、距离、爬升、跳变、耗电
   - Spec: `### Requirement: 试点结论以对照数据决定` → 两个 Scenario
 - [ ] 4.5 结论写入 `openspec/verification/2026-11-02-location-sdk-pilot.md`
 - [ ] 4.6 未达标则保持 `system` 默认并确认开关仅 debug；达标则记录「可讨论切换默认值」
-- [ ] 4.7 更新 `README.md`：`LOCATION_PROVIDER`、debug 开关、试点结论、WGS-84 与回滚
+- [x] 4.7 更新 `README.md`：`LOCATION_PROVIDER`、debug 开关、试点结论、WGS-84 与回滚
+  - 试点结论等 4.4/4.5 完成后补写
 - [ ] 4.8 提交：`docs(location-acquisition): document provider pilot and rollback`
 
 ### Exit Gate
@@ -121,8 +127,8 @@
 |-------|-------|-----------|--------|
 | Phase 1 | 7 | 7 | COMPLETE |
 | Phase 2 | 7 | 7 | COMPLETE |
-| Phase 3 | 11 | 10 | IN_PROGRESS |
-| Phase 4 | 8 | 0 | PENDING |
-| **Total** | **33** | **24** | **73%** |
+| Phase 3 | 11 | 11 | COMPLETE |
+| Phase 4 | 8 | 4 | IN_PROGRESS |
+| **Total** | **33** | **29** | **88%** |
 
 **Status values:** `PENDING` → `IN_PROGRESS` → `COMPLETE`

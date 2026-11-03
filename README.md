@@ -23,7 +23,7 @@
 | 用途 | 选型 |
 | --- | --- |
 | 框架 | Flutter 3.47.4 / Dart 3.13.3（fvm 管理） |
-| 定位 | `geolocator` |
+| 定位 | `geolocator`（默认）/ `amap_flutter_location_plus`（试点源，内置副本） |
 | 地名 / 天气 | 高德逆地理编码 / Open-Meteo（`http`） |
 | 蓝牙 | `flutter_blue_plus` |
 | 本地存储 | `sqflite`（测试用 `sqflite_common_ffi` 内存库） |
@@ -118,6 +118,24 @@ Key 需要先在 [高德开放平台](https://lbs.amap.com/) 创建「Android �
 - 首次使用高德 SDK 前会弹出隐私同意说明（底图请求会联网，记录数据仍只存本机）；同意后写入本地设置，拒绝或未同意时继续用内置底图。
 - 排障时可用 `--dart-define=MAP_BACKEND=legacy` 强制回到内置栅格底图。
 - 纸色底图由高德自定义样式二进制提供：把控制台导出的 `style.data` / `style_extra.data` 放到 `assets/amap/` 并在 `pubspec.yaml` 声明；没有这两个文件时使用 SDK 默认样式，不会崩溃。
+
+### 定位源试点（可选）
+
+默认始终使用系统定位（`geolocator`）。高德定位只作为试点源，用来对照城市峡谷、树荫下的轨迹连续性：
+
+```bash
+tool/run_local.sh --dart-define=LOCATION_PROVIDER=amap
+# 或者
+fvm flutter run --dart-define=LOCATION_PROVIDER=amap
+```
+
+debug 构建还可以在「设置 → 调试 → 定位源」里临时切换；切换后从**下一次开始或恢复记录**生效，记录 / 暂停中按钮不可点。release 构建不显示该入口，也会忽略已存的调试值。
+
+- 高德定位复用上面「地图 Key」里的 Android / iOS 平台 Key；缺 Key 时自动回落到系统定位，并在设置页显示原因。
+- 高德返回 GCJ-02，接入层立即转回 WGS-84；落盘、统计、备份与 GPX 导出仍是同一口径。
+- 两个源共用 50 米精度门槛：基站级定位点不落盘、不参与距离 / 爬升 / 速度，也不会误报「信号弱」。
+- Android 上高德插件不自带前台服务，记录期间由应用自己的定位前台服务保活，熄屏后定位回调不被冻结；iOS 暂未接入。
+- 回滚：去掉 `LOCATION_PROVIDER=amap` 构建参数即可；debug 构建也可把「定位源」切回系统定位。
 
 ### Android 说明
 
