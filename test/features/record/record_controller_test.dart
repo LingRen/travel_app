@@ -686,6 +686,31 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('暂停期间不重建定位流，也不标信号弱', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await rideOneSecond(tester, lat: 31.0);
+
+    controller.pause();
+    await tester.pump();
+    final int listensAtPause = location.fixListenCalls;
+
+    // 暂停时用户可能在补给、拍照，几十秒没有新点是正常的，不该重建订阅或提示。
+    clockMs += 30000;
+    await tester.pump(const Duration(seconds: 30));
+
+    expect(location.fixListenCalls, listensAtPause);
+    expect(container.read(recordControllerProvider).gpsWeak, isFalse);
+
+    controller.resume();
+    await rideOneSecond(tester, lat: 31.0002);
+    expect(location.fixListenCalls, 1);
+    container.dispose();
+  });
+
   testWidgets('信号丢失与恢复各播报一次，不重复刷屏', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller = container.read(

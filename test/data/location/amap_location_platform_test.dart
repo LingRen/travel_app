@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cycling_app/data/location/amap_location_platform.dart';
+import 'package:cycling_app/data/location/background_keep_alive.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/domain/analysis/gcj02.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +56,18 @@ class FakeAmapSdk implements AmapLocationSdk {
 
   @override
   void destroy() => calls.add('destroy');
+}
+
+/// 记录前台服务在测试里的替身：只记启停次数。
+class FakeBackgroundKeepAlive implements BackgroundKeepAlive {
+  int startCalls = 0;
+  int stopCalls = 0;
+
+  @override
+  Future<void> start() async => startCalls++;
+
+  @override
+  Future<void> stop() async => stopCalls++;
 }
 
 /// 只用于验证回退与权限透传的假系统平台。
@@ -192,10 +205,12 @@ void main() {
   group('AmapLocationPlatform', () {
     late FakeAmapSdk sdk;
     late FakeFallbackPlatform fallback;
+    late FakeBackgroundKeepAlive keepAlive;
 
     setUp(() {
       sdk = FakeAmapSdk();
       fallback = FakeFallbackPlatform();
+      keepAlive = FakeBackgroundKeepAlive();
     });
 
     AmapLocationPlatform buildPlatform() => AmapLocationPlatform(
@@ -203,6 +218,7 @@ void main() {
       apiKeyIos: 'ios-key',
       sdk: sdk,
       fallback: fallback,
+      keepAlive: keepAlive,
       previewTimeout: const Duration(milliseconds: 50),
     );
 
@@ -227,6 +243,8 @@ void main() {
       ]);
       expect(sdk.lastOnceLocation, isFalse);
       expect(position.latitude, isNot(closeTo(30.57854, 1e-9)));
+      // 高德没有自带前台服务：连续定位期间必须拉起应用侧服务，熄屏后才不被冻结。
+      expect(keepAlive.startCalls, 1);
     });
 
     test('订阅取消时停止高德定位，避免后台继续耗电', () async {
@@ -242,6 +260,7 @@ void main() {
       await subscription.cancel();
 
       expect(sdk.stopCalls, 1);
+      expect(keepAlive.stopCalls, 1);
     });
 
     test('一次定位成功时直接用高德，不碰系统定位', () async {

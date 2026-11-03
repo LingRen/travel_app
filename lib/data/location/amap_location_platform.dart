@@ -9,6 +9,7 @@ import 'package:amap_flutter_location_plus/amap_location_option.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../domain/analysis/gcj02.dart';
+import 'background_keep_alive.dart';
 import 'location_service.dart';
 
 /// 高德定位 SDK 的最小抽象。
@@ -152,17 +153,22 @@ class AmapLocationPlatform implements LocationPlatform {
     required String apiKeyIos,
     AmapLocationSdk? sdk,
     LocationPlatform fallback = const GeolocatorLocationPlatform(),
+    BackgroundKeepAlive? keepAlive,
     Duration previewTimeout = const Duration(seconds: 3),
   }) : _apiKeyAndroid = apiKeyAndroid,
        _apiKeyIos = apiKeyIos,
        _sdk = sdk ?? AmapFlutterLocationSdk(),
        _fallback = fallback,
+       _keepAlive = keepAlive ?? defaultBackgroundKeepAlive(),
        _previewTimeout = previewTimeout;
 
   final String _apiKeyAndroid;
   final String _apiKeyIos;
   final AmapLocationSdk _sdk;
   final LocationPlatform _fallback;
+
+  /// Android 前台服务；熄屏后靠它保住进程，iPhone 上是空实现。
+  final BackgroundKeepAlive _keepAlive;
 
   /// 一次定位的超时。超过就回退系统定位，不让待机页一直空着。
   final Duration _previewTimeout;
@@ -203,6 +209,8 @@ class AmapLocationPlatform implements LocationPlatform {
     _ensureInitialized();
     _sdk.configure(onceLocation: false);
     _sdk.start();
+    // 前台服务启动失败不影响定位本身（例如通知权限被拒），静默降级。
+    unawaited(_keepAlive.start().catchError((Object _) {}));
 
     late StreamController<Position> controller;
     late StreamSubscription<Map<String, Object>> subscription;
@@ -210,6 +218,7 @@ class AmapLocationPlatform implements LocationPlatform {
       onCancel: () async {
         await subscription.cancel();
         _sdk.stop();
+        await _keepAlive.stop().catchError((Object _) {});
       },
     );
     subscription = _sdk.events.listen((Map<String, Object> event) {

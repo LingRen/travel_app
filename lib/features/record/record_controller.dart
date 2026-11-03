@@ -905,6 +905,9 @@ class RecordController extends Notifier<RecordState> {
 
   bool _isGpsWeak() {
     if (_session == null || _lastFixMs == 0) return false;
+    // 暂停期间没有新定位是正常的（补给、拍照），不标记信号弱；恢复时会重置
+    // 「多久没拿到点」的计时，见 [resume]。
+    if (state.phase != RecordingPhase.recording) return false;
     return _now() - _lastFixMs > kGpsGapMs;
   }
 
