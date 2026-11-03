@@ -1195,6 +1195,31 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('结束记录取消旧定位流，重置后再次开始建立新订阅', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+
+    await controller.start();
+    await tester.pump();
+    expect(location.fixListenCalls, 1);
+
+    await controller.finish();
+    controller.reset();
+    await tester.pump();
+
+    // 切换定位源发生在两次记录之间：providers_test 已验证选择变化会重建
+    // locationServiceProvider；这里确认旧会话的订阅已随结束释放，下一次开始
+    // 重新订阅，而不是复用已经 stop 的旧流。
+    await controller.start();
+    await tester.pump();
+    expect(location.fixListenCalls, 2);
+    container.dispose();
+  });
+
   // 平台侧的定位回调偶尔「假死」：服务与权限都正常，就是不再送新点。等到
   // 用户发现轨迹停了，缺口已经几十秒、上百米。看门狗在 15 秒没有新点时重建
   // 一次订阅，把这种假死拉回来。

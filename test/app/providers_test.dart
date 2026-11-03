@@ -3,6 +3,7 @@ import 'package:cycling_app/data/ble/ble_scanner.dart';
 import 'package:cycling_app/data/db/database.dart';
 import 'package:cycling_app/data/db/track_point_dao.dart';
 import 'package:cycling_app/data/db/workout_dao.dart';
+import 'package:cycling_app/data/location/location_provider.dart';
 import 'package:cycling_app/data/location/location_service.dart';
 import 'package:cycling_app/data/settings_repository.dart';
 import 'package:cycling_app/data/workout_repository.dart';
@@ -162,6 +163,40 @@ void main() {
   test('locationServiceProvider / bleScannerProvider 返回生产实现', () {
     expect(container.read(locationServiceProvider), isA<LocationService>());
     expect(container.read(bleScannerProvider), isA<BleScanner>());
+  });
+
+  test('切换定位源后 locationServiceProvider 重建，下一次开始用新源', () async {
+    LocationProviderSelection selection = const LocationProviderSelection(
+      kind: LocationProviderKind.system,
+    );
+    final ProviderContainer switching = ProviderContainer(
+      overrides: <Override>[
+        databaseProvider.overrideWithValue(db),
+        locationProviderSelectionProvider.overrideWith(
+          (Ref ref) async => selection,
+        ),
+      ],
+    );
+    addTearDown(switching.dispose);
+    final ProviderSubscription<LocationService> subscription = switching.listen(
+      locationServiceProvider,
+      (LocationService? _, LocationService _) {},
+    );
+
+    await switching.read(locationProviderSelectionProvider.future);
+    final LocationService before = switching.read(locationServiceProvider);
+
+    selection = const LocationProviderSelection(
+      kind: LocationProviderKind.amap,
+    );
+    switching.invalidate(locationProviderSelectionProvider);
+    await switching.read(locationProviderSelectionProvider.future);
+    final LocationService after = switching.read(locationServiceProvider);
+
+    // 记录 controller 每次 start 都 ref.read 这个 provider，换实例即代表下一次
+    // 开始 / 恢复会拿到新源；旧的定位流订阅由 finish 负责取消。
+    expect(identical(before, after), isFalse);
+    subscription.close();
   });
 
   test('仓储 provider 是长生命周期单例，不会每次读都新建', () {

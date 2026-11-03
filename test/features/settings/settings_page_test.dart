@@ -15,13 +15,21 @@ import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/features/map/map_backend.dart';
+import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/settings/backup_section.dart';
 import 'package:cycling_app/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _ActiveRecordController extends RecordController {
+  @override
+  RecordState build() =>
+      const RecordState(phase: RecordingPhase.recording, foreground: true);
+}
 
 const AppSettings _settings = AppSettings(
   maxHeartRate: 190,
@@ -210,6 +218,7 @@ void main() {
   Widget wrap({
     AppSettings current = _settings,
     MapBackend backend = MapBackend.legacy,
+    List<Override> extraOverrides = const <Override>[],
   }) => ProviderScope(
     overrides: <Override>[
       settingsRepositoryProvider.overrideWithValue(settings),
@@ -222,6 +231,7 @@ void main() {
       ),
       // 测试环境按无 Key 处理；需要时显式覆盖成原生后端。
       mapBackendProvider.overrideWithValue(backend),
+      ...extraOverrides,
     ],
     child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
   );
@@ -230,11 +240,14 @@ void main() {
     WidgetTester tester, {
     AppSettings current = _settings,
     MapBackend backend = MapBackend.legacy,
+    List<Override> extraOverrides = const <Override>[],
   }) async {
     tester.view.physicalSize = const Size(800, 3200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(wrap(current: current, backend: backend));
+    await tester.pumpWidget(
+      wrap(current: current, backend: backend, extraOverrides: extraOverrides),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -563,5 +576,39 @@ void main() {
     }
     // debug 构建下有调试工具；release 由 kDebugMode 门控（见源码）。
     expect(find.text('调试（仅 debug 构建）'), findsOneWidget);
+  });
+
+  testWidgets('调试区显示定位源，切换后写库并提示下一次生效', (
+    WidgetTester tester,
+  ) async {
+    await pumpSettings(tester);
+
+    expect(find.byKey(const Key('settings-location-provider')), findsOneWidget);
+    expect(find.text('定位源：系统定位'), findsOneWidget);
+
+    await openRow(tester, 'settings-location-provider');
+    expect(find.text('影响之后的定位采样；记录 / 暂停中切换无效'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('location-provider-amap')));
+    await tester.pumpAndSettle();
+
+    expect(settings.locationProviderDebugValue, 'amap');
+    expect(find.textContaining('下一次开始记录生效'), findsOneWidget);
+  });
+
+  testWidgets('记录中定位源按钮不可点，避免同一条轨迹混用坐标系', (
+    WidgetTester tester,
+  ) async {
+    await pumpSettings(
+      tester,
+      extraOverrides: <Override>[
+        recordControllerProvider.overrideWith(_ActiveRecordController.new),
+      ],
+    );
+
+    final OutlinedButton button = tester.widget<OutlinedButton>(
+      find.byKey(const Key('settings-location-provider')),
+    );
+    expect(button.onPressed, isNull);
   });
 }

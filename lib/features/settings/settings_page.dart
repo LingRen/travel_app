@@ -9,11 +9,13 @@ import '../../app/ui/paper_sheet.dart';
 import '../../core/format.dart';
 import '../../data/ble/ble_scanner.dart';
 import '../../data/ble/sensor_monitor.dart';
+import '../../data/location/location_provider.dart';
 import '../../data/mock_ride_seeder.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
 import '../map/map_backend.dart';
 import '../record/device_picker_sheet.dart';
+import '../record/record_controller.dart';
 import 'backup_section.dart';
 import 'settings_providers.dart';
 
@@ -854,6 +856,14 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
 
   @override
   Widget build(BuildContext context) {
+    final RecordState record = ref.watch(recordControllerProvider);
+    final LocationProviderSelection? selection =
+        ref.watch(locationProviderSelectionProvider).value;
+    final LocationProviderKind provider =
+        selection?.kind ?? LocationProviderKind.system;
+    final String providerLabel = selection?.fallbackReason == null
+        ? provider.label
+        : '${provider.label}（${selection!.fallbackReason}）';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -868,6 +878,16 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
             '铺 $_seedCount 条模拟记录，跨最近两个半月，'
             '用来检查历史页、统计页的排版与曲线。',
             style: kMutedTextStyle.copyWith(fontSize: 12),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
+          child: OutlinedButton(
+            key: const Key('settings-location-provider'),
+            // 记录 / 暂停中不允许换源：换源只在开始或恢复时生效，中途换会让
+            // 同一条轨迹混用两种坐标系。
+            onPressed: _busy || record.isActive ? null : _pickLocationProvider,
+            child: Text('定位源：$providerLabel'),
           ),
         ),
         Padding(
@@ -903,6 +923,41 @@ class _DebugSectionState extends ConsumerState<_DebugSection> {
           ),
       ],
     );
+  }
+
+  /// 只在 debug 构建出现：切换试点定位源，下一次开始 / 恢复记录时生效。
+  Future<void> _pickLocationProvider() async {
+    final LocationProviderKind current =
+        ref.read(locationProviderSelectionProvider).value?.kind ??
+        LocationProviderKind.system;
+    final LocationProviderKind? chosen =
+        await showPaperSheet<LocationProviderKind>(
+          context: context,
+          builder: (BuildContext sheetContext) => PaperSheet(
+            title: '定位源',
+            subtitle: '影响之后的定位采样；记录 / 暂停中切换无效',
+            onClose: () => Navigator.of(sheetContext).pop(),
+            child: Column(
+              children: <Widget>[
+                for (final LocationProviderKind kind
+                    in LocationProviderKind.values)
+                  _ChoiceRow(
+                    key: Key('location-provider-${kind.dbValue}'),
+                    label: kind.label,
+                    selected: kind == current,
+                    onTap: () => Navigator.of(sheetContext).pop(kind),
+                  ),
+              ],
+            ),
+          ),
+        );
+    if (!mounted || chosen == null || chosen == current) return;
+
+    await ref
+        .read(settingsRepositoryProvider)
+        .saveLocationProviderDebug(chosen.dbValue);
+    ref.invalidate(locationProviderSelectionProvider);
+    _setMessage('定位源已切到${chosen.label}，下一次开始记录生效');
   }
 
   Future<void> _seed() async {

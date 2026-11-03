@@ -2,9 +2,9 @@
 
 ## Status
 - Total Tasks: 33
-- Completed: 13
+- Completed: 24
 - In Progress: 1
-- Pending: 19
+- Pending: 8
 
 ---
 
@@ -62,21 +62,29 @@
 > 读 `plan.md` Task 4-5 与 `specs/recording/spec.md`、`specs/settings/spec.md`。
 
 ### Tasks
-- [ ] 3.1 写 `test/data/location/location_service_test.dart`：800 m 点被丢弃、8 m 点通过
+- [x] 3.1 写 `test/data/location/location_service_test.dart`：800 m 点被丢弃、8 m 点通过
   - Spec: `### Requirement: 差精度定位不进入记录` → `#### Scenario: 基站级定位`、`#### Scenario: 精度恢复`
-- [ ] 3.2 在 `lib/domain/analysis/constants.dart` 增加 `kMaxAcceptedAccuracyM = 50.0`
-- [ ] 3.3 在 `LocationService.fixes()` 共享出口应用精度过滤
-- [ ] 3.4 新增 `lib/data/location/amap_location_platform.dart`：初始化、流映射、逆变换、销毁
-- [ ] 3.5 写 `test/data/location/amap_location_platform_test.dart`：字段映射（速度 -1、负朝向）与坐标口径
+  - 另补 50 m 边界与「只有差精度点时不输出」两条
+- [x] 3.2 在 `lib/domain/analysis/constants.dart` 增加 `kMaxAcceptedAccuracyM = 50.0`
+- [x] 3.3 在 `LocationService.fixes()` 共享出口应用精度过滤
+  - 精度为空同样丢弃；被丢弃的点不落盘、不参与距离 / 爬升 / 速度、不刷新信号状态
+- [x] 3.4 新增 `lib/data/location/amap_location_platform.dart`：初始化、流映射、逆变换、销毁
+  - 插件收发抽成 `AmapLocationSdk`；生产适配器把单订阅事件流包成广播流，支持看门狗重建
+- [x] 3.5 写 `test/data/location/amap_location_platform_test.dart`：字段映射（速度 -1、负朝向）与坐标口径
   - Spec: `### Requirement: 高德定位结果归一为 WGS-84` → `#### Scenario: 导出 GPX`
-- [ ] 3.6 `quickPreviewFix` 高德失败时回退系统一次，不阻塞待机页
-- [ ] 3.7 写 `test/features/settings/settings_page_test.dart`：debug 出现定位源行、release 不出现
+  - 覆盖：GCJ→WGS 往返 ≤ 2 m、errorCode 事件丢弃、缺精度 / 经纬度丢弃、locationTime 解析、订阅取消即 stop
+- [x] 3.6 `quickPreviewFix` 高德失败时回退系统一次，不阻塞待机页
+  - 实现位置：`AmapLocationPlatform.getCurrentPosition` 3 秒超时后回退系统定位
+- [x] 3.7 写 `test/features/settings/settings_page_test.dart`：debug 出现定位源行、release 不出现
   - Spec: `### Requirement: 调试工具只在调试构建出现` → 两个 Scenario
-- [ ] 3.8 在设置页 `_DebugSection` 增加定位源行，记录中 / 暂停时不可点
+  - release 由 `kDebugMode` 门控整个调试区；测试补切换写库与记录中禁用两条
+- [x] 3.8 在设置页 `_DebugSection` 增加定位源行，记录中 / 暂停时不可点
   - Spec: `### Requirement: 定位源切换不改变记录状态语义` → `#### Scenario: 记录中禁止切换`
-- [ ] 3.9 写 `test/features/record/record_controller_test.dart`：切换取消旧流、看门狗重置
+- [x] 3.9 写 `test/features/record/record_controller_test.dart`：切换取消旧流、看门狗重置
   - Spec: `### Requirement: 试点源保持后台持续记录与看门狗` → `#### Scenario: 定位回调假死`
-- [ ] 3.10 运行相关测试与 `fvm flutter analyze`
+  - 新增「结束取消旧流、重置后再开始重新订阅」；切换重建由 `providers_test` 覆盖；看门狗重建用例原已存在
+- [x] 3.10 运行相关测试与 `fvm flutter analyze`
+  - 结果：`flutter analyze` 无问题；全量 `flutter test` 899 条全过
 - [ ] 3.11 提交：`feat(location-acquisition): add amap platform and accuracy gate` 与 debug 开关提交
 
 ### Exit Gate
@@ -112,9 +120,9 @@
 | Phase | Tasks | Completed | Status |
 |-------|-------|-----------|--------|
 | Phase 1 | 7 | 7 | COMPLETE |
-| Phase 2 | 7 | 6 | IN_PROGRESS |
-| Phase 3 | 11 | 0 | PENDING |
+| Phase 2 | 7 | 7 | COMPLETE |
+| Phase 3 | 11 | 10 | IN_PROGRESS |
 | Phase 4 | 8 | 0 | PENDING |
-| **Total** | **33** | **13** | **39%** |
+| **Total** | **33** | **24** | **73%** |
 
 **Status values:** `PENDING` → `IN_PROGRESS` → `COMPLETE`

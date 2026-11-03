@@ -14,6 +14,7 @@ import '../data/db/workout_dao.dart';
 import '../data/export/backup_io.dart';
 import '../data/export/backup_store.dart';
 import '../data/geocode/place_service.dart';
+import '../data/location/amap_location_platform.dart';
 import '../data/location/location_provider.dart';
 import '../data/location/location_service.dart';
 import '../data/sensor_pairing.dart';
@@ -86,11 +87,20 @@ locationProviderSelectionProvider = FutureProvider<LocationProviderSelection>(
 
 final Provider<LocationService> locationServiceProvider =
     Provider<LocationService>((Ref ref) {
-      // 先订阅选择结果：切换定位源后 invalidate 选择 provider，本 provider 随之
-      // 重建，下一次开始 / 恢复记录就能取到新源。高德平台实现随 Task 4 接入，
-      // 接入前仍构造系统定位，保证选择后不会崩、行为与升级前一致。
-      ref.watch(locationProviderSelectionProvider);
-      return const LocationService();
+      final LocationProviderSelection selection =
+          ref.watch(locationProviderSelectionProvider).value ??
+          const LocationProviderSelection(kind: LocationProviderKind.system);
+      switch (selection.kind) {
+        case LocationProviderKind.system:
+          return const LocationService();
+        case LocationProviderKind.amap:
+          return LocationService(
+            platform: AmapLocationPlatform(
+              apiKeyAndroid: kAmapMapKeyAndroid,
+              apiKeyIos: kAmapMapKeyIos,
+            ),
+          );
+      }
     });
 
 /// 当前底图后端。启动时按 Key 与覆盖值计算一次，测试可 override 为 legacy。
