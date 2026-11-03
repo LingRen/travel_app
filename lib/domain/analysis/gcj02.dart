@@ -4,7 +4,9 @@
 /// 偏移数百米。本文件只服务**显示**：落盘的轨迹点与导出的 GPX 一律保持
 /// WGS-84 原始坐标，否则导出给第三方平台的数据会带上偏移。
 ///
-/// 反解（GCJ-02 → WGS-84）本计划不需要，不做，避免无用代码。
+/// 正变换服务**显示**，逆变换 [gcj02ToWgs84] 服务**高德定位**：高德定位 SDK
+/// 直接输出 GCJ-02，必须在接入层转回 WGS-84，才能与历史轨迹、GPX 和备份
+/// 保持同一口径。
 library;
 
 import 'dart:math' as math;
@@ -79,6 +81,41 @@ bool isOutOfChina(double lat, double lon) =>
       (dLon * 180.0) / (_axis / sqrtMagic * _cos(radLat) * _pi);
 
   return (lat: lat + correctedLat, lon: lon + correctedLon);
+}
+
+/// 逆变换的最大迭代次数。每轮把正变换的残差减回去，通常 2~3 轮即可收敛。
+const int _inverseMaxIterations = 5;
+
+/// 逆变换的收敛阈值（度）。1e-7 度约 1 厘米，远小于定位精度。
+const double _inverseToleranceDeg = 1e-7;
+
+/// 把 GCJ-02 经纬度转回 WGS-84。
+///
+/// 高德定位 SDK 只输出 GCJ-02；落盘、统计与 GPX 必须是 WGS-84，因此在接入层
+/// 调用本函数。正变换没有解析反函数，用迭代逼近：以 GCJ 点为初值，反复把
+/// 「正变换后的偏差」减回去。[_inverseMaxIterations] 轮或误差小于
+/// [_inverseToleranceDeg] 即停止。
+///
+/// 境外点、非有限值原样返回：高德 SDK 在境外也可能给出未偏移的坐标，
+/// 此时再转一次会把点凭空挪位。
+({double lat, double lon}) gcj02ToWgs84(double lat, double lon) {
+  if (!lat.isFinite || !lon.isFinite) return (lat: lat, lon: lon);
+  if (isOutOfChina(lat, lon)) return (lat: lat, lon: lon);
+
+  double wgsLat = lat;
+  double wgsLon = lon;
+  for (int i = 0; i < _inverseMaxIterations; i++) {
+    final ({double lat, double lon}) approx = wgs84ToGcj02(wgsLat, wgsLon);
+    final double dLat = lat - approx.lat;
+    final double dLon = lon - approx.lon;
+    wgsLat += dLat;
+    wgsLon += dLon;
+    if (dLat.abs() < _inverseToleranceDeg &&
+        dLon.abs() < _inverseToleranceDeg) {
+      break;
+    }
+  }
+  return (lat: wgsLat, lon: wgsLon);
 }
 
 double _transformLat(double x, double y) {
