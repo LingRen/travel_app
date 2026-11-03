@@ -18,4 +18,22 @@ if [[ -z "$KEY" || "$KEY" == "YOUR_AMAP_WEB_KEY" ]]; then
   exit 1
 fi
 
-exec fvm flutter run --dart-define=AMAP_WEB_KEY="$KEY" "$@"
+EXTRA_ARGS=()
+
+ANDROID_KEY_FILE="config/amap_map_key_android.txt"
+if [[ -f "$ANDROID_KEY_FILE" ]]; then
+  ANDROID_KEY="$(tr -d '[:space:]' < "$ANDROID_KEY_FILE")"
+  if [[ -n "$ANDROID_KEY" && "$ANDROID_KEY" != "YOUR_AMAP_ANDROID_MAP_KEY" ]]; then
+    EXTRA_ARGS+=("--dart-define=AMAP_MAP_KEY_ANDROID=$ANDROID_KEY")
+  fi
+fi
+
+IOS_KEY_FILE="config/amap_map_key_ios.txt"
+if [[ -f "$IOS_KEY_FILE" ]]; then
+  IOS_KEY="$(tr -d '[:space:]' < "$IOS_KEY_FILE")"
+  if [[ -n "$IOS_KEY" && "$IOS_KEY" != "YOUR_AMAP_IOS_MAP_KEY" ]]; then
+    EXTRA_ARGS+=("--dart-define=AMAP_MAP_KEY_IOS=$IOS_KEY")
+  fi
+fi
+
+exec fvm flutter run --dart-define=AMAP_WEB_KEY="$KEY" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} "$@"

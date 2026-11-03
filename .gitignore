@@ -62,3 +62,6 @@ app.*.map.json
 .widget_preview/
 # 本地 API Key（高德 Web 服务）
 config/amap_key.txt
+# 本地原生地图 Key（Android / iOS 分开）
+config/amap_map_key_android.txt
+config/amap_map_key_ios.txt

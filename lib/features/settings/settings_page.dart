@@ -12,6 +12,7 @@ import '../../data/ble/sensor_monitor.dart';
 import '../../data/mock_ride_seeder.dart';
 import '../../data/sensor_pairing.dart';
 import '../../data/settings_repository.dart';
+import '../map/map_backend.dart';
 import '../record/device_picker_sheet.dart';
 import 'backup_section.dart';
 import 'settings_providers.dart';
@@ -73,11 +74,11 @@ class SettingsPage extends ConsumerWidget {
                   const _GroupHeader('传 感 器', hint: '点击配对'),
                   const _SensorSection(),
                   const _GroupHeader('地 图 与 外 观', hint: '点选即生效'),
-                  _SettingsRow(
-                    key: const Key('settings-tile'),
-                    label: '地图瓦片',
-                    value: _tileLabel(settings.mapTileUrlTemplate),
-                    onTap: () => _editTileUrl(context, ref, settings),
+                  // 底图由构建期 Key 决定，不再暴露可编辑的瓦片地址。
+                  _BasemapRow(
+                    value: ref.watch(mapBackendProvider) == MapBackend.amap
+                        ? '高德地图'
+                        : '内置栅格底图',
                   ),
                   _ThemeSection(settings: settings),
                   const _GroupHeader('数 据', hint: '仅存本机'),
@@ -154,33 +155,6 @@ class SettingsPage extends ConsumerWidget {
     await _save(ref, settings.copyWith(weightKg: double.parse(value)));
   }
 
-  Future<void> _editTileUrl(
-    BuildContext context,
-    WidgetRef ref,
-    AppSettings settings,
-  ) async {
-    final String? value = await _showTextSheet(
-      context,
-      title: '地图瓦片源',
-      helper: '高德接口失效时可换成 OSM 或自建源，无需重新发版',
-      initial: settings.mapTileUrlTemplate,
-      label: '瓦片地址',
-      keyboardType: TextInputType.url,
-      validate: (String text) {
-        if (text.isEmpty) return '瓦片源不能为空';
-        final Uri? uri = Uri.tryParse(text);
-        if (uri == null ||
-            (uri.scheme != 'http' && uri.scheme != 'https') ||
-            uri.host.isEmpty) {
-          return '需要是 http(s) 地址';
-        }
-        return null;
-      },
-    );
-    if (value == null) return;
-    await _save(ref, settings.copyWith(mapTileUrlTemplate: value));
-  }
-
   Future<void> _editUnit(
     BuildContext context,
     WidgetRef ref,
@@ -249,12 +223,6 @@ class SettingsPage extends ConsumerWidget {
 
   static String _unitLabel(DistanceUnit unit) =>
       unit == DistanceUnit.mile ? '英里' : '公里';
-
-  static String _tileLabel(String url) {
-    if (url == kDefaultMapTileUrlTemplate) return '高德 · 宣纸';
-    final Uri? uri = Uri.tryParse(url);
-    return uri != null && uri.host.isNotEmpty ? uri.host : '自定义源';
-  }
 }
 
 /// 分组标题：疏排小标题 + 右侧说明。上方不需要线——上一行的底边线已经分隔。
@@ -353,6 +321,55 @@ class _SettingsRow extends StatelessWidget {
             endIndent: kSpaceL,
             color: palette.hairline,
           ),
+      ],
+    );
+  }
+}
+
+/// 只读的底图状态行：显示当前后端，不提供地址输入。
+class _BasemapRow extends StatelessWidget {
+  const _BasemapRow({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppPalette palette = context.palette;
+    return Column(
+      children: <Widget>[
+        Padding(
+          key: const Key('settings-basemap'),
+          padding: const EdgeInsets.symmetric(
+            horizontal: kSpaceL,
+            vertical: kSpaceM,
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '底图',
+                  style: TextStyle(
+                    fontSize: kFontSubtitle,
+                    color: palette.ink,
+                  ),
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: kFontMeta,
+                  color: palette.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(
+          height: 1,
+          indent: kSpaceL,
+          endIndent: kSpaceL,
+          color: palette.hairline,
+        ),
       ],
     );
   }

@@ -98,6 +98,17 @@ void main() {
     expect((await repo.load()).accent, ThemeAccent.cinnabar);
   });
 
+  group('高德地图隐私同意', () {
+    test('首次读取是未同意', () async {
+      expect(await repo.hasAmapPrivacyConsent(), isFalse);
+    });
+
+    test('同意后可读回', () async {
+      await repo.grantAmapPrivacyConsent();
+      expect(await repo.hasAmapPrivacyConsent(), isTrue);
+    });
+  });
+
   group('上次选中的运动类型', () {
     test('首次读取是骑行', () async {
       expect((await repo.load()).lastActivityType, ActivityType.cycling);

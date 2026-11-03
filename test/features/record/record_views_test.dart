@@ -21,8 +21,10 @@ import 'package:cycling_app/domain/models/workout_summary.dart';
 import 'package:cycling_app/domain/recording/recording_session.dart';
 import 'package:cycling_app/domain/recording/ride_cue.dart';
 import 'package:cycling_app/features/activity/activity_type_sheet.dart';
+import 'package:cycling_app/features/map/map_backend.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
 import 'package:cycling_app/features/record/idle_conditions.dart';
+import 'package:cycling_app/features/record/live_route_map.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
 import 'package:cycling_app/features/record/record_page.dart';
 import 'package:flutter/material.dart';
@@ -219,9 +221,13 @@ void main() {
   /// 底部 `NavigationBar` 高度（dp），见 `theme.dart` 的 `navigationBarTheme`。
   const double navBarHeight = 64;
 
-  Widget wrap(Widget child) => MaterialApp(
-    theme: buildAppTheme(),
-    home: Scaffold(body: child),
+  /// 这些用例只关心界面，底图一律钉在 legacy：widget 测试里没有高德的
+  /// platform view，也不该因为本机配了 Key 就切到原生后端。
+  Widget wrap(Widget child) => ProviderScope(
+    overrides: <Override>[
+      mapBackendProvider.overrideWithValue(MapBackend.legacy),
+    ],
+    child: MaterialApp(theme: buildAppTheme(), home: Scaffold(body: child)),
   );
 
   /// 真机几何：360×640dp 的屏幕上，状态栏占 18dp、底部 `NavigationBar` 占 64dp，
@@ -229,17 +235,22 @@ void main() {
   ///
   /// 量「中间留了多少地图」必须用这个盒子而不是裸的 640dp：少了这两条，正文区凭空
   /// 多出 82dp，量出来的余量会比真机宽出一大截，阈值也就守不住真机。
-  Widget wrapDevice(Widget child) => MaterialApp(
-    theme: buildAppTheme(),
-    home: Scaffold(
-      body: MediaQuery(
-        data: const MediaQueryData(
-          size: Size(360, 640),
-          padding: EdgeInsets.only(top: statusBarHeight),
+  Widget wrapDevice(Widget child) => ProviderScope(
+    overrides: <Override>[
+      mapBackendProvider.overrideWithValue(MapBackend.legacy),
+    ],
+    child: MaterialApp(
+      theme: buildAppTheme(),
+      home: Scaffold(
+        body: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(360, 640),
+            padding: EdgeInsets.only(top: statusBarHeight),
+          ),
+          child: child,
         ),
-        child: child,
+        bottomNavigationBar: const SizedBox(height: navBarHeight),
       ),
-      bottomNavigationBar: const SizedBox(height: navBarHeight),
     ),
   );
 
@@ -1448,6 +1459,75 @@ void main() {
     });
   });
 
+  group('原生底图后端', () {
+    /// 原生后端不创建平台视图：底图换成一个纯 Flutter 色块，只验证上层选择
+    /// 与覆盖层绘制，不依赖设备上的高德 SDK。
+    Widget nativeWrap(Widget child, {bool consent = true}) => ProviderScope(
+      overrides: <Override>[
+        mapBackendProvider.overrideWithValue(MapBackend.amap),
+        mapPrivacyConsentProvider.overrideWith((Ref ref) => consent),
+      ],
+      child: MaterialApp(theme: buildAppTheme(), home: Scaffold(body: child)),
+    );
+
+    const List<TrackPoint> track = <TrackPoint>[
+      TrackPoint(rideId: 1, tMs: 1000, lat: 30.0, lon: 120.0),
+      TrackPoint(rideId: 1, tMs: 2000, lat: 30.001, lon: 120.001),
+      TrackPoint(rideId: 1, tMs: 3000, lat: 30.002, lon: 120.002),
+    ];
+
+    Widget liveRouteMap({double? headingDeg, LocationFix? startPoint}) =>
+        LiveRouteMap(
+          points: track,
+          tileUrlTemplate: kDefaultMapTileUrlTemplate,
+          headingDeg: headingDeg,
+          startPoint: startPoint,
+          // 参数类型由 LiveRouteMap.amapBasemapBuilder 推断。
+          amapBasemapBuilder: (context, initialCamera, onMapCreated) =>
+              const ColoredBox(
+                key: Key('fake-amap-basemap'),
+                color: Colors.white,
+              ),
+        );
+
+    testWidgets('同意隐私后切到原生底图，轨迹与标记仍由 Flutter 覆盖层绘制', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        nativeWrap(
+          liveRouteMap(
+            headingDeg: 90,
+            startPoint: const LocationFix(tMs: 1000, lat: 30.0, lon: 120.0),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('fake-amap-basemap')), findsOneWidget);
+      expect(find.byType(FlutterMap), findsNothing);
+      // 覆盖层继续用原有的 Key：轨迹、起点、当前位置与比例尺都还在。
+      expect(find.byKey(const Key('live-map-overlay')), findsOneWidget);
+      expect(find.byKey(const Key('map-heading-arrow')), findsOneWidget);
+      expect(find.byKey(const Key('map-start-marker')), findsOneWidget);
+      expect(find.byKey(const Key('map-north')), findsOneWidget);
+      expect(find.byKey(const Key('map-scale-bar')), findsOneWidget);
+    });
+
+    testWidgets('未同意隐私时仍走 legacy 底图，并弹一次说明', (WidgetTester tester) async {
+      await tester.pumpWidget(nativeWrap(liveRouteMap(), consent: false));
+      await tester.pumpAndSettle();
+
+      // 弹窗出现前底图已经是 legacy 的 FlutterMap：记录不受隐私同意阻塞。
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.byKey(const Key('fake-amap-basemap')), findsNothing);
+      expect(find.byKey(const Key('amap-privacy-dialog')), findsOneWidget);
+
+      // 选「暂不使用」后弹窗收起，仍停在 legacy，不落库也不再重复询问。
+      await tester.tap(find.byKey(const Key('amap-privacy-decline')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('amap-privacy-dialog')), findsNothing);
+      expect(find.byType(FlutterMap), findsOneWidget);
+    });
+  });
+
   group('速度刻度尺', () {
     // 刻度尺是自绘的 `CustomPaint`，没有语义节点也拿不到画出来的像素，
     // 所以把「当前速度换算成多少格」抽成纯函数再断言——这是项目里自绘画笔
@@ -1510,6 +1590,8 @@ void main() {
             weatherServiceProvider.overrideWithValue(
               weatherService ?? _FakeWeatherService(),
             ),
+            // 记录页测试不创建高德 platform view，底图固定走 legacy。
+            mapBackendProvider.overrideWithValue(MapBackend.legacy),
           ],
           child: MaterialApp(theme: buildAppTheme(), home: const RecordPage()),
         ),

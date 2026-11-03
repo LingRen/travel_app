@@ -1,30 +1,50 @@
-import 'dart:math' as math;
+import 'dart:async';
 
+import 'package:amap_map/amap_map.dart' as amap;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 // latlong2 也导出了同名 `Path`，这里要的是 dart:ui 的绘制路径，藏掉前者。
 import 'package:latlong2/latlong.dart' hide Path;
+// amap_map 的经纬度类型来自 x_amap_base；用前缀导入避免与 latlong2 的 LatLng 重名。
+import 'package:x_amap_base/x_amap_base.dart' as amap_base;
 
+import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../domain/analysis/gcj02.dart';
 import '../../domain/analysis/heading.dart';
 import '../../domain/analysis/route_segments.dart';
 import '../../domain/models/location_fix.dart';
 import '../../domain/models/track_point.dart';
+import '../map/amap_basemap.dart';
+import '../map/map_backend.dart';
+import '../map/map_overlays.dart';
+import '../map/map_projection.dart';
+import '../privacy/privacy_consent.dart';
+
+/// 构造原生底图。默认使用 [AmapBasemap]；widget 测试可换成纯 Flutter 占位，
+/// 避免在测试环境创建 platform view。
+typedef AmapBasemapBuilder =
+    Widget Function(
+      BuildContext context,
+      amap.CameraPosition initialCamera,
+      ValueChanged<amap.AMapController> onMapCreated,
+    );
+
+/// 高德 SDK 的经纬度类型别名，避免与 flutter_map 的 `LatLng` 混淆。
+typedef AmapLatLng = amap_base.LatLng;
 
 /// 骑行界面里的实时轨迹地图。见设计文档 9.4。
 ///
-/// 与详情页的 [RouteMap] 是两回事，所以没有复用它：
-///   - 详情页的地图是一次性画完的，用 `initialCameraFit` 定死取景就够；
-///   - 这里轨迹在骑行中一直长，必须自己拿 [MapController] 跟着当前位置走，
-///     否则骑出去一会儿箭头就出了画面（见 [_LiveRouteMapState._syncCamera]）。
+/// 对外仍是「一块跟随当前位置的地图」，内部按 `mapBackendProvider` 选择：
+///   - [MapBackend.amap]：高德原生底图 + Flutter 覆盖层（轨迹、标记、比例尺）；
+///   - [MapBackend.legacy]：原有 `flutter_map` 栅格实现，无 Key 或排障时使用。
 ///
-/// 复用它的**纯部分**：`buildRouteSegments` 的分段着色与断点规则、`TileLayer` /
-/// `PolylineLayer` 的画法、坐标转换口径（跟随瓦片源决定是否转 GCJ-02）。
+/// 原生底图必须先取得隐私同意（[AmapPrivacyGate]），未同意时继续用 legacy。
 ///
 /// 不可交互：骑行中它不该吃掉手指，页面上的按钮才是手势目标。地图现在铺满整页
 /// （[height] 为 null），读数与按钮浮在它上方（见 10.1）。
-class LiveRouteMap extends StatefulWidget {
+class LiveRouteMap extends ConsumerWidget {
   const LiveRouteMap({
     required this.points,
     required this.tileUrlTemplate,
@@ -36,6 +56,7 @@ class LiveRouteMap extends StatefulWidget {
     this.height,
     this.placeholderAlignment = Alignment.center,
     this.showPlaceholder = true,
+    this.amapBasemapBuilder,
     super.key,
   });
 
@@ -61,6 +82,7 @@ class LiveRouteMap extends StatefulWidget {
   final double? headingDeg;
 
   /// 瓦片源，来自设置（设计文档 9.1 的对冲措施：接口失效时可换源）。
+  /// 仅在 legacy 后端使用；原生后端始终是 GCJ-02 高德底图。
   final String tileUrlTemplate;
 
   final List<String> subdomains;
@@ -76,11 +98,96 @@ class LiveRouteMap extends StatefulWidget {
   /// 避免同一句话出现两次；地图底仍铺纸色。
   final bool showPlaceholder;
 
+  /// 测试用的原生底图替身。为 null 时使用真实的高德平台视图。
+  final AmapBasemapBuilder? amapBasemapBuilder;
+
   @override
-  State<LiveRouteMap> createState() => _LiveRouteMapState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool hasFix =
+        previewFix?.hasPosition == true ||
+        points.any((TrackPoint p) => p.hasPosition);
+    final MapBackend backend = ref.watch(mapBackendProvider);
+
+    final Widget body;
+    if (!hasFix) {
+      body = _placeholder(context);
+    } else {
+      final _LegacyBody legacy = _LegacyBody(
+        points: points,
+        tileUrlTemplate: tileUrlTemplate,
+        breakIndexes: breakIndexes,
+        previewFix: previewFix,
+        startPoint: startPoint,
+        headingDeg: headingDeg,
+        subdomains: subdomains,
+      );
+      body = backend == MapBackend.amap
+          ? AmapPrivacyGate(
+              fallback: legacy,
+              child: _AmapBody(
+                points: points,
+                breakIndexes: breakIndexes,
+                previewFix: previewFix,
+                startPoint: startPoint,
+                headingDeg: headingDeg,
+                basemapBuilder: amapBasemapBuilder ?? _defaultBasemap,
+              ),
+            )
+          : legacy;
+    }
+
+    return SizedBox(
+      key: const Key('live-route-map'),
+      height: height,
+      child: body,
+    );
+  }
+
+  Widget _placeholder(BuildContext context) => showPlaceholder
+      ? Align(
+          alignment: placeholderAlignment,
+          child: Text(
+            '等待定位…',
+            style: kLabelTextStyle.copyWith(color: context.palette.muted),
+          ),
+        )
+      : ColoredBox(color: context.palette.paper);
+
+  Widget _defaultBasemap(
+    BuildContext context,
+    amap.CameraPosition initialCamera,
+    ValueChanged<amap.AMapController> onMapCreated,
+  ) => AmapBasemap(
+    initialCamera: initialCamera,
+    onMapCreated: onMapCreated,
+  );
 }
 
-class _LiveRouteMapState extends State<LiveRouteMap>
+/// legacy 栅格底图。原有 `flutter_map` 实现原样保留：无 Key、测试与排障都走这里。
+class _LegacyBody extends StatefulWidget {
+  const _LegacyBody({
+    required this.points,
+    required this.tileUrlTemplate,
+    this.breakIndexes = const <int>{},
+    this.previewFix,
+    this.startPoint,
+    this.headingDeg,
+    this.subdomains = const <String>[],
+  });
+
+  final List<TrackPoint> points;
+  final Set<int> breakIndexes;
+  final LocationFix? previewFix;
+  final LocationFix? startPoint;
+  final double? headingDeg;
+  final String tileUrlTemplate;
+  final List<String> subdomains;
+
+  @override
+  State<_LegacyBody> createState() => _LegacyBodyState();
+}
+
+class _LegacyBodyState extends State<_LegacyBody>
     with SingleTickerProviderStateMixin {
   final MapController _controller = MapController();
 
@@ -114,14 +221,8 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   /// [LiveRouteMap.startPoint] 转换到当前瓦片坐标系后的位置。
   LatLng? _startVertex;
 
-  /// 朝向累计转过的角度。补间必须沿最短弧累加，见 [_updateHeading]。
-  double _unwrappedDeg = 0;
-
-  /// 上一拍的朝向，用来算最短弧差。与 [_unwrappedDeg] 分开保存：后者是连续
-  /// 展开的角度，可以直接除以 360 交给 [AnimatedRotation]。
-  double? _lastHeadingDeg;
-
-  double get _headingTurns => _unwrappedDeg / 360;
+  /// 朝向累计转过的角度。补间必须沿最短弧累加。
+  final _HeadingTurns _heading = _HeadingTurns();
 
   /// 首帧取景交给 `initialCameraFit`：它在拿到尺寸之后才生效，自己调
   /// `fitCamera` 有可能赶在布局之前，算出来的缩放级别是错的。
@@ -139,7 +240,7 @@ class _LiveRouteMapState extends State<LiveRouteMap>
     _rebuild(widget.points);
     _updatePreview(widget.previewFix);
     _updateStart(widget.startPoint);
-    _updateHeading(widget.headingDeg);
+    _heading.update(widget.headingDeg);
     // 首帧就以当前位置为中心：绘制的是「我跟到哪儿了」，不是整段轨迹的全貌。
     // 没有真实点时退到粗略定位。
     final LatLng? center = _currentVertex ?? _markerPoint;
@@ -147,12 +248,12 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   }
 
   @override
-  void didUpdateWidget(LiveRouteMap oldWidget) {
+  void didUpdateWidget(_LegacyBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 朝向每秒都可能在变，但它只影响箭头，不该让折线重算。先把它接掉，
     // 下面那组「轨迹没变就早退」照旧成立。
     if (oldWidget.headingDeg != widget.headingDeg) {
-      _updateHeading(widget.headingDeg);
+      _heading.update(widget.headingDeg);
     }
     if (oldWidget.startPoint != widget.startPoint) {
       _updateStart(widget.startPoint);
@@ -212,21 +313,6 @@ class _LiveRouteMapState extends State<LiveRouteMap>
     final double? lat = fix?.lat;
     final double? lon = fix?.lon;
     _startVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
-  }
-
-  /// 把新的朝向接到连续角度上，交给 [AnimatedRotation] 补间。
-  ///
-  /// 不能直接用 `heading / 360` 当 `turns`：359° → 1° 会得到 -358°，箭头倒转
-  /// 一整圈。累计最短弧差后，同样的变化只有 +2°，箭头沿最短一侧转过去。
-  ///
-  /// 地图本身不旋转（北向上），方向只由箭头表达。
-  void _updateHeading(double? headingDeg) {
-    if (headingDeg == null) return;
-    final double? prev = _lastHeadingDeg;
-    _unwrappedDeg = prev == null
-        ? headingDeg
-        : _unwrappedDeg + shortestArcDelta(prev, headingDeg);
-    _lastHeadingDeg = headingDeg;
   }
 
   void _rebuild(List<TrackPoint> points) {
@@ -325,33 +411,16 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: const Key('live-route-map'),
-    height: widget.height,
-    child: _vertices.isEmpty && _previewVertex == null
-        ? _placeholder(context)
-        : _map(context),
-  );
-
-  Widget _placeholder(BuildContext context) => widget.showPlaceholder
-      ? Align(
-          alignment: widget.placeholderAlignment,
-          child: Text(
-            '等待定位…',
-            style: kLabelTextStyle.copyWith(color: context.palette.muted),
-          ),
-        )
-      : ColoredBox(color: context.palette.paper);
-
-  Widget _map(BuildContext context) {
+  Widget build(BuildContext context) {
     // 360×640 这类矮屏上，上下浮层把地图带压到一百来像素；指北与比例尺
     // 要再往上收一档，否则会落到主读数上。正常屏保持设计稿的中段位置。
     final bool compact = MediaQuery.sizeOf(context).height < 700;
+    final AppPalette palette = context.palette;
     return FlutterMap(
       mapController: _controller,
       options: MapOptions(
         initialCameraFit: _initialFit,
-        backgroundColor: context.palette.paper,
+        backgroundColor: palette.paper,
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.none,
         ),
@@ -366,7 +435,7 @@ class _LiveRouteMapState extends State<LiveRouteMap>
         ColorFiltered(
           key: const Key('live-map-color-filter'),
           colorFilter: ColorFilter.mode(
-            context.palette.paper.withValues(alpha: 0.16),
+            palette.paper.withValues(alpha: 0.16),
             BlendMode.srcOver,
           ),
           child: ColorFiltered(
@@ -378,9 +447,7 @@ class _LiveRouteMapState extends State<LiveRouteMap>
             ),
           ),
         ),
-        PolylineLayer<Object>(
-          polylines: _polylinesWith(context.palette.accentInk),
-        ),
+        PolylineLayer<Object>(polylines: _polylinesWith(palette.accentInk)),
         if (_startVertex != null ||
             _currentVertex != null ||
             _previewVertex != null)
@@ -391,9 +458,9 @@ class _LiveRouteMapState extends State<LiveRouteMap>
               if (_startVertex != null)
                 Marker(
                   point: _startVertex!,
-                  width: _StartRing.size,
-                  height: _StartRing.size,
-                  child: const _StartRing(),
+                  width: MapStartRing.size,
+                  height: MapStartRing.size,
+                  child: const MapStartRing(),
                 ),
               if (_currentVertex != null)
                 Marker(
@@ -401,22 +468,22 @@ class _LiveRouteMapState extends State<LiveRouteMap>
                   // 盒子要按内容给：还没建立朝向时只画 12 dp 圆点，仍按箭头盒
                   // 的 28 dp 开会被撑成一个大墨团。
                   width: widget.headingDeg == null
-                      ? _PositionDot.size
-                      : _HeadingArrow.box,
+                      ? MapPositionDot.size
+                      : MapHeadingArrow.box,
                   height: widget.headingDeg == null
-                      ? _PositionDot.size
-                      : _HeadingArrow.box,
+                      ? MapPositionDot.size
+                      : MapHeadingArrow.box,
                   // 还没建立朝向时只画圆点，不能凭空指一个方向。
                   child: widget.headingDeg == null
-                      ? const _PositionDot()
-                      : _HeadingArrow(turns: _headingTurns),
+                      ? const MapPositionDot()
+                      : MapHeadingArrow(turns: _heading.turns),
                 )
               else if (_previewVertex != null)
                 Marker(
                   point: _previewVertex!,
-                  width: _PositionDot.size,
-                  height: _PositionDot.size,
-                  child: const _PositionDot(),
+                  width: MapPositionDot.size,
+                  height: MapPositionDot.size,
+                  child: const MapPositionDot(),
                 ),
             ],
           ),
@@ -427,7 +494,7 @@ class _LiveRouteMapState extends State<LiveRouteMap>
             alignment: compact
                 ? const Alignment(0.9, -0.3)
                 : const Alignment(0.9, 0.04),
-            child: const _NorthIndicator(),
+            child: const MapNorthIndicator(),
           ),
         ),
         IgnorePointer(
@@ -435,7 +502,19 @@ class _LiveRouteMapState extends State<LiveRouteMap>
             alignment: compact
                 ? const Alignment(-0.86, -0.3)
                 : const Alignment(-0.86, 0.2),
-            child: const _MapScaleBar(),
+            // MapCamera.of 只能在地图内部读：Builder 的 context 才是
+            // FlutterMap 的后代，State 的 context 在它之上。
+            child: Builder(
+              builder: (BuildContext context) {
+                final MapCamera camera = MapCamera.of(context);
+                return MapScaleBar(
+                  metersPerPixel: MapProjection.metersPerPixelAt(
+                    lat: camera.center.latitude,
+                    zoom: camera.zoom,
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -443,208 +522,383 @@ class _LiveRouteMapState extends State<LiveRouteMap>
   }
 }
 
-/// 指北标识。地图不旋转，所以永远指北。
-class _NorthIndicator extends StatelessWidget {
-  const _NorthIndicator();
+/// 高德原生底图 + Flutter 覆盖层。
+///
+/// 覆盖层不依赖 SDK 的 Marker / Polyline：轨迹与标记继续用熟悉的 Flutter
+/// 组件绘制，测试锚点（`map-heading-arrow` 等）因此保持不变。相机跟随仍由
+/// 本组件驱动，320ms 补间与 legacy 一致。
+class _AmapBody extends StatefulWidget {
+  const _AmapBody({
+    required this.points,
+    required this.basemapBuilder,
+    this.breakIndexes = const <int>{},
+    this.previewFix,
+    this.startPoint,
+    this.headingDeg,
+  });
+
+  final List<TrackPoint> points;
+  final Set<int> breakIndexes;
+  final LocationFix? previewFix;
+  final LocationFix? startPoint;
+  final double? headingDeg;
+  final AmapBasemapBuilder basemapBuilder;
 
   @override
-  Widget build(BuildContext context) {
-    final AppPalette palette = context.palette;
-    return Container(
-      key: const Key('map-north'),
-      width: 30,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: palette.paper.withValues(alpha: 0.88),
-        border: Border.all(color: palette.hairline),
-      ),
-      child: Text(
-        '北',
-        style: kLabelTextStyle.copyWith(
-          fontSize: 11,
-          letterSpacing: 0,
-          color: palette.ink,
-        ),
+  State<_AmapBody> createState() => _AmapBodyState();
+}
+
+class _AmapBodyState extends State<_AmapBody>
+    with SingleTickerProviderStateMixin {
+  /// 原生底图始终是 GCJ-02，与 legacy 的「按瓦片源转换」不同。
+  static const bool _toGcj02 = true;
+
+  late final AnimationController _pan = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  )..addListener(_applyPan);
+
+  final _HeadingTurns _heading = _HeadingTurns();
+
+  List<RouteSegment> _segments = const <RouteSegment>[];
+  List<AmapLatLng> _vertices = const <AmapLatLng>[];
+  AmapLatLng? _previewVertex;
+  AmapLatLng? _startVertex;
+
+  /// 首帧相机。之后由 [_center] 与 320ms 补间接管。
+  late final amap.CameraPosition _initialCamera;
+
+  /// 覆盖层使用的相机中心（GCJ-02）。与原生相机保持同步。
+  AmapLatLng? _center;
+
+  double _zoom = 16;
+
+  amap.AMapController? _controller;
+  bool _mapReady = false;
+
+  AmapLatLng? _panFrom;
+  AmapLatLng? _panTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuild(widget.points);
+    _updatePreview(widget.previewFix);
+    _updateStart(widget.startPoint);
+    _heading.update(widget.headingDeg);
+    final AmapLatLng center =
+        _currentVertex ??
+        _previewVertex ??
+        // 理论上构造前已有定位；这个兜底只为避免空 target。
+        const AmapLatLng(39.909187, 116.397451);
+    _center = center;
+    _initialCamera = amap.CameraPosition(target: center, zoom: _zoom);
+  }
+
+  @override
+  void didUpdateWidget(_AmapBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.headingDeg != widget.headingDeg) {
+      _heading.update(widget.headingDeg);
+    }
+    if (oldWidget.startPoint != widget.startPoint) {
+      _updateStart(widget.startPoint);
+    }
+    if (identical(oldWidget.points, widget.points) &&
+        identical(oldWidget.breakIndexes, widget.breakIndexes) &&
+        identical(oldWidget.previewFix, widget.previewFix)) {
+      return;
+    }
+    _rebuild(widget.points);
+    _updatePreview(widget.previewFix);
+    _scheduleSyncCamera();
+  }
+
+  @override
+  void dispose() {
+    _pan.dispose();
+    super.dispose();
+  }
+
+  AmapLatLng? get _currentVertex => _vertices.isEmpty ? null : _vertices.last;
+
+  AmapLatLng _toMap(double lat, double lon) {
+    final ({double lat, double lon}) gcj = wgs84ToGcj02(lat, lon);
+    return AmapLatLng(gcj.lat, gcj.lon);
+  }
+
+  void _updatePreview(LocationFix? fix) {
+    final double? lat = fix?.lat;
+    final double? lon = fix?.lon;
+    _previewVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
+  }
+
+  void _updateStart(LocationFix? fix) {
+    final double? lat = fix?.lat;
+    final double? lon = fix?.lon;
+    _startVertex = (lat == null || lon == null) ? null : _toMap(lat, lon);
+  }
+
+  void _rebuild(List<TrackPoint> points) {
+    _segments = buildRouteSegments(
+      points,
+      toGcj02: _toGcj02,
+      breakBefore: widget.breakIndexes,
+    );
+    _vertices = <AmapLatLng>[
+      for (final RouteSegment s in _segments)
+        for (final RouteVertex v in s.vertices) AmapLatLng(v.lat, v.lon),
+    ];
+    if (_vertices.isEmpty) {
+      final List<TrackPoint> located = points
+          .where((TrackPoint p) => p.hasPosition)
+          .toList();
+      if (located.length == 1) {
+        final TrackPoint p = located.single;
+        _vertices = <AmapLatLng>[_toMap(p.lat!, p.lon!)];
+      }
+    }
+  }
+
+  void _scheduleSyncCamera() {
+    if (!_mapReady) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncCamera());
+  }
+
+  void _syncCamera() {
+    if (!mounted || !_mapReady || _vertices.isEmpty) return;
+    final AmapLatLng current = _vertices.last;
+    if (_vertices.length == 1) {
+      _zoom = 16;
+      _moveCameraNow(current);
+      return;
+    }
+    _panTo(current);
+  }
+
+  void _panTo(AmapLatLng target) {
+    if (_center == target) return;
+    _panFrom = _center;
+    _panTarget = target;
+    _pan.forward(from: 0);
+  }
+
+  void _applyPan() {
+    final AmapLatLng? from = _panFrom;
+    final AmapLatLng? to = _panTarget;
+    if (from == null || to == null) return;
+    final double t = Curves.easeOut.transform(_pan.value);
+    _moveCameraNow(
+      AmapLatLng(
+        from.latitude + (to.latitude - from.latitude) * t,
+        from.longitude + (to.longitude - from.longitude) * t,
       ),
     );
   }
-}
 
-/// 比例尺。按当前缩放与纬度把米/像素换算成一个整数距离，画一段横线。
-///
-/// 地图记录中不可交互，但「这段路有多长」仍需要一个参照；比例尺只做显示，
-/// 用 [IgnorePointer] 包住，不改变地图的手势行为。
-class _MapScaleBar extends StatelessWidget {
-  const _MapScaleBar();
+  /// 原生相机紧跟覆盖层：动画每一拍都无补间地设到当前插值点，两者不会漂移。
+  void _moveCameraNow(AmapLatLng center) {
+    _center = center;
+    final amap.AMapController? controller = _controller;
+    if (controller == null) return;
+    unawaited(
+      controller.moveCamera(
+        amap.CameraUpdate.newCameraPosition(
+          amap.CameraPosition(target: center, zoom: _zoom),
+        ),
+        animated: false,
+      ),
+    );
+  }
 
-  /// 目标横线长度（逻辑像素）。实际会取一个不超过它的 1/2/5 整十距离。
-  static const double _targetWidth = 80;
+  void _onMapCreated(amap.AMapController controller) {
+    _controller = controller;
+    _mapReady = true;
+    _scheduleSyncCamera();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).height < 700;
     final AppPalette palette = context.palette;
-    final MapCamera camera = MapCamera.of(context);
-    final double metersPerPixel = _metersPerPixel(camera);
-    final double niceMeters = _niceDistance(metersPerPixel * _targetWidth);
-    final double width = (niceMeters / metersPerPixel).clamp(24.0, 140.0);
-    final String label = niceMeters >= 1000
-        ? '${(niceMeters / 1000).toStringAsFixed(niceMeters % 1000 == 0 ? 0 : 1)} km'
-        : '${niceMeters.round()} m';
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Size size = constraints.biggest;
+        final AmapLatLng center = _center ?? _initialCamera.target;
+        final MapProjection projection = MapProjection(
+          centerLat: center.latitude,
+          centerLon: center.longitude,
+          zoom: _zoom,
+          viewportSize: size,
+        );
+        final AmapLatLng? current = _currentVertex;
+        final AmapLatLng? preview = _previewVertex;
 
-    return Column(
-      key: const Key('map-scale-bar'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: kLabelTextStyle.copyWith(
-            fontSize: 10,
-            letterSpacing: 0,
-            color: palette.ink,
+        return ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              widget.basemapBuilder(
+                context,
+                _initialCamera,
+                _onMapCreated,
+              ),
+              // 轨迹：覆盖层自绘，避免依赖 SDK 的 Polyline 与 id 缓存。
+              IgnorePointer(
+                child: CustomPaint(
+                  key: const Key('live-map-overlay'),
+                  painter: _AmapRoutePainter(
+                    segments: _segments,
+                    projection: projection,
+                    color: palette.accentInk,
+                  ),
+                ),
+              ),
+              if (_startVertex != null)
+                _positionedMarker(
+                  projection: projection,
+                  point: _startVertex!,
+                  size: MapStartRing.size,
+                  child: const MapStartRing(),
+                ),
+              if (current != null)
+                _positionedMarker(
+                  projection: projection,
+                  point: current,
+                  size: widget.headingDeg == null
+                      ? MapPositionDot.size
+                      : MapHeadingArrow.box,
+                  child: widget.headingDeg == null
+                      ? const MapPositionDot()
+                      : MapHeadingArrow(turns: _heading.turns),
+                )
+              else if (preview != null)
+                _positionedMarker(
+                  projection: projection,
+                  point: preview,
+                  size: MapPositionDot.size,
+                  child: const MapPositionDot(),
+                ),
+              IgnorePointer(
+                child: Align(
+                  alignment: compact
+                      ? const Alignment(0.9, -0.3)
+                      : const Alignment(0.9, 0.04),
+                  child: const MapNorthIndicator(),
+                ),
+              ),
+              IgnorePointer(
+                child: Align(
+                  alignment: compact
+                      ? const Alignment(-0.86, -0.3)
+                      : const Alignment(-0.86, 0.2),
+                  child: MapScaleBar(metersPerPixel: projection.metersPerPixel),
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 2),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: <Widget>[
-            Container(width: 2, height: 8, color: palette.ink),
-            Container(width: width, height: 2, color: palette.ink),
-            Container(width: 2, height: 8, color: palette.ink),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 
-  /// Web Mercator 下每像素代表的米数。瓦片边长按 flutter_map 默认的 256。
-  static double _metersPerPixel(MapCamera camera) {
-    const double equatorMeters = 40075016.686;
-    final double latRad = camera.center.latitude * math.pi / 180;
-    final double scale = math.pow(2, camera.zoom).toDouble();
-    return equatorMeters * math.cos(latRad) / (256 * scale);
-  }
-
-  /// 取 1、2、5 乘以 10 的整数次幂中不超过 [raw] 的最大值。
-  static double _niceDistance(double raw) {
-    if (!raw.isFinite || raw <= 0) return 100;
-    final double exponent = math
-        .pow(10, (math.log(raw) / math.ln10).floor())
-        .toDouble();
-    final double fraction = raw / exponent;
-    final double nice = fraction >= 5
-        ? 5
-        : fraction >= 2
-        ? 2
-        : 1;
-    return nice * exponent;
+  Widget _positionedMarker({
+    required MapProjection projection,
+    required AmapLatLng point,
+    required double size,
+    required Widget child,
+  }) {
+    final Offset screen = projection.toScreen(
+      point.latitude,
+      point.longitude,
+    );
+    return Positioned(
+      left: screen.dx - size / 2,
+      top: screen.dy - size / 2,
+      width: size,
+      height: size,
+      child: child,
+    );
   }
 }
 
-/// 粗略定位 / 朝向尚未建立时的位置点：12 dp 半透明墨色圆点。
-///
-/// 不用主题色，也不加白边：它只表示「大概在这儿」，不该和轨迹末端抢注意力。
-class _PositionDot extends StatelessWidget {
-  const _PositionDot();
+/// 原生覆盖层的轨迹画笔：与 legacy 相同的描边 / 填充两遍绘制。
+class _AmapRoutePainter extends CustomPainter {
+  _AmapRoutePainter({
+    required this.segments,
+    required this.projection,
+    required this.color,
+  });
 
-  static const double size = 12;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: const Key('map-position-dot'),
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: context.palette.ink.withValues(alpha: 0.55),
-    ),
-  );
-}
-
-/// 记录页的起点：18 dp 主题色空心环，无字。
-///
-/// 不带字是为了小屏地图带不挤（起点环、箭头、指北与比例尺会同时出现）。
-class _StartRing extends StatelessWidget {
-  const _StartRing();
-
-  static const double size = 18;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: const Key('map-start-marker'),
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      border: Border.all(color: context.palette.accentInk, width: 2),
-    ),
-  );
-}
-
-/// 当前位置箭头：22 dp 实心三角，深墨填充 + 1.5 dp 纸色描边。
-///
-/// 用墨色而不是主题色：脚下的轨迹就是主题色，同色会融成一片。描边用纸色，
-/// 让箭头在深色底图与彩色瓦片上都立得住（与轨迹的 [kRouteCasing] 同一角色）。
-///
-/// 形变由箭头自己承担（[AnimatedRotation]），地图保持北向上。
-class _HeadingArrow extends StatelessWidget {
-  const _HeadingArrow({required this.turns});
-
-  /// 视觉尺寸（三角形本身）。
-  static const double size = 22;
-
-  /// 标记盒子：比三角形大一圈，旋转时不裁角。
-  static const double box = 28;
-
-  /// 连续展开的圈数。见 `_LiveRouteMapState._updateHeading`。
-  final double turns;
-
-  @override
-  Widget build(BuildContext context) => AnimatedRotation(
-    key: const Key('map-heading-arrow'),
-    turns: turns,
-    duration: const Duration(milliseconds: 200),
-    curve: Curves.easeOut,
-    child: CustomPaint(
-      size: const Size(box, box),
-      painter: _HeadingArrowPainter(
-        fill: context.palette.ink,
-        casing: context.palette.paper,
-      ),
-    ),
-  );
-}
-
-class _HeadingArrowPainter extends CustomPainter {
-  const _HeadingArrowPainter({required this.fill, required this.casing});
-
-  final Color fill;
-  final Color casing;
+  final List<RouteSegment> segments;
+  final MapProjection projection;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Offset center = size.center(Offset.zero);
-    final double half = _HeadingArrow.size / 2;
-    // 尖端朝上（0° ＝ 正北），底边带一个内凹，像导航箭头。
-    final Path path = Path()
-      ..moveTo(center.dx, center.dy - half)
-      ..lineTo(center.dx + half * 0.72, center.dy + half * 0.78)
-      ..lineTo(center.dx, center.dy + half * 0.42)
-      ..lineTo(center.dx - half * 0.72, center.dy + half * 0.78)
-      ..close();
+    if (segments.isEmpty) return;
+    final Paint casing = Paint()
+      ..color = kRouteCasing
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = kRouteStrokeWidth + kRouteCasingWidth * 2
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    final Paint fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = kRouteStrokeWidth
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
 
-    // 先描一圈比填充宽 3 的边，再被填充盖住内侧，净剩 1.5 dp 的纸色轮廓。
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = casing
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeJoin = StrokeJoin.round,
-    );
-    canvas.drawPath(path, Paint()..color = fill);
+    // 先把所有描边画完，再画彩色线：段与段交叠时不会被别人的描边压住。
+    for (final RouteSegment segment in segments) {
+      final Path? path = _pathFor(segment);
+      if (path != null) canvas.drawPath(path, casing);
+    }
+    for (final RouteSegment segment in segments) {
+      final Path? path = _pathFor(segment);
+      if (path != null) canvas.drawPath(path, fill);
+    }
+  }
+
+  Path? _pathFor(RouteSegment segment) {
+    if (segment.vertices.length < 2) return null;
+    final Path path = Path();
+    for (int i = 0; i < segment.vertices.length; i++) {
+      final RouteVertex vertex = segment.vertices[i];
+      final Offset point = projection.toScreen(vertex.lat, vertex.lon);
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    return path;
   }
 
   @override
-  bool shouldRepaint(_HeadingArrowPainter old) =>
-      old.fill != fill || old.casing != casing;
+  bool shouldRepaint(_AmapRoutePainter old) =>
+      old.segments != segments ||
+      old.color != color ||
+      old.projection.centerLat != projection.centerLat ||
+      old.projection.centerLon != projection.centerLon ||
+      old.projection.zoom != projection.zoom ||
+      old.projection.viewportSize != projection.viewportSize;
+}
+
+/// 朝向累计转过的角度。359° → 1° 只累加 +2°，箭头沿最短弧转过去。
+class _HeadingTurns {
+  double _unwrappedDeg = 0;
+  double? _lastHeadingDeg;
+
+  void update(double? headingDeg) {
+    if (headingDeg == null) return;
+    final double? prev = _lastHeadingDeg;
+    _unwrappedDeg = prev == null
+        ? headingDeg
+        : _unwrappedDeg + shortestArcDelta(prev, headingDeg);
+    _lastHeadingDeg = headingDeg;
+  }
+
+  double get turns => _unwrappedDeg / 360;
 }

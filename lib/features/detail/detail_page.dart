@@ -16,6 +16,8 @@ import '../../domain/models/track_point.dart';
 import '../../domain/models/workout.dart';
 import '../../domain/models/workout_conditions.dart';
 import '../../domain/models/workout_summary.dart';
+// 高德原生底图使用 GCJ-02，显示前必须转换；legacy 仍按瓦片源决定。
+import '../map/map_backend.dart';
 import 'curve_chart.dart';
 import 'detail_providers.dart';
 import 'gpx_export.dart';
@@ -34,9 +36,16 @@ const double _kMapHeightShrink = 0.45;
 /// 页眉只有返回与「{类型}详情」，地图装在一张发丝线卡片里；下面是标题 / 日期、
 /// 两行三列汇总、按类型命名的曲线与导出入口。
 class DetailPage extends ConsumerWidget {
-  const DetailPage({required this.rideId, super.key});
+  const DetailPage({
+    required this.rideId,
+    this.amapBasemapBuilder,
+    super.key,
+  });
 
   final int rideId;
+
+  /// 原生底图构造器，仅测试注入；生产用 `RouteMap` 的默认实现。
+  final DetailAmapBasemapBuilder? amapBasemapBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -58,8 +67,11 @@ class DetailPage extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (Object error, StackTrace stack) =>
                     Center(child: Text('读取记录失败：$error')),
-                data: (WorkoutDetail data) =>
-                    _DetailBody(detail: data, unit: unit),
+                data: (WorkoutDetail data) => _DetailBody(
+                  detail: data,
+                  unit: unit,
+                  amapBasemapBuilder: amapBasemapBuilder,
+                ),
               ),
             ),
           ],
@@ -140,10 +152,15 @@ class _ConditionsPlace extends StatelessWidget {
 }
 
 class _DetailBody extends ConsumerWidget {
-  const _DetailBody({required this.detail, required this.unit});
+  const _DetailBody({
+    required this.detail,
+    required this.unit,
+    this.amapBasemapBuilder,
+  });
 
   final WorkoutDetail detail;
   final DistanceUnit unit;
+  final DetailAmapBasemapBuilder? amapBasemapBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -198,7 +215,9 @@ class _DetailBody extends ConsumerWidget {
     final String tileUrl =
         ref.watch(appSettingsProvider).value?.mapTileUrlTemplate ??
         kDefaultMapTileUrlTemplate;
-    final bool toGcj02 = isGcj02TileSource(tileUrl);
+    final bool toGcj02 =
+        ref.watch(mapBackendProvider) == MapBackend.amap ||
+        isGcj02TileSource(tileUrl);
     final List<RouteSegment> route = buildRouteSegments(
       points,
       toGcj02: toGcj02,
@@ -246,6 +265,7 @@ class _DetailBody extends ConsumerWidget {
               ],
               bridgedGaps: bridgedGaps,
               height: mapHeight,
+              amapBasemapBuilder: amapBasemapBuilder,
             ),
           ),
         ),

@@ -17,6 +17,7 @@ import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/history/history_page.dart';
 import 'package:cycling_app/features/history/history_providers.dart';
+import 'package:cycling_app/features/map/map_backend.dart';
 import 'package:cycling_app/features/record/handlebar_view.dart';
 import 'package:cycling_app/features/record/idle_conditions.dart';
 import 'package:cycling_app/features/record/record_controller.dart';
@@ -103,20 +104,26 @@ Widget _scaled(Widget child) => MaterialApp(
 Widget _record(
   RecordState state, {
   IdleConditions conditions = IdleConditions.none,
-}) => HandlebarView(
-  state: state,
-  unit: DistanceUnit.kilometer,
-  idleConditions: conditions,
-  tileUrlTemplate: kDefaultMapTileUrlTemplate,
-  selectedActivityType: state.selectedActivityType,
-  now: DateTime(2026, 10, 27, 6, 42),
-  onSelectActivityType: (_) {},
-  onStart: () {},
-  onPause: () {},
-  onResume: () {},
-  onFinish: () {},
-  onPickDevice: (_) {},
-  onFixError: () {},
+}) => ProviderScope(
+  // 冒烟测试只看排版，底图钉在 legacy，不创建高德 platform view。
+  overrides: <Override>[
+    mapBackendProvider.overrideWithValue(MapBackend.legacy),
+  ],
+  child: HandlebarView(
+    state: state,
+    unit: DistanceUnit.kilometer,
+    idleConditions: conditions,
+    tileUrlTemplate: kDefaultMapTileUrlTemplate,
+    selectedActivityType: state.selectedActivityType,
+    now: DateTime(2026, 10, 27, 6, 42),
+    onSelectActivityType: (_) {},
+    onStart: () {},
+    onPause: () {},
+    onResume: () {},
+    onFinish: () {},
+    onPickDevice: (_) {},
+    onFixError: () {},
+  ),
 );
 
 Widget _history() => ProviderScope(

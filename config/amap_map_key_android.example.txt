@@ -1,0 +1,4 @@
+# 复制本文件为 config/amap_map_key_android.txt，填入高德开放平台的 Android 地图 Key。
+# 该 Key 需要绑定包名 com.ling.cycling_app + SHA1。
+# config/amap_map_key_android.txt 已被 .gitignore 忽略，不会进入版本库。
+YOUR_AMAP_ANDROID_MAP_KEY

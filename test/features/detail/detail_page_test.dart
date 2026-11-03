@@ -14,6 +14,7 @@ import 'package:cycling_app/features/detail/detail_page.dart';
 import 'package:cycling_app/features/detail/detail_providers.dart';
 import 'package:cycling_app/features/detail/hr_zone_bar.dart';
 import 'package:cycling_app/features/detail/route_map.dart';
+import 'package:cycling_app/features/map/map_backend.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
@@ -144,16 +145,25 @@ List<TrackPoint> pointsWithShortGap() => <TrackPoint>[
 Widget wrap({
   required WorkoutDetail detail,
   AppSettings settings = _settings,
+  MapBackend backend = MapBackend.legacy,
+  DetailAmapBasemapBuilder? amapBasemapBuilder,
 }) => ProviderScope(
   overrides: <Override>[
     rideDetailProvider(detail.ride.id!).overrideWith((Ref ref) => detail),
     appSettingsProvider.overrideWithValue(
       AsyncValue<AppSettings>.data(settings),
     ),
+    // 测试环境不创建高德 platform view，后端显式钉住。
+    mapBackendProvider.overrideWithValue(backend),
+    mapPrivacyConsentProvider.overrideWith((Ref ref) => true),
   ],
   child: MaterialApp(
     theme: buildAppTheme(),
-    home: DetailPage(rideId: detail.ride.id!),
+    home: DetailPage(
+      rideId: detail.ride.id!,
+      // 原生测试注入的纯 Flutter 底图；legacy 用例不传。
+      amapBasemapBuilder: amapBasemapBuilder,
+    ),
   ),
 );
 
@@ -509,6 +519,31 @@ void main() {
     expect(line.strokeWidth, kRouteStrokeWidth);
     expect(line.borderStrokeWidth, kRouteCasingWidth);
     expect(line.borderColor, kRouteCasing);
+  });
+
+  // 原生后端只换底图，起终点、断口端点与指北仍由 Flutter 覆盖层绘制；
+  // 测试里用纯 Flutter 色块代替 AMapWidget，不创建 platform view。
+  testWidgets('原生后端下起终点、断口与指北仍由覆盖层绘制', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      wrap(
+        detail: WorkoutDetail(ride: rideWith(), points: pointsWithGap()),
+        backend: MapBackend.amap,
+        amapBasemapBuilder:
+            (context, initialCamera, onMapCreated, interactive, onCameraMove) =>
+                const ColoredBox(
+                  key: Key('fake-detail-basemap'),
+                  color: Colors.white,
+                ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('fake-detail-basemap')), findsOneWidget);
+    expect(find.byType(FlutterMap), findsNothing);
+    expect(find.byKey(const Key('detail-map-north')), findsOneWidget);
+    expect(find.byKey(const Key('detail-gap-end')), findsNWidgets(2));
+    expect(find.byKey(const Key('detail-start-marker')), findsOneWidget);
+    expect(find.byKey(const Key('detail-finish-marker')), findsOneWidget);
   });
 
   // 信号弱导致轨迹断开时，界面必须解释这个缺口：否则用户只看到线断了一截，

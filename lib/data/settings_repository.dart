@@ -178,4 +178,15 @@ class SettingsRepository {
   Future<void> saveLastActivityType(ActivityType type) async {
     await _dao.setString('last_activity_type', type.dbValue);
   }
+
+  /// 是否已同意高德地图 SDK 的隐私说明。
+  ///
+  /// 只有明确点过「同意」才写入；没同意过（含选择「暂不使用」）一律视为未同意，
+  /// 原生底图不会创建平台视图，地图继续走 legacy 栅格。
+  Future<bool> hasAmapPrivacyConsent() async =>
+      await _dao.getString('amap_privacy_agreed') == 'true';
+
+  /// 记录用户已同意地图隐私说明。之后启动直接使用原生底图。
+  Future<void> grantAmapPrivacyConsent() =>
+      _dao.setString('amap_privacy_agreed', 'true');
 }

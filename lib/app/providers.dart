@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // StateProvider 在 riverpod 3 里只从 legacy 入口导出。
 import 'package:flutter_riverpod/legacy.dart';
@@ -18,6 +19,7 @@ import '../data/sensor_pairing.dart';
 import '../data/settings_repository.dart';
 import '../data/weather/weather_service.dart';
 import '../data/workout_repository.dart';
+import '../features/map/map_backend.dart';
 
 /// 数据库连接。`main()` 发起打开、`CyclingApp` 在连接就绪后 override 注入，
 /// 因此这里不需要异步；测试里直接 override 成内存库。
@@ -66,6 +68,22 @@ final FutureProvider<AppSettings> appSettingsProvider =
 
 final Provider<LocationService> locationServiceProvider =
     Provider<LocationService>((Ref ref) => const LocationService());
+
+/// 当前底图后端。启动时按 Key 与覆盖值计算一次，测试可 override 为 legacy。
+final Provider<MapBackend> mapBackendProvider = Provider<MapBackend>(
+  (Ref ref) => resolveMapBackend(
+    key: amapMapKeyFor(defaultTargetPlatform),
+    override: kMapBackendOverride,
+  ),
+);
+
+/// 用户是否已同意高德地图 SDK 隐私说明。
+///
+/// 地图网关在同意前不会创建平台视图，继续用 legacy 底图；同意后 invalidate
+/// 本 provider，下一次构建才切到原生地图。
+final FutureProvider<bool> mapPrivacyConsentProvider = FutureProvider<bool>(
+  (Ref ref) => ref.watch(settingsRepositoryProvider).hasAmapPrivacyConsent(),
+);
 
 /// 待机页查地名与天气共用的 HTTP 客户端。
 ///

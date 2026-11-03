@@ -15,6 +15,7 @@ import 'package:cycling_app/domain/models/activity_type.dart';
 import 'package:cycling_app/domain/models/track_point.dart';
 import 'package:cycling_app/domain/models/workout.dart';
 import 'package:cycling_app/domain/models/workout_status.dart';
+import 'package:cycling_app/features/map/map_backend.dart';
 import 'package:cycling_app/features/settings/backup_section.dart';
 import 'package:cycling_app/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +56,12 @@ class _FakeSettingsRepository implements SettingsRepository {
   Future<void> saveLastActivityType(ActivityType type) async {
     saved = saved.copyWith(lastActivityType: type);
   }
+
+  @override
+  Future<bool> hasAmapPrivacyConsent() async => false;
+
+  @override
+  Future<void> grantAmapPrivacyConsent() async {}
 }
 
 class _FakeSensorPairing implements SensorPairingRepository {
@@ -190,7 +197,10 @@ void main() {
     io = _FakeBackupIo();
   });
 
-  Widget wrap({AppSettings current = _settings}) => ProviderScope(
+  Widget wrap({
+    AppSettings current = _settings,
+    MapBackend backend = MapBackend.legacy,
+  }) => ProviderScope(
     overrides: <Override>[
       settingsRepositoryProvider.overrideWithValue(settings),
       sensorPairingProvider.overrideWithValue(pairing),
@@ -200,6 +210,8 @@ void main() {
       appSettingsProvider.overrideWithValue(
         AsyncValue<AppSettings>.data(current),
       ),
+      // 测试环境按无 Key 处理；需要时显式覆盖成原生后端。
+      mapBackendProvider.overrideWithValue(backend),
     ],
     child: MaterialApp(theme: buildAppTheme(), home: const SettingsPage()),
   );
@@ -207,11 +219,12 @@ void main() {
   Future<void> pumpSettings(
     WidgetTester tester, {
     AppSettings current = _settings,
+    MapBackend backend = MapBackend.legacy,
   }) async {
     tester.view.physicalSize = const Size(800, 3200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(wrap(current: current));
+    await tester.pumpWidget(wrap(current: current, backend: backend));
     await tester.pumpAndSettle();
   }
 
@@ -268,8 +281,9 @@ void main() {
     expect(find.text('70.0 kg'), findsOneWidget);
     expect(find.text('距离单位'), findsOneWidget);
     expect(find.text('公里'), findsOneWidget);
-    expect(find.text('地图瓦片'), findsOneWidget);
-    expect(find.text('高德 · 宣纸'), findsOneWidget);
+    expect(find.text('底图'), findsOneWidget);
+    expect(find.text('内置栅格底图'), findsOneWidget);
+    expect(find.byKey(const Key('settings-tile')), findsNothing);
     expect(find.text('行迹 XINGJI · 1.0.0'), findsOneWidget);
     expect(find.text('记录仅存本机'), findsOneWidget);
     expect(find.text('地点与天气随记录保存在本机；查询会联网，不额外保存坐标。'), findsOneWidget);
@@ -302,7 +316,7 @@ void main() {
     expect(find.byType(PaperSheet), findsNothing);
   });
 
-  testWidgets('体重与瓦片源校验，取消不写库', (WidgetTester tester) async {
+  testWidgets('体重校验，取消不写库', (WidgetTester tester) async {
     await pumpSettings(tester);
 
     await openRow(tester, 'settings-weight');
@@ -311,33 +325,30 @@ void main() {
     expect(settings.saveCalls, 0);
     expect(find.textContaining('大于 0'), findsOneWidget);
     await closeSheet(tester);
-
-    await openRow(tester, 'settings-tile');
-    await tester.enterText(sheetTextField(), 'not a url');
-    await saveSheet(tester);
-    expect(settings.saveCalls, 0);
-    expect(find.textContaining('http(s)'), findsOneWidget);
-    await closeSheet(tester);
   });
 
-  testWidgets('修改体重与瓦片源后立即保存', (WidgetTester tester) async {
+  testWidgets('修改体重后立即保存', (WidgetTester tester) async {
     await pumpSettings(tester);
 
     await openRow(tester, 'settings-weight');
     await tester.enterText(sheetTextField(), '68.5');
     await saveSheet(tester);
     expect(settings.saved.weightKg, 68.5);
+  });
 
-    await openRow(tester, 'settings-tile');
-    await tester.enterText(
-      sheetTextField(),
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    );
-    await saveSheet(tester);
-    expect(
-      settings.saved.mapTileUrlTemplate,
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    );
+  // 底图由构建期 Key 决定，设置页只能看、不能改；旧的可编辑瓦片地址必须消失。
+  testWidgets('底图行只读，有 Key 时显示高德地图且没有地址输入', (WidgetTester tester) async {
+    await pumpSettings(tester, backend: MapBackend.amap);
+
+    expect(find.byKey(const Key('settings-basemap')), findsOneWidget);
+    expect(find.text('高德地图'), findsOneWidget);
+    expect(find.byKey(const Key('settings-tile')), findsNothing);
+    expect(find.text('地图瓦片'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.tap(find.byKey(const Key('settings-basemap')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PaperSheet), findsNothing);
   });
 
   testWidgets('距离单位行内切换并立即保存', (WidgetTester tester) async {

@@ -50,6 +50,17 @@ dependencies:
   archive: ^4.3.0
   xml: ^7.0.1
   flutter_tts: ^4.2.5
+  amap_map: ^1.0.15
+  # amap_map 不 re-export 这个包，但 AMapApiKey / AMapPrivacyStatement 都定义在这里。
+  x_amap_base: ^1.0.3
+  # 首启隐私弹窗里的「高德隐私政策」入口。
+  url_launcher: ^6.3.2
+
+# amap_map 1.0.15 仍以 compileSdk 35 发布，而 flutter_plugin_android_lifecycle
+# 2.0.32+ 要求依赖方编译到 36。锁到 2.0.24，让旧插件能在 AGP 9 下构建，
+# 不影响 Flutter 自身的生命周期桥接接口。
+dependency_overrides:
+  flutter_plugin_android_lifecycle: 2.0.24
 
 dev_dependencies:
   flutter_test:
