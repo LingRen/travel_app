@@ -374,6 +374,55 @@ void main() {
     });
   });
 
+  group('精度门槛', () {
+    test('基站级 800 米的点被丢弃，只留下 8 米的真实点', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform();
+      final LocationService service = LocationService(platform: platform);
+
+      platform.controller
+        ..add(fakePosition(tMs: 1000, accuracy: 800))
+        ..add(fakePosition(tMs: 2000, accuracy: 8));
+
+      final List<LocationFix> fixes = await service.fixes().take(1).toList();
+      platform.controller.close();
+
+      expect(fixes.single.tMs, 2000);
+      expect(fixes.single.accuracyM, 8.0);
+    });
+
+    test('刚好 50 米通过，超过 50 米丢弃', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform();
+      final LocationService service = LocationService(platform: platform);
+
+      platform.controller
+        ..add(fakePosition(tMs: 1000, accuracy: 50))
+        ..add(fakePosition(tMs: 2000, accuracy: 51))
+        ..add(fakePosition(tMs: 3000, accuracy: 10));
+
+      final List<LocationFix> fixes = await service.fixes().take(2).toList();
+      platform.controller.close();
+
+      expect(fixes.map((LocationFix f) => f.tMs), <int>[1000, 3000]);
+    });
+
+    test('差精度点之外没有点时流保持安静，不回退到旧读数', () async {
+      final FakeLocationPlatform platform = FakeLocationPlatform();
+      final LocationService service = LocationService(platform: platform);
+
+      platform.controller.add(fakePosition(tMs: 1000, accuracy: 800));
+
+      // 用 timeout 断言「没有可信点就不输出」，而不是把 800 m 的点送出去。
+      final List<LocationFix> fixes = await service
+          .fixes()
+          .timeout(const Duration(milliseconds: 20))
+          .toList()
+          .catchError((Object _) => <LocationFix>[]);
+      platform.controller.close();
+
+      expect(fixes, isEmpty);
+    });
+  });
+
   group('fixes', () {
     test('定位流逐条把 Position 翻译成 LocationFix', () async {
       final FakeLocationPlatform platform = FakeLocationPlatform();

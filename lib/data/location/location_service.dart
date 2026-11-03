@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:geolocator/geolocator.dart';
 
+import '../../domain/analysis/constants.dart';
 import '../../domain/models/location_fix.dart';
 
 /// 开始记录前的定位前置校验结果。见设计文档 11.1（阻断类）。
@@ -205,11 +206,19 @@ class LocationService {
 
   /// 定位流。1Hz 的落盘节拍由 [RecordingSession] 的 tick 保证，
   /// 这里不做系统侧距离过滤，避免丢掉用于平滑的原始点。
+  ///
+  /// 共享出口统一挡掉差精度点（[kMaxAcceptedAccuracyM]）：带位置但精度缺失的
+  /// 点同样不可信，一并丢弃。被丢弃的点连流都不进入，因此不会落盘、不参与
+  /// 距离 / 爬升 / 速度，也不会被当成新点刷新信号状态。
   Stream<LocationFix> fixes() => _platform
       .positionStream(
         locationSettings: buildLocationSettings(isAndroid: Platform.isAndroid),
       )
-      .map(toLocationFix);
+      .map(toLocationFix)
+      .where(
+        (LocationFix fix) =>
+            fix.accuracyM != null && fix.accuracyM! <= kMaxAcceptedAccuracyM,
+      );
 
   /// 开始记录时先要的一次粗略定位，用来在 GPS 锁星前把地图点亮。
   ///
