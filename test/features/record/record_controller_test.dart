@@ -686,6 +686,27 @@ void main() {
     container.dispose();
   });
 
+  testWidgets('开始后一直没有任何定位时也标记信号弱', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+
+    // 这里一个点都不发：模拟定位源整条流都没有回调（例如原生 sink 没注册）。
+    expect(container.read(recordControllerProvider).gpsWeak, isFalse);
+
+    clockMs += 11000;
+    await tester.pump(const Duration(seconds: 11));
+
+    expect(container.read(recordControllerProvider).gpsWeak, isTrue);
+
+    // 首个点到达后恢复正常。
+    await rideOneSecond(tester, lat: 31.0);
+    expect(container.read(recordControllerProvider).gpsWeak, isFalse);
+    container.dispose();
+  });
+
   testWidgets('暂停期间不重建定位流，也不标信号弱', (WidgetTester tester) async {
     final ProviderContainer container = makeContainer();
     final RecordController controller = container.read(

@@ -15,8 +15,14 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "start" -> {
-                    RecordingForegroundService.start(this)
-                    result.success(null)
+                    // Android 12+ 在应用处于后台时会拒绝启动前台服务。异常必须
+                    // 在这里接住：抛到主线程会让进程直接崩掉。
+                    try {
+                        RecordingForegroundService.start(this)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("foreground_service_denied", e.message, null)
+                    }
                 }
                 "stop" -> {
                     RecordingForegroundService.stop(this)

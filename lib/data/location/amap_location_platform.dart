@@ -155,12 +155,14 @@ class AmapLocationPlatform implements LocationPlatform {
     LocationPlatform fallback = const GeolocatorLocationPlatform(),
     BackgroundKeepAlive? keepAlive,
     Duration previewTimeout = const Duration(seconds: 3),
+    Duration keepAliveStopDelay = const Duration(seconds: 2),
   }) : _apiKeyAndroid = apiKeyAndroid,
        _apiKeyIos = apiKeyIos,
        _sdk = sdk ?? AmapFlutterLocationSdk(),
        _fallback = fallback,
        _keepAlive = keepAlive ?? defaultBackgroundKeepAlive(),
-       _previewTimeout = previewTimeout;
+       _previewTimeout = previewTimeout,
+       _keepAliveStopDelay = keepAliveStopDelay;
 
   final String _apiKeyAndroid;
   final String _apiKeyIos;
@@ -173,7 +175,32 @@ class AmapLocationPlatform implements LocationPlatform {
   /// 一次定位的超时。超过就回退系统定位，不让待机页一直空着。
   final Duration _previewTimeout;
 
+  /// 全部退订后回收前台服务的延迟。
+  ///
+  /// 看门狗重建订阅是「取消旧订阅 → 立刻重新订阅」，不留缓冲就会退化成
+  /// 一次 stopService + startForegroundService 的抖动。
+  final Duration _keepAliveStopDelay;
+
   bool _initialized = false;
+
+  /// 连续定位是否正在占用同一个原生客户端。
+  ///
+  /// 一次定位与连续定位共用 [_sdk]（插件按 pluginKey 复用原生客户端），
+  /// 所以一次定位的收尾必须知道记录是否已经在跑，不能无条件 stop。
+  bool _continuousActive = false;
+
+  /// 当前活跃的连续定位订阅数。
+  int _activeStreams = 0;
+
+  /// 本次记录是否已经拉起过前台服务。
+  ///
+  /// Android 12+ 禁止从后台启动前台服务；重建订阅发生在熄屏骑行中时，如果再
+  /// 拉起一次，系统会拒绝并抛 `ForegroundServiceDidNotStartInTimeException`
+  /// 把整个进程杀掉（K40 实测闪退）。所以整个记录期只拉起一次，后续重建复用它。
+  bool _keepAliveStarted = false;
+
+  /// 退订后回收服务的定时器；重建订阅会把它取消。
+  Timer? _keepAliveStopTimer;
 
   /// 插件要求在定位前完成 Key 与隐私声明设置，否则 SDK 不会工作。
   void _ensureInitialized() {
@@ -202,30 +229,65 @@ class AmapLocationPlatform implements LocationPlatform {
   Future<bool> openLocationSettings() => _fallback.openLocationSettings();
 
   /// 连续定位流。失败事件在这里被丢弃，由看门狗负责「超过 15 秒没点」的重建。
+  ///
+  /// 订阅必须早于 [AmapLocationSdk.configure] / [AmapLocationSdk.start]：插件在
+  /// 第一次设置参数或启动时创建原生定位客户端，并用当时从 EventChannel 拿到的
+  /// sink 回传结果。先启动后订阅时 sink 还是 null，回调会被整条丢弃，且不报错。
   @override
   Stream<Position> positionStream({
     required LocationSettings locationSettings,
   }) {
     _ensureInitialized();
-    _sdk.configure(onceLocation: false);
-    _sdk.start();
-    // 前台服务启动失败不影响定位本身（例如通知权限被拒），静默降级。
-    unawaited(_keepAlive.start().catchError((Object _) {}));
 
     late StreamController<Position> controller;
     late StreamSubscription<Map<String, Object>> subscription;
     controller = StreamController<Position>(
       onCancel: () async {
-        await subscription.cancel();
+        _continuousActive = false;
         _sdk.stop();
-        await _keepAlive.stop().catchError((Object _) {});
+        await subscription.cancel();
+        _detachKeepAlive();
       },
     );
     subscription = _sdk.events.listen((Map<String, Object> event) {
       final Position? position = positionFromAmapEvent(event);
       if (position != null) controller.add(position);
     });
+
+    _sdk.configure(onceLocation: false);
+    _sdk.start();
+    _continuousActive = true;
+    _attachKeepAlive();
+
     return controller.stream;
+  }
+
+  /// 订阅建立：整个记录期只拉起一次前台服务。
+  ///
+  /// 启动失败（例如通知权限被拒、后台启动被系统限制）不影响定位本身，静默降级；
+  /// 同时记住已经尝试过，避免在后台反复重试触发系统的后台启动限制。
+  void _attachKeepAlive() {
+    _activeStreams++;
+    _keepAliveStopTimer?.cancel();
+    _keepAliveStopTimer = null;
+    if (_keepAliveStarted) return;
+    _keepAliveStarted = true;
+    unawaited(_keepAlive.start().catchError((Object _) {}));
+  }
+
+  /// 订阅取消：等所有订阅都退出后再回收服务。
+  ///
+  /// 看门狗的「取消旧订阅 → 立刻重新订阅」会在这个延迟内重新建立订阅，
+  /// 于是服务既不停止也不会被重复启动。
+  void _detachKeepAlive() {
+    _activeStreams--;
+    if (_activeStreams > 0) return;
+    _keepAliveStopTimer?.cancel();
+    _keepAliveStopTimer = Timer(_keepAliveStopDelay, () {
+      _keepAliveStopTimer = null;
+      _keepAliveStarted = false;
+      unawaited(_keepAlive.stop().catchError((Object _) {}));
+    });
   }
 
   /// 一次定位：优先高德，超时或失败时回退系统定位一次（见设计文档）。
@@ -234,19 +296,34 @@ class AmapLocationPlatform implements LocationPlatform {
     required LocationSettings locationSettings,
   }) async {
     _ensureInitialized();
+
+    // 同 [positionStream]：先订阅拿到 sink，再启动定位客户端。
+    final Stream<Map<String, Object>> events = _sdk.events;
+    final Completer<Position> completer = Completer<Position>();
+    final StreamSubscription<Map<String, Object>> subscription = events.listen(
+      (Map<String, Object> event) {
+        final Position? position = positionFromAmapEvent(event);
+        if (position != null && !completer.isCompleted) {
+          completer.complete(position);
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!completer.isCompleted) completer.completeError(error, stack);
+      },
+    );
+
     try {
       _sdk.configure(onceLocation: true);
       _sdk.start();
-      return await _sdk.events
-          .map(positionFromAmapEvent)
-          .where((Position? position) => position != null)
-          .cast<Position>()
-          .first
-          .timeout(_previewTimeout);
+      return await completer.future.timeout(_previewTimeout);
     } catch (_) {
       return _fallback.getCurrentPosition(locationSettings: locationSettings);
     } finally {
-      _sdk.stop();
+      // 记录已经接管同一个原生客户端时不能停：待机页这次一次定位常常在开始
+      // 记录之后才超时，这里 stop() 会把刚启动的连续定位一起停掉，整条流
+      // 再也收不到回调（11:37 真机日志复现：连续 start 后 3 秒被 stop）。
+      if (!_continuousActive) _sdk.stop();
+      await subscription.cancel();
     }
   }
 }

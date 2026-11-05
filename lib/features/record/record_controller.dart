@@ -177,6 +177,12 @@ class RecordController extends Notifier<RecordState> {
   bool _finished = false;
   int _lastFixMs = 0;
 
+  /// 本次订阅开始等待第一个定位的时刻，用来在没有拿到任何点时也判得出信号弱。
+  ///
+  /// [_lastFixMs] 为 0 曾直接return false，结果定位源整条流都收不到回调时，
+  /// 界面一直显示「信号良好」，把空流掩盖成了正常记录。
+  int _fixWaitSinceMs = 0;
+
   /// 上一次因定位流卡死而重建订阅的时刻。
   int _lastFixRestartMs = 0;
 
@@ -444,6 +450,7 @@ class RecordController extends Notifier<RecordState> {
     _writeFailures = 0;
     _lastFixMs = 0;
     _lastFixRestartMs = 0;
+    _fixWaitSinceMs = 0;
     _previewFix = null;
     _conditionsPendingRideId = null;
     _lastBackgroundFlushMs = 0;
@@ -664,6 +671,7 @@ class RecordController extends Notifier<RecordState> {
   }
 
   void _startStreams() {
+    _fixWaitSinceMs = _now();
     _fixSub = _location.fixes().listen(_onFix, onError: (Object _) {});
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
   }
@@ -673,6 +681,7 @@ class RecordController extends Notifier<RecordState> {
     if (session == null) return;
     _previewFix = null;
     _lastFixMs = fix.tMs;
+    _fixWaitSinceMs = 0;
     session.ingestFix(fix);
     // 没有粗略定位时，用第一个真实定位点补地点 / 天气。
     final int? conditionsRideId = _conditionsPendingRideId;
@@ -904,11 +913,15 @@ class RecordController extends Notifier<RecordState> {
   }
 
   bool _isGpsWeak() {
-    if (_session == null || _lastFixMs == 0) return false;
+    if (_session == null) return false;
     // 暂停期间没有新定位是正常的（补给、拍照），不标记信号弱；恢复时会重置
     // 「多久没拿到点」的计时，见 [resume]。
     if (state.phase != RecordingPhase.recording) return false;
-    return _now() - _lastFixMs > kGpsGapMs;
+    // 还没拿到第一个点时按订阅起始时间算：整条流都没回调时也必须报弱，
+    // 不能因为 _lastFixMs 恒为 0 就永远显示「信号良好」。
+    final int sinceMs = _lastFixMs != 0 ? _lastFixMs : _fixWaitSinceMs;
+    if (sinceMs == 0) return false;
+    return _now() - sinceMs > kGpsGapMs;
   }
 
   int _now() => ref.read(nowProvider)();

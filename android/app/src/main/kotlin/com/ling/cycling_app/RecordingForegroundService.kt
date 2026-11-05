@@ -57,16 +57,24 @@ class RecordingForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        createChannel()
-        val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            createChannel()
+            val notification = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            // 进不了前台（通知通道异常、系统限制等）就立刻退出这次启动。
+            // 不退出的话，系统会在几秒后抛
+            // ForegroundServiceDidNotStartInTimeException，把整个记录进程杀掉。
+            stopSelf()
+            return START_NOT_STICKY
         }
         // 被系统回收后尽量恢复；真正的恢复逻辑在 Dart 侧（未完成记录会重新进入）。
         return START_STICKY
