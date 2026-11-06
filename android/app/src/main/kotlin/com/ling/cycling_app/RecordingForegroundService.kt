@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 
 /**
@@ -19,6 +20,15 @@ import androidx.core.content.ContextCompat
  * 系统定位由 geolocator 的前台服务负责，这里只在高德试点源生效时由 Dart 侧启停。
  */
 class RecordingForegroundService : Service() {
+
+    /**
+     * 记录期 CPU 唤醒锁。
+     *
+     * 前台服务只保证进程不被冻结，不保证 CPU 不休眠；长时间熄屏后 CPU 会睡下去，
+     * 高德 SDK 的定位更新随之停摆（官方文档明确提到黑屏 / 锁屏场景需要主动叫醒
+     * CPU）。geolocator 的前台服务用 `enableWakeLock` 做了同一件事，这里补齐。
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -76,8 +86,28 @@ class RecordingForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        acquireWakeLock()
         // 被系统回收后尽量恢复；真正的恢复逻辑在 Dart 侧（未完成记录会重新进入）。
         return START_STICKY
+    }
+
+    /** 只在进前台成功后持有，避免服务启动被拒时还占着 CPU。 */
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:recording")
+            .apply {
+                // 不做引用计数：启动被重复调用也只释放一次。
+                setReferenceCounted(false)
+                acquire()
+            }
+    }
+
+    override fun onDestroy() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
