@@ -1741,7 +1741,9 @@ void main() {
       expect(find.text('成都市 · 武侯区 · 20°C'), findsNothing);
     });
 
-    testWidgets('结束后显示结算页，完成后回到待机并保留类型', (WidgetTester tester) async {
+    testWidgets('结束后显示结算页，无移动距离时不保存，完成后回到待机并保留类型', (
+      WidgetTester tester,
+    ) async {
       await pumpRecordPage(
         tester,
         settings: _testSettings.copyWith(lastActivityType: ActivityType.hiking),
@@ -1761,14 +1763,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('记录已保存'), findsOneWidget);
+      expect(find.text('未保存'), findsOneWidget);
       expect(find.text('完成'), findsOneWidget);
-      expect(find.text('记录已写入历史，详情页可以看轨迹与曲线。'), findsOneWidget);
+      expect(find.text('本次没有产生移动距离，不写入历史记录。'), findsOneWidget);
 
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
 
-      expect(find.text('记录已保存'), findsNothing);
+      expect(find.text('未保存'), findsNothing);
       expect(find.text('开始徒步'), findsOneWidget, reason: '完成后保留上次类型');
     });
   });

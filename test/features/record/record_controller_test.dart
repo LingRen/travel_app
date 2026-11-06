@@ -44,6 +44,7 @@ class _FakeWorkoutRepository implements WorkoutRepository {
 
   int startWorkoutCalls = 0;
   int finishCalls = 0;
+  int deleteCalls = 0;
 
   /// startWorkout 收到的参数，供断言设备名与开始时间是否传对。
   int? startedAtMs;
@@ -141,7 +142,7 @@ class _FakeWorkoutRepository implements WorkoutRepository {
   }
 
   @override
-  Future<void> deleteRide(int rideId) async {}
+  Future<void> deleteRide(int rideId) async => deleteCalls++;
 
   @override
   void Function()? get onWorkoutDataChanged => null;
@@ -666,6 +667,32 @@ void main() {
       container.read(recordControllerProvider).phase,
       RecordingPhase.finished,
     );
+    expect(container.read(recordControllerProvider).recordSaved, isTrue);
+    container.dispose();
+  });
+
+  testWidgets('只走时间没有移动距离时结束丢弃记录', (WidgetTester tester) async {
+    final ProviderContainer container = makeContainer();
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+
+    // 位置一直不动，只有时钟在走：里程口径带噪声门槛，累计距离保持 0。
+    for (int i = 0; i < 3; i++) {
+      await rideOneSecond(tester, lat: 31.0);
+    }
+    expect(container.read(recordControllerProvider).distanceM, 0);
+
+    await controller.finish();
+    await tester.pump();
+
+    // 结算页照常展示，但这条记录不落库，历史里不会多出一条 0 公里的空记录。
+    expect(repo.finishCalls, 0);
+    expect(repo.deleteCalls, 1);
+    final RecordState state = container.read(recordControllerProvider);
+    expect(state.phase, RecordingPhase.finished);
+    expect(state.recordSaved, isFalse);
     container.dispose();
   });
 

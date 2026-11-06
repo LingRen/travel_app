@@ -53,9 +53,16 @@ class RecordState {
     this.lastCue,
     this.cueSeq = 0,
     this.selectedActivityType = ActivityType.cycling,
+    this.recordSaved = true,
   });
 
   final int? rideId;
+
+  /// 结束后这条记录是否真的写进了历史。
+  ///
+  /// 只走了时间、没产生任何移动距离的记录不落库（见 [RecordController.finish]），
+  /// 结算页据此显示「未保存」，避免历史里多出一条 0 公里的空记录。
+  final bool recordSaved;
 
   /// null 表示尚未开始记录。
   final RecordingPhase? phase;
@@ -221,6 +228,9 @@ class RecordController extends Notifier<RecordState> {
   /// 见 [RecordState.suggestAlwaysPermission]。
   bool _suggestAlwaysPermission = false;
 
+  /// 见 [RecordState.recordSaved]。默认 true，结算丢弃时置 false。
+  bool _recordSaved = true;
+
   /// 上一次节拍判定出的「信号弱」状态。只在翻转的那一刻播报一次，
   /// 否则每秒一条「GPS 信号弱」会把其它提示全淹掉。
   bool _wasGpsWeak = false;
@@ -263,6 +273,7 @@ class RecordController extends Notifier<RecordState> {
     _lastFixMs = 0;
     _lastFixRestartMs = 0;
     _wasGpsWeak = false;
+    _recordSaved = true;
 
     // 快照选中类型：start() 全程（等待权限/连传感器）都用这一刻的类型，
     // 期间用户点 chip 不再影响本次落库——「开始」按钮显示什么，落库就是什么。
@@ -429,13 +440,21 @@ class RecordController extends Notifier<RecordState> {
     await _persist(remaining);
     await _flush(force: true);
 
-    await ref
-        .read(workoutRepositoryProvider)
-        .finishRide(
-          _rideId!,
-          endedAtMs: now,
-          durationS: session.snapshot.elapsedSeconds,
-        );
+    // 只有时间在走、没攒出任何移动距离的记录不落库：里程口径带噪声门槛，
+    // 值为 0 就说明全程都是原地抖动。删掉开始时就预建的这条，历史里不留空记录。
+    final double distanceM = session.snapshot.distanceM;
+    _recordSaved = distanceM > 0;
+    if (_recordSaved) {
+      await ref
+          .read(workoutRepositoryProvider)
+          .finishRide(
+            _rideId!,
+            endedAtMs: now,
+            durationS: session.snapshot.elapsedSeconds,
+          );
+    } else {
+      await ref.read(workoutRepositoryProvider).deleteRide(_rideId!);
+    }
     _publish();
   }
 
@@ -458,6 +477,7 @@ class RecordController extends Notifier<RecordState> {
     _cueSeq = 0;
     _wasGpsWeak = false;
     _suggestAlwaysPermission = false;
+    _recordSaved = true;
     state = RecordState(
       foreground: _foreground,
       selectedActivityType: _selectedActivityType,
@@ -909,6 +929,7 @@ class RecordController extends Notifier<RecordState> {
       lastCue: _lastCue,
       cueSeq: _cueSeq,
       selectedActivityType: _selectedActivityType,
+      recordSaved: _recordSaved,
     );
   }
 

@@ -227,13 +227,15 @@ class _FinishedView extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 Icon(
-                  Icons.check_circle_outline,
+                  state.recordSaved
+                      ? Icons.check_circle_outline
+                      : Icons.info_outline,
                   size: 20,
                   color: palette.accentInk,
                 ),
                 const SizedBox(width: kSpaceS),
                 Text(
-                  '记录已保存',
+                  state.recordSaved ? '记录已保存' : '未保存',
                   style: kSerifHeadingTextStyle.copyWith(fontSize: 22),
                 ),
               ],
@@ -258,7 +260,9 @@ class _FinishedView extends StatelessWidget {
                     ),
                     const SizedBox(height: kSpaceXl),
                     Text(
-                      '记录已写入历史，详情页可以看轨迹与曲线。',
+                      state.recordSaved
+                          ? '记录已写入历史，详情页可以看轨迹与曲线。'
+                          : '本次没有产生移动距离，不写入历史记录。',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12, color: palette.muted),
                     ),
