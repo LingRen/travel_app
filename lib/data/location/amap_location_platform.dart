@@ -74,6 +74,8 @@ class AmapFlutterLocationSdk implements AmapLocationSdk {
         onceLocation: onceLocation,
         // iOS 后台定位能力随 Phase 4 接入；未配置 capability 前打开会抛异常。
         allowsBackgroundLocationUpdates: false,
+        // Android 锁屏后台定位：插件默认关闭，退后台后 SDK 会暂停回调导致轨迹掉线。
+        enableBackgroundLocation: true,
         pausesLocationUpdatesAutomatically: false,
         // 与系统定位的 bestForNavigation 对齐，骑行遮挡后更容易接回。
         desiredAccuracy: DesiredAccuracy.BestForNavigation,

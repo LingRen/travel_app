@@ -56,6 +56,15 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <!-- 高德定位 SDK 的定位服务：连续定位与后台定位（enableBackgroundLocation）
+             都由它承载。SDK 以 JAR 随 amap_map 打包（无 AAR manifest），
+             manifest 不会合并，必须在此显式声明，否则后台定位会报
+             “Unable to start service APSService not found”。 -->
+        <service
+            android:name="com.amap.api.location.APSService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

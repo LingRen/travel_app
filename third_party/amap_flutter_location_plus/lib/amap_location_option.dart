@@ -21,6 +21,14 @@ class AMapLocationOption {
   /// 默认值：false
   bool allowsBackgroundLocationUpdates = false;
 
+  /// 是否允许后台定位（Android 端）。
+  ///
+  /// 高德 SDK 默认在应用退到后台（锁屏）后暂停连续定位回调。置 true 后原生端会调用
+  /// [AMapLocationClient.enableBackgroundLocation] 启动后台定位前台服务，并把定位用途
+  /// 声明为 Sport，从而在熄屏后继续出点。
+  /// 默认值：false
+  bool enableBackgroundLocation = false;
+
   ///Android端定位模式, 只在Android系统上有效<br>
   ///默认值：[AMapLocationMode.Hight_Accuracy]<br>
   ///可选值：<br>
@@ -68,6 +76,7 @@ class AMapLocationOption {
       this.geoLanguage = GeoLanguage.DEFAULT,
       this.onceLocation = false,
       this.allowsBackgroundLocationUpdates = false,
+      this.enableBackgroundLocation = false,
       this.pausesLocationUpdatesAutomatically = false,
       this.desiredAccuracy = DesiredAccuracy.Best,
       this.distanceFilter = -1,
@@ -83,6 +92,7 @@ class AMapLocationOption {
       "geoLanguage": geoLanguage.index,
       "onceLocation": onceLocation,
       "allowsBackgroundLocationUpdates": allowsBackgroundLocationUpdates,
+      "enableBackgroundLocation": enableBackgroundLocation,
       "pausesLocationUpdatesAutomatically": pausesLocationUpdatesAutomatically,
       "desiredAccuracy": desiredAccuracy.index,
       'distanceFilter': distanceFilter,
