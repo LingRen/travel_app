@@ -93,6 +93,9 @@ class FakeFallbackPlatform implements LocationPlatform {
   int currentPositionCalls = 0;
 
   @override
+  bool get canRebuildStreamOnStall => true;
+
+  @override
   Future<bool> isLocationServiceEnabled() async => true;
 
   @override
@@ -143,6 +146,7 @@ Map<String, Object> amapEvent({
   double bearing = 92.0,
   double altitude = 512.0,
   String locationTime = '2026-11-02 09:30:00',
+  int locationType = 1,
 }) => <String, Object>{
   'latitude': latitude,
   'longitude': longitude,
@@ -151,6 +155,7 @@ Map<String, Object> amapEvent({
   'bearing': bearing,
   'altitude': altitude,
   'locationTime': locationTime,
+  'locationType': locationType,
 };
 
 void main() {
@@ -207,6 +212,26 @@ void main() {
       );
     });
 
+    test('只有卫星点（locationType 1）可以写进轨迹', () {
+      expect(isGpsFixEvent(amapEvent()), isTrue);
+      for (final int type in <int>[2, 3, 4, 5, 6, 7]) {
+        expect(
+          isGpsFixEvent(amapEvent(locationType: type)),
+          isFalse,
+          reason: 'locationType $type 不是卫星定位',
+        );
+      }
+      // 字段缺失时按卫星点处理，避免误杀其它平台实现。
+      expect(
+        isGpsFixEvent(<String, Object>{
+          'latitude': 30.5,
+          'longitude': 104.0,
+          'accuracy': 8.0,
+        }),
+        isTrue,
+      );
+    });
+
     test('locationTime 解析成本地时间戳', () {
       final Position position = positionFromAmapEvent(
         amapEvent(locationTime: '2026-11-02 09:30:00'),
@@ -240,6 +265,56 @@ void main() {
       // 生产值是 2 秒；测试缩短，只为把定时器等出来。
       keepAliveStopDelay: const Duration(milliseconds: 10),
     );
+
+    test('不允许看门狗重建订阅：退订会停掉原生定位、打断搜星', () {
+      expect(buildPlatform().canRebuildStreamOnStall, isFalse);
+    });
+
+    // 2026-11-23 真机：起步静止时网络点报出 10.17 / 16.14 m/s，界面瞬间跳到
+    // 36～58 km/h。连续定位必须只收卫星点，宁可暂留空白也不喂假速度。
+    test('连续定位丢弃网络 / 缓存点，不产出假速度', () async {
+      final AmapLocationPlatform platform = buildPlatform();
+      final List<Position> received = <Position>[];
+      final StreamSubscription<Position> subscription = platform
+          .positionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.best,
+            ),
+          )
+          .listen(received.add);
+
+      sdk.controller.add(
+        amapEvent(locationType: 4, accuracy: 40, altitude: 0, speed: 10.17),
+      );
+      sdk.controller.add(
+        amapEvent(locationType: 3, accuracy: 40, altitude: 0, speed: 16.14),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(received, isEmpty);
+
+      sdk.controller.add(amapEvent());
+      await Future<void>.delayed(Duration.zero);
+      expect(received, hasLength(1));
+      expect(received.single.speed, 5.2);
+
+      await subscription.cancel();
+    });
+
+    test('点亮地图的一次定位仍接受网络点', () async {
+      final AmapLocationPlatform platform = buildPlatform();
+
+      final Future<Position> result = platform.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+      sdk.controller.add(
+        amapEvent(locationType: 3, accuracy: 40, altitude: 0, speed: 0),
+      );
+
+      final Position position = await result;
+      expect(position.accuracy, 40);
+    });
 
     test('首次订阅先设 Key 与隐私声明，再按 1 Hz 连续定位启动', () async {
       final AmapLocationPlatform platform = buildPlatform();

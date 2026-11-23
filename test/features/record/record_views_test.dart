@@ -132,6 +132,9 @@ class _FakeLocationService implements LocationService {
   Future<bool> hasPermission() async => true;
 
   @override
+  bool get canRebuildStreamOnStall => true;
+
+  @override
   Stream<LocationFix> fixes() => _fixes.stream;
 
   @override

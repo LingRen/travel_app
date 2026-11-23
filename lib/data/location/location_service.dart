@@ -40,11 +40,23 @@ abstract class LocationPlatform {
   Future<Position> getCurrentPosition({
     required LocationSettings locationSettings,
   });
+
+  /// 定位流卡住时，能否靠「取消订阅再重建」把它拉回来。
+  ///
+  /// geolocator 退订只是撤掉一个 Dart 侧监听，重建代价很小；高德 SDK 退订会
+  /// 调 `stopLocation()`，把正在进行的卫星搜索推倒重来，重建后往往只能立刻换回
+  /// 一条坐标不变的缓存点。2026-11-23 真机日志：看门狗每 15 秒重建一次，对应
+  /// APSService 每 15 秒 STOP/START，卫星迟迟锁不上，反而制造出 30～100 秒的
+  /// 断点。这类定位源返回 false，让看门狗交给 SDK 自己重试。
+  bool get canRebuildStreamOnStall => true;
 }
 
 /// 生产实现：转发到 geolocator 的静态 API。
 class GeolocatorLocationPlatform implements LocationPlatform {
   const GeolocatorLocationPlatform();
+
+  @override
+  bool get canRebuildStreamOnStall => true;
 
   @override
   Future<bool> isLocationServiceEnabled() =>
@@ -158,6 +170,9 @@ class LocationService {
   final bool? _isIOSOverride;
 
   bool get _isIOS => _isIOSOverride ?? Platform.isIOS;
+
+  /// 见 [LocationPlatform.canRebuildStreamOnStall]。
+  bool get canRebuildStreamOnStall => _platform.canRebuildStreamOnStall;
 
   /// 检查定位服务与权限。不满足时返回具体原因，由 UI 引导用户处理。
   Future<LocationReadiness> checkReadiness() async {

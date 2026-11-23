@@ -124,7 +124,8 @@ Position? positionFromAmapEvent(Map<String, Object> event) {
     latitude: wgs.lat,
     longitude: wgs.lon,
     timestamp: timestamp,
-    // Android 上非 GPS 点没有海拔，给 0；这类点通常会因精度差被 50 m 门槛挡掉。
+    // Android 上非 GPS 点没有海拔，给 0；这类点通常已在 [positionStream] 被
+    // 过滤掉，一次定位（点亮地图）仍允许使用。
     altitude: _asDouble(event['altitude']) ?? 0.0,
     altitudeAccuracy: 0.0,
     accuracy: rawAccuracy.toDouble(),
@@ -138,6 +139,18 @@ Position? positionFromAmapEvent(Map<String, Object> event) {
 
 double? _asDouble(Object? value) =>
     value is num && value.toDouble().isFinite ? value.toDouble() : null;
+
+/// 这个事件是不是卫星定位结果。
+///
+/// 高德在 GPS 不可用时会回退到网络 / 离线缓存点（`locationType` 为 2～5）：
+/// 没有海拔，速度是推算出来的。2026-11-23 真机在起步静止时收到 10.2 / 16.1 m/s
+/// 的假速度，界面瞬间跳到 36～58 km/h；相邻缓存点之间上百米的跳变还会灌进
+/// 里程与爬升。连续定位只收 `locationType == 1` 的卫星点，宁可短暂留空。
+bool isGpsFixEvent(Map<String, Object> event) {
+  final Object? type = event['locationType'];
+  // iOS 插件固定填 1；字段缺失时按卫星点处理，避免误杀其它平台实现。
+  return type is! num || type == 1;
+}
 
 /// 高德的 `locationTime` 是本地时间字符串（`yyyy-MM-dd HH:mm:ss`）。
 DateTime? _parseAmapTime(Object? value) {
@@ -224,13 +237,22 @@ class AmapLocationPlatform implements LocationPlatform {
   @override
   Future<LocationPermission> requestPermission() => _fallback.requestPermission();
 
+  /// 高德定位流不能靠「退订再重建」自愈。
+  ///
+  /// 退订会 `stopLocation()` 并停掉 APSService，重建要重新搜星；而真机上重建
+  /// 只会立刻换回一条缓存点，15 秒后又被看门狗打断，陷入「永远锁不上星」的
+  /// 循环。SDK 自身会持续重试，交给它恢复。
+  @override
+  bool get canRebuildStreamOnStall => false;
+
   @override
   Future<bool> openAppSettings() => _fallback.openAppSettings();
 
   @override
   Future<bool> openLocationSettings() => _fallback.openLocationSettings();
 
-  /// 连续定位流。失败事件在这里被丢弃，由看门狗负责「超过 15 秒没点」的重建。
+  /// 连续定位流。失败事件与非卫星点在这里被丢弃，由看门狗负责「超过 15 秒
+  /// 没点」的重建。
   ///
   /// 订阅必须早于 [AmapLocationSdk.configure] / [AmapLocationSdk.start]：插件在
   /// 第一次设置参数或启动时创建原生定位客户端，并用当时从 EventChannel 拿到的
@@ -252,6 +274,9 @@ class AmapLocationPlatform implements LocationPlatform {
       },
     );
     subscription = _sdk.events.listen((Map<String, Object> event) {
+      // 网络 / 缓存点只适合给待机页点亮地图，不能写进轨迹：它们没有海拔，
+      // 速度与相邻点位移都不可信（见 [isGpsFixEvent]）。
+      if (!isGpsFixEvent(event)) return;
       final Position? position = positionFromAmapEvent(event);
       if (position != null) controller.add(position);
     });

@@ -161,6 +161,10 @@ class _FakeLocationService implements LocationService {
   @override
   Future<bool> hasPermission() async => true;
 
+  /// 定位源卡住时是否允许看门狗重建订阅。高德定位源生产值为 false。
+  @override
+  bool canRebuildStreamOnStall = true;
+
   /// `fixes()` 被订阅的次数：定位流看门狗重建订阅时会再调一次。
   int fixListenCalls = 0;
 
@@ -1324,6 +1328,30 @@ void main() {
     clockMs += 5000;
     await tester.pump(const Duration(seconds: 1));
     expect(location.fixListenCalls, 2);
+    container.dispose();
+  });
+
+  // 高德定位源退订会把原生定位客户端停掉重开（APSService STOP/START），正在
+  // 进行的搜星推倒重来，真机上只能立刻换回一条缓存点。这种「重建」不是自愈，
+  // 是把短暂遮挡拖成上百秒的断点（2026-11-23 真机日志）。
+  testWidgets('高德定位源丢星时不重建订阅，交给 SDK 自己重试', (
+    WidgetTester tester,
+  ) async {
+    final ProviderContainer container = makeContainer();
+    location.canRebuildStreamOnStall = false;
+    final RecordController controller = container.read(
+      recordControllerProvider.notifier,
+    );
+    await controller.start();
+    await tester.pump();
+    expect(location.fixListenCalls, 1);
+
+    await rideOneSecond(tester, lat: 31.0);
+
+    // 超过看门狗阈值很久也不该重建。
+    clockMs += 60000;
+    await tester.pump(const Duration(seconds: 1));
+    expect(location.fixListenCalls, 1);
     container.dispose();
   });
 

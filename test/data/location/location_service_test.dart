@@ -37,6 +37,12 @@ class FakeLocationPlatform implements LocationPlatform {
   final StreamController<Position> controller = StreamController<Position>();
 
   @override
+  bool get canRebuildStreamOnStall => rebuildable;
+
+  /// 定位源卡住时能否安全重建订阅，模拟不同平台的能力差异。
+  bool rebuildable = true;
+
+  @override
   Future<bool> isLocationServiceEnabled() async => serviceEnabled;
 
   @override
@@ -173,6 +179,19 @@ void main() {
 
       expect(fix.lat, -33.8688);
       expect(fix.lon, -70.6693);
+    });
+  });
+
+  group('canRebuildStreamOnStall', () {
+    test('原样暴露定位源的重建能力', () {
+      final FakeLocationPlatform platform = FakeLocationPlatform();
+      expect(LocationService(platform: platform).canRebuildStreamOnStall, isTrue);
+
+      platform.rebuildable = false;
+      expect(
+        LocationService(platform: platform).canRebuildStreamOnStall,
+        isFalse,
+      );
     });
   });
 

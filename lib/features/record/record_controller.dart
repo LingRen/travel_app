@@ -196,7 +196,9 @@ class RecordController extends Notifier<RecordState> {
   /// 定位流看门狗阈值：超过这么久没有新定位，就重建一次订阅。
   ///
   /// 平台侧的定位回调偶尔会「假死」——服务与权限都正常，回调却不再来。重建
-  /// 订阅能把这种状态拉回来；真的是卫星信号被挡住时，重建也无害。
+  /// 订阅能把这种状态拉回来。仅对能安全重建的定位源生效：高德退订会打断原生
+  /// 搜星，反而把短暂丢星拖成几十秒的空档（见
+  /// [LocationPlatform.canRebuildStreamOnStall]）。
   static const int _kFixStallRestartMs = 15000;
 
   /// 见 [RecordState.previewFix]。
@@ -749,6 +751,10 @@ class RecordController extends Notifier<RecordState> {
   /// 间隔，避免每个节拍都取消/重订阅。
   void _restartStalledFixStream(RecordingSession session) {
     if (session.phase != RecordingPhase.recording) return;
+    // 高德定位源重建订阅会停掉原生定位客户端再重开（APSService 跟着 STOP/START），
+    // 卫星搜索从头来过；真机上它换来的只是一条坐标不变的缓存点，等 15 秒又被
+    // 打断一次，短暂遮挡被拖成上百秒的断点。这类定位源交给 SDK 自己重试。
+    if (!_location.canRebuildStreamOnStall) return;
     if (_lastFixMs == 0) return;
     final int now = _now();
     if (now - _lastFixMs < _kFixStallRestartMs) return;
